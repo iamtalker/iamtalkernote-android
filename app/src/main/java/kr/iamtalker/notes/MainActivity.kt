@@ -153,6 +153,8 @@ fun App(model: NotesModel) {
 
     var screen by remember { mutableStateOf("") }
     if (screen == "trash") { TrashScreen(model, onBack = { screen = ""; model.refresh() }); return }
+    if (screen == "dups") { DuplicatesScreen(model, onBack = { screen = "" }, onOpen = { screen = ""; open = it }); return }
+    if (screen == "media") { UnusedMediaScreen(model, onBack = { screen = ""; model.refresh() }); return }
     if (screen == "journal") { JournalScreen(model, onBack = { screen = "" }, onOpen = { screen = ""; open = it }); return }
     val cur = open
     if (cur != null) {
@@ -263,6 +265,8 @@ fun App(model: NotesModel) {
                                 HorizontalDivider()
                                 DropdownMenuItem(text = { Text("휴지통") }, onClick = { screen = "trash"; close() })
                                 DropdownMenuItem(text = { Text("전체 변경 이력") }, onClick = { screen = "journal"; close() })
+                                DropdownMenuItem(text = { Text("중복 노트 찾기") }, onClick = { screen = "dups"; close() })
+                                DropdownMenuItem(text = { Text("안 쓰는 미디어") }, onClick = { screen = "media"; close() })
                                 DropdownMenuItem(text = { Text("새로고침") }, onClick = { model.refresh(); close() })
                                 DropdownMenuItem(text = { Text("다른 폴더 고르기") }, onClick = { picker.launch(null); close() })
                             }

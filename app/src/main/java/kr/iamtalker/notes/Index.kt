@@ -61,6 +61,23 @@ class Index(ctx: Context, tree: Uri) :
 
     private fun esc(s: String) = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
+    /** uri → 색인된 글(제목\n본문, 소문자) */
+    fun hayOf(uris: List<String>): Map<String, String> {
+        val out = HashMap<String, String>()
+        for (chunk in uris.chunked(400)) {
+            readableDatabase.rawQuery("SELECT uri, hay FROM notes WHERE uri IN (" + chunk.joinToString(",") { "?" } + ")", chunk.toTypedArray())
+                .use { c -> while (c.moveToNext()) out[c.getString(0)] = c.getString(1).orEmpty() }
+        }
+        return out
+    }
+
+    /** hay 가 패턴(LIKE)에 맞는 노트의 글들 */
+    fun hayLike(pattern: String): List<String> {
+        val out = ArrayList<String>()
+        readableDatabase.rawQuery("SELECT hay FROM notes WHERE hay LIKE ?", arrayOf(pattern)).use { c -> while (c.moveToNext()) out.add(c.getString(0).orEmpty()) }
+        return out
+    }
+
     /** WHERE 조건(QueryParser.toSql)에 맞는 노트의 uri */
     fun searchWhere(where: String, args: Array<String>): Set<String> {
         val out = HashSet<String>()

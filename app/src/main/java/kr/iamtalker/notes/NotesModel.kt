@@ -89,7 +89,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         if (tree != null) refresh()
     }
 
-    private fun index(): Index = idx ?: Index(getApplication(), tree!!).also { idx = it }
+    fun index(): Index = idx ?: Index(getApplication(), tree!!).also { idx = it }
 
     fun pick(uri: Uri) {
         // 기억하지 못해도(일부 기기) 이번 실행에서는 쓸 수 있으니 실패해도 앱을 죽이지 않는다
@@ -244,6 +244,16 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     /** 새로 생겼거나 바뀐 노트를 읽어 날짜·태그·본문 사본을 색인 DB 에 적는다(처음 한 번은 오래 걸린다) */
     private suspend fun syncIndex(scanned: List<Note>, have: Map<String, Index.Row>) {
         val todo = scanned.filter { n -> have[n.uri.toString()].let { it == null || it.size != n.size || it.mtime != n.modified } }
+        // 앱 밖에서(동기화 도구·다른 편집기) 고친 노트: 색인에 있던 노트가 바뀌었고, 이 앱이 저장한 기록(변경 이력)보다 늦은 것
+        val external: Set<String> = withContext(Dispatchers.IO) {
+            val changed = todo.filter { have.containsKey(it.uri.toString()) }
+            if (changed.isEmpty()) emptySet() else runCatching {
+                val last = HashMap<String, Double>()
+                for (r in History.readJournal(getApplication(), tree!!, 20000)) if (r.t > (last[r.path] ?: 0.0)) last[r.path] = r.t
+                changed.filter { it.modified / 1000.0 > (last[History.relOf(it)] ?: 0.0) + 5 }.map { it.uri.toString() }.toSet()
+            }.getOrDefault(emptySet())
+        }
+        if (external.size > 200) runCatching { History.journal(getApplication(), tree!!, "external", ".", detail = "앱 밖에서 노트 ${external.size}개 수정") }
         val rows = HashMap<String, Index.Row>(have)
         withContext(Dispatchers.IO) {
             val ix = index()
@@ -256,6 +266,11 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     for (n in chunk) {
                         val text = if (n.size in 0..2_000_000) runCatching { NoteRepo.read(getApplication(), n.uri) }.getOrDefault("") else ""
                         val info = Meta.parse(text)
+                        if (external.size in 1..200 && n.uri.toString() in external) runCatching {
+                            // 바뀌기 전 내용은 알 수 없지만, 고친 뒤의 내용을 노트 버전으로 남겨 이후에 돌아올 수 있게 한다
+                            History.journal(getApplication(), tree!!, "external", History.relOf(n), detail = "앱 밖에서 수정")
+                            History.snapshot(getApplication(), tree!!, History.relOf(n), text, "", true)
+                        }
                         val hay = (n.title + "\n" + text).lowercase().take(300_000)
                         val snip = Meta.snippet(text, n.title)
                         ix.put(db, n.uri.toString(), n.size, n.modified, info.updated, info.tags, hay, snip, info.created)
@@ -432,5 +447,25 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 History.journal(ctx, tree!!, "tags", History.relOf(n), detail = if (new == null) "#$old 삭제" else "#$old → #$new")
             }
         }
+    }
+
+    // ---- 정리 도구
+    fun findDuplicates(): List<List<Note>> = Cleanup.duplicates(index(), notes)
+
+    fun findUnusedMedia(progress: (String) -> Unit): List<Cleanup.Media> = Cleanup.unusedMedia(getApplication(), tree!!, index(), progress)
+
+    /** 안 쓰는 미디어 파일을 완전히 지운다(휴지통 없음) → 지운 개수 */
+    fun deleteMedia(list: List<Cleanup.Media>): Int {
+        var n = 0
+        for (m in list) runCatching { History.delete(getApplication(), tree!!, m.id); n++ }
+        NoteRepo.clearCache()
+        History.journal(getApplication(), tree!!, "cleanup", ".", detail = "안 쓰는 미디어 ${n}개 삭제")
+        return n
+    }
+
+    /** 노트들을 휴지통으로 보낸다(batch 와 같은 방식으로 결과를 알리고 목록을 새로 읽는다) */
+    fun trashMany(list: List<Note>) {
+        selected = list.map { it.uri.toString() }.toSet()
+        batch("휴지통") { n -> trashNote(n) }
     }
 }

@@ -162,3 +162,119 @@ fun JournalScreen(model: NotesModel, onBack: () -> Unit, onOpen: (Note) -> Unit)
         }
     }
 }
+
+/** 중복 노트 찾기: 제목이 같고(끝의 -1, (2) 는 무시) 본문이 완전히 같은 노트끼리 묶어, 최근 것만 남기고 휴지통으로 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DuplicatesScreen(model: NotesModel, onBack: () -> Unit, onOpen: (Note) -> Unit) {
+    var groups by remember { mutableStateOf<List<List<Note>>?>(null) }
+    var confirm by remember { mutableStateOf<List<Note>?>(null) }   // 휴지통으로 보낼 노트들
+    val fmt = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
+    LaunchedEffect(Unit) { groups = withContext(Dispatchers.IO) { runCatching { model.findDuplicates() }.getOrDefault(emptyList()) } }
+    BackHandler { onBack() }
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("중복 노트 찾기") },
+            navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } },
+            actions = {
+                val g = groups
+                if (!g.isNullOrEmpty()) TextButton(onClick = { confirm = g.flatMap { it.drop(1) } }) { Text("모두 정리") }
+            }
+        )
+    }) { pad ->
+        val g = groups
+        Box(Modifier.padding(pad).fillMaxSize()) {
+            if (g == null) CircularProgressIndicator(Modifier.align(Alignment.Center))
+            else if (g.isEmpty()) Text("본문까지 똑같은 중복 노트가 없습니다.", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
+            else LazyColumn(Modifier.fillMaxSize()) {
+                item { Text("제목이 같고 본문이 완전히 같은 노트 ${g.size}묶음. ‘정리’는 가장 최근 것만 남기고 나머지를 휴지통으로 보냅니다.",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp)) }
+                items(g.size) { i ->
+                    val group = g[i]
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        for ((k, n) in group.withIndex()) Text((if (k == 0) "남김  " else "중복  ") + History.relOf(n) + "  · " + fmt.format(Date(n.date)),
+                            maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp,
+                            color = if (k == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth().clickable { onOpen(n) }.padding(vertical = 3.dp))
+                        TextButton(onClick = { confirm = group.drop(1) }, modifier = Modifier.align(Alignment.End)) { Text("정리") }
+                    }
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+    confirm?.let { list ->
+        AlertDialog(
+            onDismissRequest = { confirm = null }, title = { Text("${list.size}개를 휴지통으로?") },
+            text = { Text("가장 최근 노트만 남깁니다. 컴퓨터의 iamtalkernote 에서 복원할 수 있습니다.") },
+            confirmButton = { TextButton(onClick = { confirm = null; model.trashMany(list); onBack() }) { Text("휴지통으로") } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("취소") } }
+        )
+    }
+}
+
+/** 안 쓰는 미디어 파일 정리: 어떤 노트(휴지통 속 노트 포함)도 가리키지 않는 .resources 파일을 찾아 지운다 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UnusedMediaScreen(model: NotesModel, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var found by remember { mutableStateOf<List<Cleanup.Media>?>(null) }
+    var status by remember { mutableStateOf("준비 중…") }
+    var picked by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var confirm by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+    val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    fun mb(n: Long) = if (n >= 1_048_576) "%.1fMB".format(n / 1_048_576.0) else "%,dKB".format(n / 1024)
+    LaunchedEffect(Unit) {
+        found = withContext(Dispatchers.IO) { runCatching { model.findUnusedMedia { s -> main.post { status = s } } }.getOrDefault(emptyList()) }
+        picked = found.orEmpty().map { it.id }.toSet()
+    }
+    BackHandler { onBack() }
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("안 쓰는 미디어") },
+            navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } },
+            actions = { if (!found.isNullOrEmpty()) TextButton(enabled = picked.isNotEmpty(), onClick = { confirm = true }) { Text("지우기") } }
+        )
+    }) { pad ->
+        val list = found
+        Box(Modifier.padding(pad).fillMaxSize()) {
+            if (list == null) Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(); Text(status, Modifier.padding(top = 12.dp), fontSize = 12.sp)
+            }
+            else if (list.isEmpty()) Text("안 쓰는 미디어 파일이 없습니다.", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
+            else LazyColumn(Modifier.fillMaxSize()) {
+                item { Text("${list.size}개, 합계 ${mb(list.sumOf { it.size })}. 지우면 휴지통 없이 바로 삭제됩니다. 노트의 이전 버전 기록(.history)이 가리키는 그림은 확인하지 않으므로, 오래된 버전으로 되돌릴 때 그림이 빠질 수 있습니다.",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp)) }
+                items(list, key = { it.id }) { m ->
+                    Row(Modifier.fillMaxWidth().clickable { picked = if (m.id in picked) picked - m.id else picked + m.id }.padding(horizontal = 8.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(checked = m.id in picked, onCheckedChange = { picked = if (it) picked + m.id else picked - m.id })
+                        Text(m.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
+                        Text(mb(m.size), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                    }
+                }
+            }
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false }, title = { Text("${picked.size}개를 완전히 지울까요?") },
+            text = { Text("휴지통 없이 바로 삭제되어 되돌릴 수 없습니다.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    val targets = found.orEmpty().filter { it.id in picked }
+                    scope.launch {
+                        val n = withContext(Dispatchers.IO) { model.deleteMedia(targets) }
+                        result = "${n}개를 지웠습니다"
+                        found = found.orEmpty().filter { it.id !in picked }
+                        picked = emptySet()
+                    }
+                }) { Text("지우기") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("취소") } }
+        )
+    }
+    result?.let { m -> AlertDialog(onDismissRequest = { result = null }, text = { Text(m) }, confirmButton = { TextButton(onClick = { result = null }) { Text("닫기") } }) }
+}
