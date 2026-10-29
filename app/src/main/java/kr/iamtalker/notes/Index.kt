@@ -1,0 +1,75 @@
+package kr.iamtalker.notes
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import android.net.Uri
+
+/** 색인 DB: 노트별 수정 시각·태그와 검색용 본문 사본. 파일이 원본이고 이 DB 는 언제든 지우고 다시 만들 수 있는 캐시다. 폴더(트리)마다 따로 둔다. */
+class Index(ctx: Context, tree: Uri) :
+    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 1) {
+
+    init {
+        setWriteAheadLoggingEnabled(true)   // 색인하는 동안에도 검색이 막히지 않게
+    }
+
+    data class Row(val size: Long, val mtime: Long, val updated: Long, val tags: List<String>)
+
+    override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT)")
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
+        db.execSQL("DROP TABLE IF EXISTS notes")
+        onCreate(db)
+    }
+
+    /** 색인에 있는 모든 노트의 요약(본문은 읽지 않는다) */
+    fun load(): Map<String, Row> {
+        val out = HashMap<String, Row>()
+        readableDatabase.rawQuery("SELECT uri, size, mtime, updated, tags FROM notes", null).use { c ->
+            while (c.moveToNext()) {
+                val tags = c.getString(4).orEmpty().split('\n').filter { it.isNotEmpty() }
+                out[c.getString(0)] = Row(c.getLong(1), c.getLong(2), c.getLong(3), tags)
+            }
+        }
+        return out
+    }
+
+    /** 노트 하나를 색인한다(여러 개는 begin/commit 으로 묶어 부른다) */
+    fun put(db: SQLiteDatabase, uri: String, size: Long, mtime: Long, updated: Long, tags: List<String>, hay: String) {
+        val v = ContentValues()
+        v.put("uri", uri); v.put("size", size); v.put("mtime", mtime); v.put("updated", updated)
+        v.put("tags", tags.joinToString("\n") { it }); v.put("hay", hay)
+        db.insertWithOnConflict("notes", null, v, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun removeMissing(keep: Set<String>) {
+        val db = writableDatabase
+        val stale = ArrayList<String>()
+        db.rawQuery("SELECT uri FROM notes", null).use { c -> while (c.moveToNext()) if (c.getString(0) !in keep) stale.add(c.getString(0)) }
+        if (stale.isEmpty()) return
+        db.beginTransaction()
+        try {
+            for (u in stale) db.delete("notes", "uri=?", arrayOf(u))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun esc(s: String) = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    /** 본문(제목 포함)에 must 가 모두 있고 not 이 하나도 없는 노트의 uri */
+    fun search(must: List<String>, not: List<String>): Set<String> {
+        val where = ArrayList<String>()
+        val args = ArrayList<String>()
+        for (w in must) { where.add("hay LIKE ? ESCAPE '\\'"); args.add("%" + esc(w) + "%") }
+        for (w in not) { where.add("hay NOT LIKE ? ESCAPE '\\'"); args.add("%" + esc(w) + "%") }
+        val sql = "SELECT uri FROM notes" + if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
+        val out = HashSet<String>()
+        readableDatabase.rawQuery(sql, args.toTypedArray()).use { c -> while (c.moveToNext()) out.add(c.getString(0)) }
+        return out
+    }
+}

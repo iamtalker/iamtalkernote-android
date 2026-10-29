@@ -1,0 +1,153 @@
+package kr.iamtalker.notes
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+/** 마크다운 보기용 아주 단순한 렌더러: 제목·목록·인용·코드·표(글자 그대로)·**굵게**·*기울임*·`코드`·링크. 그림은 아직 자리 표시만 한다. */
+sealed class Block {
+    data class H(val level: Int, val text: String) : Block()
+    data class P(val text: String) : Block()
+    data class Li(val indent: Int, val marker: String, val text: String) : Block()
+    data class Quote(val text: String) : Block()
+    data class Code(val text: String) : Block()
+    data class Table(val text: String) : Block()
+    object Rule : Block()
+}
+
+private val heading = Regex("^(#{1,6})\\s+(.*)$")
+private val rule = Regex("^\\s*(-{3,}|\\*{3,}|_{3,})\\s*$")
+private val item = Regex("^(\\s*)([-*+]|\\d+[.)])\\s+(.*)$")
+private val inline = Regex("!\\[([^\\]]*)\\]\\(([^)]*)\\)|\\[([^\\]]+)\\]\\(([^)\\s]*)[^)]*\\)|\\*\\*(.+?)\\*\\*|__(.+?)__|`([^`]+)`|~~(.+?)~~|\\*([^*\\n]+?)\\*")
+
+fun parseBlocks(body: String): List<Block> {
+    val out = ArrayList<Block>()
+    val para = ArrayList<String>()
+    val code = ArrayList<String>()
+    val table = ArrayList<String>()
+    var fence = false
+    fun flushPara() { if (para.isNotEmpty()) { out.add(Block.P(para.joinToString("\n"))); para.clear() } }
+    fun flushTable() { if (table.isNotEmpty()) { out.add(Block.Table(table.joinToString("\n"))); table.clear() } }
+    for (raw in body.lines()) {
+        val line = raw.trimEnd()
+        if (line.trimStart().startsWith("```") || line.trimStart().startsWith("~~~")) {
+            if (fence) { out.add(Block.Code(code.joinToString("\n"))); code.clear() } else { flushPara(); flushTable() }
+            fence = !fence
+            continue
+        }
+        if (fence) { code.add(raw); continue }
+        if (line.trimStart().startsWith("|")) { flushPara(); table.add(line); continue } else flushTable()
+        if (line.isBlank()) { flushPara(); continue }
+        val h = heading.find(line)
+        val li = item.find(line)
+        when {
+            h != null -> { flushPara(); out.add(Block.H(h.groupValues[1].length, h.groupValues[2])) }
+            rule.matches(line) -> { flushPara(); out.add(Block.Rule) }
+            li != null -> { flushPara(); out.add(Block.Li(li.groupValues[1].length / 2, li.groupValues[2], li.groupValues[3])) }
+            line.startsWith(">") -> { flushPara(); out.add(Block.Quote(line.removePrefix(">").trim())) }
+            else -> para.add(line)
+        }
+    }
+    if (fence && code.isNotEmpty()) out.add(Block.Code(code.joinToString("\n")))
+    flushPara(); flushTable()
+    return out
+}
+
+fun inlineText(s: String, link: Color, codeBg: Color, muted: Color): AnnotatedString = buildAnnotatedString {
+    var pos = 0
+    for (m in inline.findAll(s)) {
+        append(s.substring(pos, m.range.first))
+        pos = m.range.last + 1
+        val g = m.groups
+        when {
+            g[1] != null -> withStyle(SpanStyle(color = muted, fontStyle = FontStyle.Italic)) { append("[그림" + (if (g[1]!!.value.isNotEmpty()) ": " + g[1]!!.value else "") + "]") }
+            g[3] != null -> {
+                val url = g[4]!!.value
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    pushStringAnnotation("URL", url)
+                    withStyle(SpanStyle(color = link, textDecoration = TextDecoration.Underline)) { append(g[3]!!.value) }
+                    pop()
+                } else withStyle(SpanStyle(color = link)) { append(g[3]!!.value) }
+            }
+            g[5] != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(g[5]!!.value) }
+            g[6] != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(g[6]!!.value) }
+            g[7] != null -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg)) { append(g[7]!!.value) }
+            g[8] != null -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { append(g[8]!!.value) }
+            g[9] != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(g[9]!!.value) }
+        }
+    }
+    append(s.substring(pos))
+}
+
+@Composable
+fun MarkdownView(text: String, modifier: Modifier = Modifier) {
+    val blocks = remember(text) { parseBlocks(Meta.split(text).second) }
+    val link = MaterialTheme.colorScheme.primary
+    val codeBg = MaterialTheme.colorScheme.surfaceVariant
+    val muted = MaterialTheme.colorScheme.outline
+    val color = MaterialTheme.colorScheme.onSurface
+    val uri = LocalUriHandler.current
+
+    @Composable
+    fun Rich(s: String, size: Int, weight: FontWeight? = null, modifier: Modifier = Modifier) {
+        val a = inlineText(s, link, codeBg, muted)
+        ClickableText(
+            text = a, modifier = modifier,
+            style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.5f).sp, fontWeight = weight, color = color),
+            onClick = { off -> a.getStringAnnotations("URL", off, off).firstOrNull()?.let { runCatching { uri.openUri(it.item) } } }
+        )
+    }
+
+    LazyColumn(modifier.padding(horizontal = 16.dp)) {
+        itemsIndexed(blocks) { _, b ->
+            when (b) {
+                is Block.H -> Rich(b.text, when (b.level) { 1 -> 24; 2 -> 21; 3 -> 18; else -> 16 }, FontWeight.Bold, Modifier.padding(top = 14.dp, bottom = 4.dp))
+                is Block.P -> Rich(b.text, 15, modifier = Modifier.padding(vertical = 4.dp))
+                is Block.Li -> Row(Modifier.padding(start = (b.indent * 16).dp, top = 2.dp, bottom = 2.dp)) {
+                    Text(if (b.marker.first().isDigit()) b.marker else "•", color = color, fontSize = 15.sp, modifier = Modifier.padding(end = 8.dp))
+                    Rich(b.text, 15)
+                }
+                is Block.Quote -> Row(Modifier.padding(vertical = 3.dp)) {
+                    Box(Modifier.padding(end = 10.dp).background(muted).height(20.dp).fillMaxWidthPx())
+                    Rich(b.text, 15)
+                }
+                is Block.Code -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = color,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(codeBg).horizontalScroll(rememberScrollState()).padding(10.dp))
+                is Block.Table -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = color,
+                    modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()))
+                Block.Rule -> HorizontalDivider(Modifier.padding(vertical = 10.dp))
+            }
+        }
+        item { Spacer(Modifier.height(80.dp)) }
+    }
+}
+
+private fun Modifier.fillMaxWidthPx(): Modifier = this.then(Modifier.padding(horizontal = 1.5.dp))
