@@ -8,16 +8,16 @@ import android.net.Uri
 
 /** 색인 DB: 노트별 수정 시각·태그와 검색용 본문 사본. 파일이 원본이고 이 DB 는 언제든 지우고 다시 만들 수 있는 캐시다. 폴더(트리)마다 따로 둔다. */
 class Index(ctx: Context, tree: Uri) :
-    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 2) {
+    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 3) {
 
     init {
         setWriteAheadLoggingEnabled(true)   // 색인하는 동안에도 검색이 막히지 않게
     }
 
-    data class Row(val size: Long, val mtime: Long, val updated: Long, val tags: List<String>, val snip: String = "")
+    data class Row(val size: Long, val mtime: Long, val updated: Long, val tags: List<String>, val snip: String = "", val created: Long = 0)
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT, snip TEXT)")
+        db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT, snip TEXT, created INTEGER)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
@@ -28,20 +28,20 @@ class Index(ctx: Context, tree: Uri) :
     /** 색인에 있는 모든 노트의 요약(본문은 읽지 않는다) */
     fun load(): Map<String, Row> {
         val out = HashMap<String, Row>()
-        readableDatabase.rawQuery("SELECT uri, size, mtime, updated, tags, snip FROM notes", null).use { c ->
+        readableDatabase.rawQuery("SELECT uri, size, mtime, updated, tags, snip, created FROM notes", null).use { c ->
             while (c.moveToNext()) {
                 val tags = c.getString(4).orEmpty().split('\n').filter { it.isNotEmpty() }
-                out[c.getString(0)] = Row(c.getLong(1), c.getLong(2), c.getLong(3), tags, c.getString(5).orEmpty())
+                out[c.getString(0)] = Row(c.getLong(1), c.getLong(2), c.getLong(3), tags, c.getString(5).orEmpty(), c.getLong(6))
             }
         }
         return out
     }
 
     /** 노트 하나를 색인한다(여러 개는 begin/commit 으로 묶어 부른다) */
-    fun put(db: SQLiteDatabase, uri: String, size: Long, mtime: Long, updated: Long, tags: List<String>, hay: String, snip: String) {
+    fun put(db: SQLiteDatabase, uri: String, size: Long, mtime: Long, updated: Long, tags: List<String>, hay: String, snip: String, created: Long) {
         val v = ContentValues()
         v.put("uri", uri); v.put("size", size); v.put("mtime", mtime); v.put("updated", updated)
-        v.put("tags", tags.joinToString("\n") { it }); v.put("hay", hay); v.put("snip", snip)
+        v.put("tags", tags.joinToString("\n") { it }); v.put("hay", hay); v.put("snip", snip); v.put("created", created)
         db.insertWithOnConflict("notes", null, v, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
@@ -61,15 +61,10 @@ class Index(ctx: Context, tree: Uri) :
 
     private fun esc(s: String) = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
-    /** 본문(제목 포함)에 must 가 모두 있고 not 이 하나도 없는 노트의 uri */
-    fun search(must: List<String>, not: List<String>): Set<String> {
-        val where = ArrayList<String>()
-        val args = ArrayList<String>()
-        for (w in must) { where.add("hay LIKE ? ESCAPE '\\'"); args.add("%" + esc(w) + "%") }
-        for (w in not) { where.add("hay NOT LIKE ? ESCAPE '\\'"); args.add("%" + esc(w) + "%") }
-        val sql = "SELECT uri FROM notes" + if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
+    /** WHERE 조건(QueryParser.toSql)에 맞는 노트의 uri */
+    fun searchWhere(where: String, args: Array<String>): Set<String> {
         val out = HashSet<String>()
-        readableDatabase.rawQuery(sql, args.toTypedArray()).use { c -> while (c.moveToNext()) out.add(c.getString(0)) }
+        readableDatabase.rawQuery("SELECT uri FROM notes WHERE $where", args).use { c -> while (c.moveToNext()) out.add(c.getString(0)) }
         return out
     }
 }

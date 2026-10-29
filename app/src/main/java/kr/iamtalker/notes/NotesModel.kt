@@ -18,31 +18,14 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Sort(val label: String) { DATE_DESC("최근 수정 순"), DATE_ASC("오래된 순"), TITLE("제목 순") }
-
-/** 검색식: 공백 = AND, "정확한 구절", -낱말 또는 NOT 낱말 = 제외, #태그 = 태그. (OR 은 아직 없다) */
-class ParsedQuery(val must: List<String>, val not: List<String>, val tags: List<String>)
-
-fun parseQuery(q: String): ParsedQuery {
-    val must = ArrayList<String>(); val not = ArrayList<String>(); val tags = ArrayList<String>()
-    var negate = false
-    for (m in Regex("\"([^\"]+)\"|(\\S+)").findAll(q)) {
-        val phrase = m.groups[1]?.value
-        val word = (phrase ?: m.groups[2]!!.value)
-        if (phrase == null) {
-            if (word == "AND" || word == "&") continue
-            if (word == "NOT" || word == "!") { negate = true; continue }
-        }
-        var w = word
-        var neg = negate
-        negate = false
-        if (phrase == null && w.length > 1 && w.startsWith("-")) { neg = true; w = w.substring(1) }
-        if (phrase == null && w.length > 1 && w.startsWith("#") && !neg) { tags.add(w.substring(1)); continue }
-        w = w.lowercase()
-        if (neg) not.add(w) else must.add(w)
-    }
-    return ParsedQuery(must, not, tags)
+enum class Sort(val label: String) {
+    RELEVANCE("관련도순"), DATE_DESC("수정 최근 순"), DATE_ASC("수정 오래된 순"), CREATED_DESC("생성 최근 순"), TITLE("제목 순")
 }
+
+enum class Period(val label: String, val days: Int) { ALL("전체 기간", 0), TODAY("오늘", 1), WEEK("7일", 7), MONTH("30일", 30), YEAR("1년", 365) }
+
+/** 저장된 검색(스마트 폴더): 이름과 검색식. 이 폰에만 저장한다 */
+data class Saved(val name: String, val query: String)
 
 class NotesModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("settings", 0)
@@ -68,9 +51,11 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         private set
     var folder by mutableStateOf<String?>(null)
         private set
+    var period by mutableStateOf(Period.ALL)
+        private set
     var tag by mutableStateOf<String?>(null)
         private set
-    var sort by mutableStateOf(Sort.values().getOrElse(prefs.getInt("sort", 0)) { Sort.DATE_DESC })
+    var sort by mutableStateOf(Sort.values().getOrElse(prefs.getInt("sort2", 1)) { Sort.DATE_DESC })
         private set
 
     /** 고정(즐겨찾기)한 노트의 uri — 이 폰에만 저장한다(파일에는 쓰지 않는다) */
@@ -125,7 +110,81 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     fun changeInBody(b: Boolean) { inBody = b; prefs.edit().putBoolean("inBody", b).apply(); reapply() }
     fun changeFolder(f: String?) { folder = f; reapply() }
     fun changeTag(t: String?) { tag = t; reapply() }
-    fun changeSort(s: Sort) { sort = s; prefs.edit().putInt("sort", s.ordinal).apply(); reapply() }
+    fun changeSort(s: Sort) { sort = s; prefs.edit().putInt("sort2", s.ordinal).apply(); reapply() }
+    fun changePeriod(p: Period) { period = p; reapply() }
+
+    // ---- 최근 검색(30개)·저장된 검색
+    private fun loadStrings(key: String): List<String> = runCatching {
+        val a = org.json.JSONArray(prefs.getString(key, "[]")); (0 until a.length()).map { a.getString(it) }
+    }.getOrDefault(emptyList())
+
+    var recent by mutableStateOf(loadStrings("recent"))
+        private set
+    var saved by mutableStateOf(runCatching {
+        val a = org.json.JSONArray(prefs.getString("saved", "[]")); (0 until a.length()).map { Saved(a.getJSONObject(it).getString("name"), a.getJSONObject(it).getString("q")) }
+    }.getOrDefault(emptyList()))
+        private set
+
+    fun addRecent(q: String) {
+        val t = q.trim()
+        if (t.isEmpty()) return
+        recent = (listOf(t) + recent.filter { it != t }).take(30)
+        prefs.edit().putString("recent", org.json.JSONArray(recent).toString()).apply()
+    }
+
+    private fun persistSaved() {
+        val a = org.json.JSONArray()
+        for (x in saved) a.put(org.json.JSONObject().put("name", x.name).put("q", x.query))
+        prefs.edit().putString("saved", a.toString()).apply()
+    }
+
+    fun saveSearch(name: String) {
+        if (query.isBlank()) return
+        saved = saved.filter { it.name != name } + Saved(name.ifBlank { query.trim().take(20) }, query.trim())
+        persistSaved()
+    }
+
+    fun deleteSaved(x: Saved) { saved = saved - x; persistSaved() }
+    fun applySaved(x: Saved) { folder = null; tag = null; period = Period.ALL; query = x.query; reapply() }
+
+    // ---- 여러 노트 선택
+    var selected by mutableStateOf<Set<String>>(emptySet())
+        private set
+    var message by mutableStateOf<String?>(null)
+
+    fun toggleSelect(n: Note) { val u = n.uri.toString(); selected = if (u in selected) selected - u else selected + u }
+    fun clearSelect() { selected = emptySet() }
+    fun selectAll() { selected = shown.map { it.uri.toString() }.toSet() }
+
+    /** 고른 노트들에 같은 일을 한다(백그라운드). 하나가 실패해도 나머지는 계속하고, 끝나면 결과를 알리고 목록을 새로 읽는다 */
+    fun batch(label: String, work: (Note) -> Unit) {
+        val targets = notes.filter { it.uri.toString() in selected }
+        selected = emptySet()
+        viewModelScope.launch {
+            var ok = 0; var fail = 0; var lastErr = ""
+            withContext(Dispatchers.IO) {
+                for ((i, n) in targets.withIndex()) {
+                    try { work(n); ok++ } catch (e: Exception) { fail++; lastErr = e.message ?: e.javaClass.simpleName }
+                    say("$label ${i + 1}/${targets.size}")
+                }
+            }
+            message = "$label: ${ok}개 완료" + if (fail > 0) ", ${fail}개 실패 ($lastErr)" else ""
+            refresh()
+        }
+    }
+
+    /** 노트 글 아래 '태그:' 줄에 태그를 더한다(이전 내용은 노트 버전으로 남김) */
+    fun addTagsTo(n: Note, tags: List<String>) {
+        val ctx = getApplication<Application>()
+        val text = NoteRepo.read(ctx, n.uri)
+        val out = NoteText.setTagLine(text, NoteText.tagLineTags(text) + tags)
+        if (out == text) return
+        NoteRepo.write(ctx, n.uri, out)
+        runCatching {
+            History.snapshot(ctx, tree!!, History.relOf(n), text, out, true)
+            History.journal(ctx, tree!!, "tags", History.relOf(n), detail = tags.joinToString(" ") { "#$it" })
+        }
+    }
 
     /** 목록을 다시 읽고(폴더를 훑음), 바뀐 노트만 읽어 색인을 맞춘다 */
     fun refresh() {
@@ -153,7 +212,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
 
     private fun merge(scanned: List<Note>, have: Map<String, Index.Row>): List<Note> = scanned.map { n ->
         val r = have[n.uri.toString()]
-        if (r != null && r.size == n.size && r.mtime == n.modified) n.copy(updated = r.updated, tags = r.tags, snip = r.snip) else n
+        if (r != null && r.size == n.size && r.mtime == n.modified) n.copy(updated = r.updated, tags = r.tags, snip = r.snip, created = r.created) else n
     }
 
     private fun publish(list: List<Note>) {
@@ -199,8 +258,8 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                         val info = Meta.parse(text)
                         val hay = (n.title + "\n" + text).lowercase().take(300_000)
                         val snip = Meta.snippet(text, n.title)
-                        ix.put(db, n.uri.toString(), n.size, n.modified, info.updated, info.tags, hay, snip)
-                        rows[n.uri.toString()] = Index.Row(n.size, n.modified, info.updated, info.tags, snip)
+                        ix.put(db, n.uri.toString(), n.size, n.modified, info.updated, info.tags, hay, snip, info.created)
+                        rows[n.uri.toString()] = Index.Row(n.size, n.modified, info.updated, info.tags, snip, info.created)
                     }
                     db.setTransactionSuccessful()
                 } finally {
@@ -221,31 +280,42 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         val base = notes
         searchJob = viewModelScope.launch {
             delay(120)
-            val q = parseQuery(query)
+            val q = QueryParser.parse(query)
             val f = folder
-            val tagFilters = q.tags + listOfNotNull(tag)
+            val t = tag
             val body = inBody
             val sorter = sort
             val seen = indexed
             val pinned = pins
+            val per = period
             val result = withContext(Dispatchers.IO) {
                 var list = base
                 if (f != null) list = list.filter { it.folder == f || it.folder.startsWith("$f/") }
-                for (t in tagFilters) list = list.filter { n -> n.tags.any { it.equals(t, ignoreCase = true) } }
-                if (q.must.isNotEmpty() || q.not.isNotEmpty()) {
-                    fun titleMatch(n: Note): Boolean {
-                        val h = n.title.lowercase()
-                        return q.must.all { h.contains(it) } && q.not.none { h.contains(it) }
-                    }
-                    if (body) {
-                        val hit = runCatching { index().search(q.must, q.not) }.getOrDefault(emptySet())
-                        // 아직 색인되지 않은 노트는 제목으로만 비교한다
-                        list = list.filter { val u = it.uri.toString(); u in hit || (u !in seen && titleMatch(it)) }
-                    } else list = list.filter(::titleMatch)
+                if (t != null) list = list.filter { n -> n.tags.any { it.equals(t, ignoreCase = true) } }
+                if (per != Period.ALL) {
+                    val since = System.currentTimeMillis() - per.days * 86_400_000L
+                    list = list.filter { it.date >= since }
                 }
+                if (q != null) {
+                    if (body) {
+                        val args = ArrayList<String>()
+                        val where = QueryParser.toSql(q, args)
+                        val hit = runCatching { index().searchWhere(where, args.toTypedArray()) }.getOrDefault(emptySet())
+                        // 아직 색인되지 않은 노트는 제목·태그로만 비교한다
+                        list = list.filter { val u = it.uri.toString(); u in hit || (u !in seen && QueryParser.matches(q, it.title, it.tags)) }
+                    } else list = list.filter { QueryParser.matches(q, it.title, it.tags) }
+                }
+                val terms = if (q != null) QueryParser.terms(q) else emptyList()
                 val ordered = when (sorter) {
+                    Sort.RELEVANCE ->
+                        if (terms.isEmpty()) list.sortedByDescending { it.date }
+                        else list.sortedWith(compareByDescending<Note> { n ->
+                            val ti = n.title.lowercase(); val sn = n.snip.lowercase()
+                            terms.sumOf { w -> (if (ti.contains(w)) 10 else 0) + (if (sn.contains(w)) 3 else 0) }
+                        }.thenByDescending { it.date })
                     Sort.DATE_DESC -> list.sortedByDescending { it.date }
                     Sort.DATE_ASC -> list.sortedBy { it.date }
+                    Sort.CREATED_DESC -> list.sortedByDescending { if (it.created > 0) it.created else it.modified }
                     Sort.TITLE -> list.sortedBy { it.title.lowercase() }
                 }
                 if (pinned.isEmpty()) ordered else ordered.filter { it.uri.toString() in pinned } + ordered.filter { it.uri.toString() !in pinned }

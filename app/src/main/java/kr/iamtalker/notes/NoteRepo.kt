@@ -11,7 +11,7 @@ import android.provider.DocumentsContract.Document
  *  updated: 머리말의 수정 시각(없으면 0), tags: 머리말·본문에서 읽은 태그 */
 data class Note(
     val uri: Uri, val name: String, val folder: String, val parentId: String, val modified: Long, val size: Long,
-    val updated: Long = 0, val tags: List<String> = emptyList(), val snip: String = ""
+    val updated: Long = 0, val tags: List<String> = emptyList(), val snip: String = "", val created: Long = 0
 ) {
     val title: String get() = name.removeSuffix(".md").removeSuffix(".MD")
 

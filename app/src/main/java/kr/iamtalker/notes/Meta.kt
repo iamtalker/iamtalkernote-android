@@ -6,7 +6,7 @@ import java.time.ZoneOffset
 
 /** 노트 머리말(조플린 내보내기의 `---` 블록)에서 수정 시각과 태그를 읽는다. 데스크톱 앱(store.py)의 규칙을 따른다. */
 object Meta {
-    data class Info(val updated: Long, val tags: List<String>)
+    data class Info(val updated: Long, val tags: List<String>, val created: Long = 0)
 
     private val front = Regex("^﻿?---[ \\t]*\\r?\\n([\\s\\S]*?)\\r?\\n---[ \\t]*(?:\\r?\\n|$)")
     private val bodyTag = Regex("(?<![\\p{L}\\p{N}_&/#])#([\\p{L}\\p{N}_\\-]{1,40})")
@@ -22,6 +22,7 @@ object Meta {
     fun parse(text: String): Info {
         val (fm, body) = split(text)
         var updated = 0L
+        var created = 0L
         val tags = LinkedHashMap<String, String>()   // 소문자 → 처음 쓴 모양
         fun add(t: String) {
             val x = t.trim().trim('#', '"', '\'', '[', ']', ',').trim()
@@ -36,6 +37,7 @@ object Meta {
                 val v = m.groupValues[2].trim()
                 when (key) {
                     "updated" -> updated = parseDate(v)
+                    "created" -> created = parseDate(v)
                     "tags", "tag" -> {
                         if (v.isEmpty()) inTagList = true
                         else v.trim('[', ']').split(',').forEach(::add)
@@ -57,7 +59,7 @@ object Meta {
             }
             if (line.contains('#') && !line.startsWith("#")) bodyTag.findAll(line).forEach { add(it.groupValues[1]) }
         }
-        return Info(updated, tags.values.toList())
+        return Info(updated, tags.values.toList(), created)
     }
 
     private val mdMarks = Regex("!\\[[^\\]]*\\]\\([^)]*\\)|\\[([^\\]]*)\\]\\([^)]*\\)|[#>*_`~|]+|^\\s*(?:[-+]|\\d+[.)])\\s+|\\[[ xX]\\]")
