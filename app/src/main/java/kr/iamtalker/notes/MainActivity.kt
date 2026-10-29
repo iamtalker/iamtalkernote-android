@@ -153,6 +153,7 @@ fun App(model: NotesModel) {
 
     var screen by remember { mutableStateOf("") }
     if (screen == "trash") { TrashScreen(model, onBack = { screen = ""; model.refresh() }); return }
+    if (screen == "conflicts") { ConflictsScreen(model, onBack = { screen = "" }); return }
     if (screen == "dups") { DuplicatesScreen(model, onBack = { screen = "" }, onOpen = { screen = ""; open = it }); return }
     if (screen == "media") { UnusedMediaScreen(model, onBack = { screen = ""; model.refresh() }); return }
     if (screen == "journal") { JournalScreen(model, onBack = { screen = "" }, onOpen = { screen = ""; open = it }); return }
@@ -265,6 +266,7 @@ fun App(model: NotesModel) {
                                 HorizontalDivider()
                                 DropdownMenuItem(text = { Text("휴지통") }, onClick = { screen = "trash"; close() })
                                 DropdownMenuItem(text = { Text("전체 변경 이력") }, onClick = { screen = "journal"; close() })
+                                DropdownMenuItem(text = { Text("동기화 충돌" + if (model.conflicts.isEmpty()) "" else " (${model.conflicts.size})") }, onClick = { screen = "conflicts"; close() })
                                 DropdownMenuItem(text = { Text("중복 노트 찾기") }, onClick = { screen = "dups"; close() })
                                 DropdownMenuItem(text = { Text("안 쓰는 미디어") }, onClick = { screen = "media"; close() })
                                 DropdownMenuItem(text = { Text("새로고침") }, onClick = { model.refresh(); close() })
@@ -316,6 +318,11 @@ fun App(model: NotesModel) {
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
                 if (model.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (model.conflicts.isNotEmpty()) {
+                    Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth().clickable { screen = "conflicts" }) {
+                        Text("⚠ 동기화 충돌 ${model.conflicts.size}개 — 눌러서 해결", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 13.sp)
+                    }
+                }
                 val fmt = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {

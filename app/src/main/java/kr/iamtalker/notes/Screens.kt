@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -277,4 +279,68 @@ fun UnusedMediaScreen(model: NotesModel, onBack: () -> Unit) {
         )
     }
     result?.let { m -> AlertDialog(onDismissRequest = { result = null }, text = { Text(m) }, confirmButton = { TextButton(onClick = { result = null }) { Text("닫기") } }) }
+}
+
+/** 동기화 충돌 화면: 원래 노트와 충돌 복사본을 비교해 하나를 고르거나 둘 다 둔다 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConflictsScreen(model: NotesModel, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val fmt = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
+    var compare by remember { mutableStateOf<Conflicts.Pair?>(null) }
+    BackHandler { onBack() }
+    Scaffold(topBar = {
+        TopAppBar(title = { Text("동기화 충돌") }, navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } })
+    }) { pad ->
+        val list = model.conflicts
+        Box(Modifier.padding(pad).fillMaxSize()) {
+            if (list.isEmpty()) Text("충돌이 없습니다.", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
+            else LazyColumn(Modifier.fillMaxSize()) {
+                item { Text("양쪽에서 같은 노트를 고쳐 동기화 도구가 남긴 복사본입니다. 어느 쪽을 고르든 지는 쪽 내용은 노트 버전(또는 휴지통)에 남습니다.",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp)) }
+                items(list, key = { it.conflict.uri.toString() }) { p ->
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(History.relOf(p.original ?: p.conflict).removeSuffix(".md"), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (p.original != null) "내 것 ${fmt.format(Date(p.original.date))} · 상대 ${fmt.format(Date(p.conflict.modified))}"
+                            else "원래 노트가 없습니다 · 복사본 ${fmt.format(Date(p.conflict.modified))}",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.outline
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { compare = p }) { Text("비교") }
+                            if (p.original != null) {
+                                TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.KEEP_MINE) }) { Text("내 것") }
+                                TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.USE_THEIRS) }) { Text("상대 것") }
+                            } else TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.RESTORE_NAME) }) { Text("원래 이름으로") }
+                            TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.KEEP_BOTH) }) { Text("둘 다") }
+                        }
+                    }
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+    compare?.let { p ->
+        var mine by remember(p) { mutableStateOf("(읽는 중…)") }
+        var theirs by remember(p) { mutableStateOf("(읽는 중…)") }
+        LaunchedEffect(p) {
+            withContext(Dispatchers.IO) {
+                mine = p.original?.let { runCatching { NoteRepo.read(ctx, it.uri) }.getOrDefault("(읽지 못했습니다)") } ?: "(원래 노트 없음)"
+                theirs = runCatching { NoteRepo.read(ctx, p.conflict.uri) }.getOrDefault("(읽지 못했습니다)")
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { compare = null }, title = { Text("비교") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text("내 것", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    Text(mine.take(1500), fontSize = 12.sp)
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    Text("상대 것 (충돌 복사본)", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    Text(theirs.take(1500), fontSize = 12.sp)
+                }
+            },
+            confirmButton = { TextButton(onClick = { compare = null }) { Text("닫기") } }
+        )
+    }
 }

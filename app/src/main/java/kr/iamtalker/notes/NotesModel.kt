@@ -215,7 +215,27 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         if (r != null && r.size == n.size && r.mtime == n.modified) n.copy(updated = r.updated, tags = r.tags, snip = r.snip, created = r.created) else n
     }
 
-    private fun publish(list: List<Note>) {
+    /** 동기화 충돌 복사본(이름.sync-conflict-….md)과 그 원래 노트 */
+    var conflicts by mutableStateOf<List<Conflicts.Pair>>(emptyList())
+        private set
+
+    fun resolveConflict(p: Conflicts.Pair, choice: Conflicts.Choice) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { Conflicts.resolve(getApplication(), tree!!, this@NotesModel, p, choice) }
+            } catch (e: Exception) {
+                message = e.message ?: e.javaClass.simpleName
+            }
+            refresh()
+        }
+    }
+
+    private fun publish(all: List<Note>) {
+        val (conf, list) = all.partition { Conflicts.isConflict(it.name) }
+        conflicts = conf.map { c ->
+            val on = Conflicts.originalName(c.name)
+            Conflicts.Pair(c, list.firstOrNull { it.parentId == c.parentId && it.name == on })
+        }.sortedByDescending { it.conflict.modified }
         notes = list
         folders = NoteRepo.folders(list)
         val fc = HashMap<String, Int>()
