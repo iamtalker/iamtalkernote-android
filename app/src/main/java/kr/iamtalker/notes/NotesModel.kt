@@ -363,4 +363,74 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         NoteRepo.trash(getApplication(), tree!!, n)
         History.journal(getApplication(), tree!!, "delete", History.relOf(n), detail = "휴지통")
     }
+
+    // ---- 다른 앱에서 공유로 받은 글: (제목 후보, 본문). 앱에서 노트북을 고르면 새 노트로 저장한다
+    var shared by mutableStateOf<Pair<String, String>?>(null)
+
+    fun handleSend(intent: Intent?) {
+        if (intent == null || intent.action != Intent.ACTION_SEND || intent.type?.startsWith("text/") != true) return
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+        shared = (intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: "") to text
+    }
+
+    /** 공유받은 글을 새 노트로 저장한다. 주소가 있으면 데스크톱 클리퍼처럼 머리말 source 에 적는다 */
+    fun saveShared(title: String, text: String, folder: String) {
+        val t = tree ?: return
+        shared = null
+        viewModelScope.launch {
+            try {
+                val note = withContext(Dispatchers.IO) {
+                    val parent = if (folder.isEmpty()) null else folderIds[folder]
+                    val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else folder, title) ?: throw IllegalStateException("노트를 만들 수 없습니다")
+                    val url = Regex("https?://\\S+").find(text)?.value
+                    NoteRepo.write(getApplication(), n.uri, (if (url != null) "---\nsource: $url\n---\n\n" else "") + text.trim() + "\n")
+                    History.journal(getApplication(), t, "create", History.relOf(n), detail = "공유로 받음")
+                    n
+                }
+                message = "저장했습니다: ${note.title}"
+                refresh()
+            } catch (e: Exception) {
+                message = e.message ?: e.javaClass.simpleName
+            }
+        }
+    }
+
+    // ---- 사진·그림 첨부: 볼트 안 .resources 에 복사하고 노트에서 가리킬 상대 경로를 돌려준다
+    fun attachImage(uri: Uri, note: Note): String {
+        val ctx = getApplication<Application>()
+        val t = tree!!
+        val mime = ctx.contentResolver.getType(uri) ?: "image/jpeg"
+        val ext = when {
+            mime.contains("png") -> "png"
+            mime.contains("webp") -> "webp"
+            mime.contains("gif") -> "gif"
+            else -> "jpg"
+        }
+        val root = android.provider.DocumentsContract.getTreeDocumentId(t)
+        val res = History.dir(ctx, t, root, ".resources", true) ?: throw IllegalStateException(".resources 폴더를 만들 수 없습니다")
+        val name = java.util.UUID.randomUUID().toString().replace("-", "") + "." + ext
+        val dst = android.provider.DocumentsContract.createDocument(ctx.contentResolver, History.docUri(t, res), mime, name)
+            ?: throw IllegalStateException("그림 파일을 만들 수 없습니다")
+        ctx.contentResolver.openInputStream(uri)?.use { input ->
+            ctx.contentResolver.openOutputStream(dst, "wt")?.use { out -> input.copyTo(out) }
+        } ?: throw IllegalStateException("그림을 읽을 수 없습니다")
+        NoteRepo.clearCache()
+        val depth = note.folder.split('/').count { it.isNotEmpty() }
+        return "../".repeat(depth) + ".resources/" + name
+    }
+
+    // ---- 태그 관리: 그 태그가 든 모든 노트에서 이름 바꾸기(이미 있는 이름이면 합치기)·삭제
+    fun retagAll(old: String, new: String?) {
+        selected = notes.filter { n -> n.tags.any { it.equals(old, ignoreCase = true) } }.map { it.uri.toString() }.toSet()
+        batch(if (new == null) "태그 삭제" else "태그 이름 변경") { n ->
+            val ctx = getApplication<Application>()
+            val text = NoteRepo.read(ctx, n.uri)
+            val out = NoteText.retag(text, old, new)
+            if (out != text) {
+                runCatching { History.snapshot(ctx, tree!!, History.relOf(n), text, out, true) }
+                NoteRepo.write(ctx, n.uri, out)   // 수정 시각은 바꾸지 않는다(데스크톱과 같게)
+                History.journal(ctx, tree!!, "tags", History.relOf(n), detail = if (new == null) "#$old 삭제" else "#$old → #$new")
+            }
+        }
+    }
 }

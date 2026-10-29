@@ -90,9 +90,15 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private val model: NotesModel by viewModels()
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        model.handleSend(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CrashLog.install(this)
+        model.handleSend(intent)
         setContent {
             val dark = isSystemInDarkTheme()
             MaterialTheme(colorScheme = if (dark) darkColorScheme(primary = Color(0xFFB9A6FF)) else lightColorScheme(primary = Color(0xFF6D4AFF))) {
@@ -163,6 +169,7 @@ fun App(model: NotesModel) {
     var newDialog by remember { mutableStateOf(false) }
     var batchDialog by remember { mutableStateOf("") }          // move / tag / trash
     var saveDialog by remember { mutableStateOf(false) }
+    var tagDialog by remember { mutableStateOf<String?>(null) }
     var deleteSaved by remember { mutableStateOf<Saved?>(null) }
     var searchFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -213,7 +220,8 @@ fun App(model: NotesModel) {
                         items(model.tagCounts, key = { "t:" + it.first }) { (t, n) ->
                             NavigationDrawerItem(
                                 label = { Text("#$t", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                selected = model.tag.equals(t, ignoreCase = true), badge = { Text("$n") },
+                                selected = model.tag.equals(t, ignoreCase = true),
+                                badge = { Row(verticalAlignment = Alignment.CenterVertically) { Text("$n"); TextButton(onClick = { tagDialog = t }) { Text("⋮") } } },
                                 onClick = { model.changeFolder(null); model.changeTag(t); scope.launch { drawer.close() } },
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
@@ -333,6 +341,55 @@ fun App(model: NotesModel) {
                     item { Spacer(Modifier.height(72.dp)) }
                 }
             }
+        }
+    }
+    tagDialog?.let { tg ->
+        var name by remember(tg) { mutableStateOf(tg) }
+        var confirmDelete by remember(tg) { mutableStateOf(false) }
+        val count = model.tagCounts.firstOrNull { it.first == tg }?.second ?: 0
+        AlertDialog(
+            onDismissRequest = { tagDialog = null }, title = { Text("#$tg") },
+            text = {
+                Column {
+                    Text("이 태그가 든 노트 ${count}개에 적용됩니다. 머리말 tags·글 아래 ‘태그:’ 줄·본문 #태그를 모두 고치고, 이전 내용은 노트 버전으로 남습니다.", fontSize = 12.sp)
+                    if (confirmDelete) Text("‘#$tg’ 를 모든 노트에서 지울까요? 본문에 쓴 #태그는 글에서도 지워집니다.", modifier = Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.error)
+                    else OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text("새 이름 (이미 있는 이름이면 합쳐짐)") }, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                if (confirmDelete) TextButton(onClick = { tagDialog = null; model.retagAll(tg, null) }) { Text("지우기") }
+                else TextButton(enabled = name.isNotBlank() && name.trim().trimStart('#') != tg, onClick = { tagDialog = null; model.retagAll(tg, name) }) { Text("이름 바꾸기") }
+            },
+            dismissButton = {
+                Row {
+                    if (!confirmDelete) TextButton(onClick = { confirmDelete = true }) { Text("삭제") }
+                    TextButton(onClick = { tagDialog = null }) { Text("취소") }
+                }
+            }
+        )
+    }
+    model.shared?.let { sh ->
+        if (model.tree == null) {
+            AlertDialog(onDismissRequest = { model.shared = null }, text = { Text("먼저 노트 폴더를 골라 주세요.") }, confirmButton = { TextButton(onClick = { model.shared = null }) { Text("닫기") } })
+        } else {
+            val first = sh.first.ifBlank { sh.second.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty() }.trim().take(60)
+            var title by remember(sh) { mutableStateOf(first) }
+            var folder by remember(sh) { mutableStateOf(model.folder ?: "") }
+            AlertDialog(
+                onDismissRequest = { model.shared = null }, title = { Text("공유받은 글을 저장") },
+                text = {
+                    Column {
+                        OutlinedTextField(value = title, onValueChange = { title = it }, singleLine = true, label = { Text("제목") })
+                        Text(sh.second.take(200), fontSize = 12.sp, maxLines = 4, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 8.dp))
+                        MenuButton("노트북: " + (folder.ifEmpty { "(맨 위)" }.substringAfterLast('/'))) { close ->
+                            DropdownMenuItem(text = { Text("(맨 위)") }, onClick = { folder = ""; close() })
+                            for (f in model.folders) DropdownMenuItem(text = { Text("  ".repeat(f.count { it == '/' }) + f.substringAfterLast('/')) }, onClick = { folder = f; close() })
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { model.saveShared(title, sh.second, folder) }) { Text("저장") } },
+                dismissButton = { TextButton(onClick = { model.shared = null }) { Text("취소") } }
+            )
         }
     }
     model.message?.let { m ->

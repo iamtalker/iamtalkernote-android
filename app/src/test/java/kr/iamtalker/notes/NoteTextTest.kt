@@ -47,4 +47,18 @@ class NoteTextTest {
     @Test fun linkByTitle() {
         assertEquals("회의록", NoteText.findByTitle(listOf("a", "회의록"), " 회의록 ") { it })
     }
+
+    @Test fun retagRenamesEverywhere() {
+        val t = "---\ntitle: x\ntags: [Work, 경제]\n---\n본문 #work 와 #workout 은 다르고\n```\n#work\n```\n\n태그: #경제 #work\n"
+        val r = NoteText.retag(t, "work", "일")
+        assertEquals("---\ntitle: x\ntags: [일, 경제]\n---\n본문 #일 와 #workout 은 다르고\n```\n#work\n```\n\n태그: #경제 #일\n", r)
+    }
+
+    @Test fun retagDeleteAndMerge() {
+        val t = "---\ntags:\n  - a\n  - b\n---\n글 #b 끝\n\n태그: #a #b\n"
+        assertEquals("---\ntags:\n  - a\n---\n글  끝\n\n태그: #a\n", NoteText.retag(t, "b", null))
+        // 이미 있는 이름으로 바꾸면 합쳐진다(중복 없음)
+        assertEquals("태그: #a\n", NoteText.retag("태그: #a #b\n", "b", "a"))
+        assertEquals("그대로 #z", NoteText.retag("그대로 #z", "q", "r"))
+    }
 }

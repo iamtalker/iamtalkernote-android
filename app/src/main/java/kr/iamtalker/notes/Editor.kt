@@ -2,6 +2,8 @@ package kr.iamtalker.notes
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +73,20 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     var findQ by remember { mutableStateOf("") }
     var findIdx by remember { mutableIntStateOf(0) }
     val focus = remember { FocusRequester() }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            try {
+                val path = withContext(Dispatchers.IO) { model.attachImage(uri, note) }
+                val v = tfv ?: return@launch
+                val at = v.selection.end.coerceIn(0, v.text.length)
+                val ins = "\n![](" + path + ")\n"
+                editing = true
+                tfv = TextFieldValue(v.text.substring(0, at) + ins + v.text.substring(at), TextRange(at + ins.length))
+            } catch (e: Exception) {
+                error = e.message ?: e.javaClass.simpleName
+            }
+        }
+    }
 
     LaunchedEffect(start.uri) {
         val t = withContext(Dispatchers.IO) { NoteRepo.read(ctx, start.uri) }
@@ -175,6 +191,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         TextButton(onClick = { format { t, s, e -> NoteText.linePrefix(t, s, e, "> ") } }) { Text("인용") }
                         TextButton(onClick = { format { t, s, e -> NoteText.wrap(t, s, e, "[", "]()") } }) { Text("링크") }
                         TextButton(onClick = { format { t, s, e -> NoteText.wrap(t, s, e, "[[", "]]") } }) { Text("[[노트]]") }
+                        TextButton(onClick = { pickImage.launch("image/*") }) { Text("그림") }
                     }
                 }
             }

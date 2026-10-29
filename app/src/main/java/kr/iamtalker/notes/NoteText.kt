@@ -96,4 +96,71 @@ object NoteText {
     /** 노트 링크 [[제목]] 의 제목 → 노트 (제목이 같은 것 중 첫째, 대소문자 무시) */
     fun <T> findByTitle(items: List<T>, title: String, titleOf: (T) -> String): T? =
         items.firstOrNull { titleOf(it).equals(title.trim(), ignoreCase = true) }
+
+    // ---- 태그 이름 바꾸기·삭제: 머리말 tags / 글 아래 '태그:' 줄 / 본문 #태그 세 군데를 모두 고친다(코드 블록은 건드리지 않음)
+    private val bodyTagRe = Regex("(?<![\\p{L}\\p{N}_&/#])#([\\p{L}\\p{N}_\\-]{1,40})")
+
+    private fun sameTag(a: String, b: String) = a.trim().trimStart('#').equals(b.trim().trimStart('#'), ignoreCase = true)
+
+    /** 태그 old 를 new 로 바꾼다(new 가 null 이면 지운다). 바뀐 곳이 없으면 같은 글을 돌려준다. 이름의 공백은 _ 로 바뀐다 */
+    fun retag(text: String, old: String, new: String?): String {
+        val nw = new?.trim()?.trimStart('#')?.replace(Regex("\\s+"), "_")?.ifEmpty { null }
+        val off = bodyStart(text)
+        val head = text.substring(0, off)
+        val rest = text.substring(off)
+
+        // 머리말: tags: a, b / tags: [a, b] / 목록 형식
+        val headOut = StringBuilder()
+        var inList = false
+        for (line in head.split("\n")) {
+            val m = Regex("^(tags?)([ \\t]*:[ \\t]*)(.*)$", RegexOption.IGNORE_CASE).find(line)
+            if (m != null) {
+                val v = m.groupValues[3].trim()
+                inList = v.isEmpty()
+                if (v.isNotEmpty()) {
+                    val br = v.startsWith("[")
+                    val parts = v.trim('[', ']').split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                    val out = LinkedHashMap<String, String>()
+                    for (p in parts) {
+                        val rep = if (sameTag(p, old)) nw else p
+                        if (rep != null) out.putIfAbsent(rep.lowercase(), rep)
+                    }
+                    if (parts.any { sameTag(it, old) }) {
+                        headOut.append(if (out.isEmpty()) "" else m.groupValues[1] + m.groupValues[2] + (if (br) "[" else "") + out.values.joinToString(", ") + (if (br) "]" else "")).append("\n")
+                        continue
+                    }
+                }
+            } else if (inList) {
+                val t = line.trim()
+                if (t.startsWith("-")) {
+                    if (sameTag(t.removePrefix("-"), old)) { if (nw != null) headOut.append(line.substringBefore("-")).append("- ").append(nw).append("\n"); continue }
+                } else if (t.isNotEmpty()) inList = false
+            }
+            headOut.append(line).append("\n")
+        }
+        val newHead = if (head.isEmpty()) "" else headOut.toString().removeSuffix("\n")
+
+        // 본문
+        var fence = false
+        val out = ArrayList<String>()
+        for (line in rest.split("\n")) {
+            if (line.trimStart().startsWith("```") || line.trimStart().startsWith("~~~")) { fence = !fence; out.add(line); continue }
+            if (fence) { out.add(line); continue }
+            val tl = tagLine.find(line)
+            if (tl != null && !line.contains("](")) {
+                val toks = tl.groupValues[1].split(',', ' ', '\t').map { it.trim().trimStart('#') }.filter { it.isNotEmpty() }
+                if (toks.any { sameTag(it, old) }) {
+                    val seen = LinkedHashMap<String, String>()
+                    for (t in toks) { val r = if (sameTag(t, old)) nw else t; if (r != null) seen.putIfAbsent(r.lowercase(), r) }
+                    if (seen.isNotEmpty()) out.add("태그: " + seen.values.joinToString(" ") { "#$it" })
+                    continue
+                }
+            }
+            if (line.startsWith("#") && !line.startsWith("##") && line.length > 1 && line[1] == ' ') { out.add(line); continue }   // 제목 줄
+            out.add(if (line.contains('#')) bodyTagRe.replace(line) { m ->
+                if (!sameTag(m.groupValues[1], old)) m.value else if (nw != null) "#$nw" else ""
+            } else line)
+        }
+        return newHead + out.joinToString("\n")
+    }
 }
