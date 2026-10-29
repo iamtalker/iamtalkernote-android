@@ -124,7 +124,12 @@ fun App(model: NotesModel) {
 
     val cur = open
     if (cur != null) {
-        Editor(cur, model, onClose = { open = null; model.refresh() })
+        androidx.compose.runtime.key(cur.uri) {
+            Editor(cur, model, onClose = { open = null; model.refresh() }, onOpenTitle = { title ->
+                val n = NoteText.findByTitle(model.notes, title) { it.title }
+                if (n != null) open = n else android.widget.Toast.makeText(ctx, "‘$title’ 노트를 찾지 못했습니다", android.widget.Toast.LENGTH_SHORT).show()
+            })
+        }
         return
     }
     val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -265,126 +270,6 @@ fun App(model: NotesModel) {
                 }) { Text("만들기") }
             },
             dismissButton = { TextButton(onClick = { newDialog = false }) { Text("취소") } }
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun Editor(start: Note, model: NotesModel, onClose: () -> Unit) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var note by remember { mutableStateOf(start) }
-    var text by remember { mutableStateOf<String?>(null) }
-    var saved by remember { mutableStateOf("") }
-    var editing by remember { mutableStateOf(start.size == 0L) }   // 새 노트는 바로 편집, 기존 노트는 보기부터
-    var dialog by remember { mutableStateOf("") }                   // rename / move / delete
-    var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(start.uri) {
-        val t = withContext(Dispatchers.IO) { NoteRepo.read(ctx, start.uri) }
-        text = t; saved = t
-    }
-    fun save() {
-        val t = text ?: return
-        if (t != saved) {
-            NoteRepo.write(ctx, note.uri, t)
-            saved = t
-        }
-    }
-    /** 노트를 바꾸는 일은 파일 시스템을 만지므로 백그라운드에서 하고, 실패하면 이유를 보여 준다(노트는 그대로) */
-    fun act(work: () -> Note?) {
-        save()
-        scope.launch {
-            try {
-                val n = withContext(Dispatchers.IO) { work() }
-                if (n == null) onClose() else note = n
-            } catch (e: Exception) {
-                error = e.message ?: e.javaClass.simpleName
-            }
-        }
-    }
-    BackHandler { save(); onClose() }
-    val pinned = note.uri.toString() in model.pins
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text(note.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = { TextButton(onClick = { save(); onClose() }) { Text("←", fontSize = 20.sp) } },
-            actions = {
-                TextButton(onClick = { if (editing) save(); editing = !editing }) { Text(if (editing) "보기" else "편집") }
-                MenuButton("⋮") { close ->
-                    DropdownMenuItem(text = { Text(if (pinned) "고정 해제" else "맨 위에 고정") }, onClick = { model.togglePin(note); close() })
-                    DropdownMenuItem(text = { Text("공유") }, onClick = {
-                        close()
-                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, note.title).putExtra(Intent.EXTRA_TEXT, text ?: "")
-                        ctx.startActivity(Intent.createChooser(send, "공유"))
-                    })
-                    DropdownMenuItem(text = { Text("이름 바꾸기") }, onClick = { close(); dialog = "rename" })
-                    DropdownMenuItem(text = { Text("노트북으로 이동") }, onClick = { close(); dialog = "move" })
-                    HorizontalDivider()
-                    DropdownMenuItem(text = { Text("휴지통으로") }, onClick = { close(); dialog = "delete" })
-                }
-            }
-        )
-    }) { pad ->
-        val t = text
-        if (t == null) {
-            Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        } else if (editing) {
-            BasicTextField(
-                value = t, onValueChange = { text = it },
-                textStyle = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.padding(pad).fillMaxSize().padding(16.dp).imePadding()
-            )
-        } else {
-            MarkdownView(
-                t, Modifier.padding(pad).fillMaxSize(),
-                loadImage = { src ->
-                    withContext(Dispatchers.IO) {
-                        if (src.startsWith("http") || src.startsWith(":/")) null
-                        else NoteRepo.resolve(ctx, model.tree!!, note.folder, src)?.let { NoteRepo.loadBitmap(ctx, it)?.asImageBitmap() }
-                    }
-                },
-                onToggle = { line ->
-                    val n = toggleCheckbox(t, line)
-                    text = n
-                    runCatching { NoteRepo.write(ctx, note.uri, n); saved = n }
-                }
-            )
-        }
-    }
-    error?.let { msg ->
-        AlertDialog(onDismissRequest = { error = null }, title = { Text("할 수 없습니다") }, text = { Text(msg) },
-            confirmButton = { TextButton(onClick = { error = null }) { Text("닫기") } })
-    }
-    when (dialog) {
-        "rename" -> {
-            var name by remember { mutableStateOf(note.title) }
-            AlertDialog(
-                onDismissRequest = { dialog = "" }, title = { Text("이름 바꾸기") },
-                text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true) },
-                confirmButton = { TextButton(onClick = { dialog = ""; act { model.renameNote(note, name) } }) { Text("바꾸기") } },
-                dismissButton = { TextButton(onClick = { dialog = "" }) { Text("취소") } }
-            )
-        }
-        "move" -> AlertDialog(
-            onDismissRequest = { dialog = "" }, title = { Text("노트북으로 이동") },
-            text = {
-                LazyColumn {
-                    items(listOf("") + model.folders) { f ->
-                        Text(if (f.isEmpty()) "(맨 위)" else "  ".repeat(f.count { it == '/' }) + f.substringAfterLast('/'),
-                            modifier = Modifier.fillMaxWidth().clickable { dialog = ""; act { model.moveNote(note, f) } }.padding(vertical = 10.dp),
-                            color = if (f == note.folder) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            },
-            confirmButton = {}, dismissButton = { TextButton(onClick = { dialog = "" }) { Text("취소") } }
-        )
-        "delete" -> AlertDialog(
-            onDismissRequest = { dialog = "" }, title = { Text("휴지통으로 보낼까요?") },
-            text = { Text("‘${note.title}’ 을 휴지통(.trash)으로 옮깁니다. 컴퓨터의 iamtalkernote 에서 복원할 수 있습니다.") },
-            confirmButton = { TextButton(onClick = { dialog = ""; act { model.trashNote(note); null } }) { Text("휴지통으로") } },
-            dismissButton = { TextButton(onClick = { dialog = "" }) { Text("취소") } }
         )
     }
 }

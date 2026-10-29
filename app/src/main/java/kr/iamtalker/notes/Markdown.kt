@@ -59,7 +59,7 @@ private val rule = Regex("^\\s*(-{3,}|\\*{3,}|_{3,})\\s*$")
 private val item = Regex("^(\\s*)([-*+]|\\d+[.)])\\s+(.*)$")
 private val check = Regex("^\\[([ xX])\\]\\s+(.*)$")
 private val imageLine = Regex("^!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)\\s*$")
-private val inline = Regex("!\\[([^\\]]*)\\]\\(([^)]*)\\)|\\[([^\\]]+)\\]\\(([^)\\s]*)[^)]*\\)|\\*\\*(.+?)\\*\\*|__(.+?)__|`([^`]+)`|~~(.+?)~~|\\*([^*\\n]+?)\\*")
+private val inline = Regex("!\\[([^\\]]*)\\]\\(([^)]*)\\)|\\[([^\\]]+)\\]\\(([^)\\s]*)[^)]*\\)|\\*\\*(.+?)\\*\\*|__(.+?)__|`([^`]+)`|~~(.+?)~~|\\*([^*\\n]+?)\\*|\\[\\[([^\\]]+)\\]\\]")
 
 fun parseBlocks(body: String): List<Block> {
     val out = ArrayList<Block>()
@@ -136,6 +136,11 @@ fun inlineText(s: String, link: Color, codeBg: Color, muted: Color): AnnotatedSt
             g[7] != null -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg)) { append(g[7]!!.value) }
             g[8] != null -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { append(g[8]!!.value) }
             g[9] != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(g[9]!!.value) }
+            g[10] != null -> {   // 노트 링크 [[제목]]
+                pushStringAnnotation("NOTE", g[10]!!.value)
+                withStyle(SpanStyle(color = link, textDecoration = TextDecoration.Underline)) { append(g[10]!!.value) }
+                pop()
+            }
         }
     }
     append(s.substring(pos))
@@ -163,7 +168,8 @@ private fun NoteImage(block: Block.Img, loader: suspend (String) -> ImageBitmap?
 fun MarkdownView(
     text: String, modifier: Modifier = Modifier,
     loadImage: suspend (String) -> ImageBitmap? = { null },
-    onToggle: (Int) -> Unit = {}
+    onToggle: (Int) -> Unit = {},
+    onNoteLink: (String) -> Unit = {}
 ) {
     val parts = remember(text) {
         val (_, body) = Meta.split(text)
@@ -183,7 +189,10 @@ fun MarkdownView(
         ClickableText(
             text = a, modifier = modifier,
             style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.5f).sp, fontWeight = weight, color = color, textDecoration = deco),
-            onClick = { off -> a.getStringAnnotations("URL", off, off).firstOrNull()?.let { runCatching { uri.openUri(it.item) } } }
+            onClick = { off ->
+                a.getStringAnnotations("URL", off, off).firstOrNull()?.let { runCatching { uri.openUri(it.item) } }
+                a.getStringAnnotations("NOTE", off, off).firstOrNull()?.let { onNoteLink(it.item) }
+            }
         )
     }
 
