@@ -274,7 +274,10 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             Conflicts.Pair(c, list.firstOrNull { it.parentId == c.parentId && it.name == on })
         }.sortedByDescending { it.conflict.modified }
         notes = list
-        folders = NoteRepo.folders(list)
+        val fset = sortedSetOf<String>()
+        fset.addAll(NoteRepo.folders(list))
+        for (k in NoteRepo.dirs.keys) { var f = k; while (f.isNotEmpty()) { fset.add(f); f = f.substringBeforeLast('/', "") } }   // 빈 노트북도
+        folders = fset.toList()
         val fc = HashMap<String, Int>()
         val ids = HashMap<String, String>()
         for (n in list) {
@@ -286,6 +289,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 f = f.substringBeforeLast('/', "")
             }
         }
+        for ((k, v) in NoteRepo.dirs) ids.putIfAbsent(k, v)
         folderCounts = fc
         folderIds = ids
         val counts = LinkedHashMap<String, Pair<String, Int>>()
@@ -442,7 +446,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     fun create(title: String): Note? {
         val t = tree ?: return null
         val f = folder
-        val parent = if (f == null) null else notes.firstOrNull { it.folder == f }?.parentId
+        val parent = if (f == null) null else folderIds[f] ?: notes.firstOrNull { it.folder == f }?.parentId
         val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else f ?: "", title) ?: return null
         publish(listOf(n.copy(updated = System.currentTimeMillis())) + notes)
         bg { History.journal(getApplication(), t, "create", History.relOf(n)) }
@@ -566,5 +570,50 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     fun trashMany(list: List<Note>) {
         selected = list.map { it.uri.toString() }.toSet()
         batch("휴지통") { n -> trashNote(n) }
+    }
+
+    // ---- 노트북(폴더) 만들기·휴지통으로
+    private fun rootDocId() = android.provider.DocumentsContract.getTreeDocumentId(tree!!)
+
+    /** parent 노트북("" 이면 맨 위) 안에 새 노트북을 만들고 그 노트북을 연다 */
+    fun createNotebook(parent: String, name: String) {
+        val t = tree ?: return
+        viewModelScope.launch {
+            try {
+                val path = withContext(Dispatchers.IO) {
+                    val pid = if (parent.isEmpty()) rootDocId() else folderIds[parent] ?: throw IllegalStateException("상위 노트북을 찾을 수 없습니다")
+                    NoteRepo.createFolder(getApplication(), t, pid, name)
+                    val clean = name.trim().replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                    val p = if (parent.isEmpty()) clean else "$parent/$clean"
+                    History.journal(getApplication(), t, "create", p, detail = "노트북")
+                    p
+                }
+                refresh()
+                folder = path; tag = null; showDocs = false
+                reapply()
+            } catch (e: Exception) {
+                message = e.message ?: e.javaClass.simpleName
+            }
+        }
+    }
+
+    fun deleteNotebook(path: String) {
+        val t = tree ?: return
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val id = folderIds[path] ?: throw IllegalStateException("노트북을 찾을 수 없습니다")
+                    val parent = path.substringBeforeLast('/', "")
+                    val pid = if (parent.isEmpty()) rootDocId() else folderIds[parent] ?: throw IllegalStateException("상위 노트북을 찾을 수 없습니다")
+                    NoteRepo.trashFolder(getApplication(), t, path, id, pid)
+                    History.journal(getApplication(), t, "delete", path, detail = "노트북 휴지통")
+                }
+                if (folder == path || folder?.startsWith("$path/") == true) folder = null
+                message = "‘${path.substringAfterLast('/')}’ 노트북을 휴지통으로 보냈습니다"
+                refresh()
+            } catch (e: Exception) {
+                message = e.message ?: e.javaClass.simpleName
+            }
+        }
     }
 }

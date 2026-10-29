@@ -175,6 +175,8 @@ fun App(model: NotesModel) {
     var batchDialog by remember { mutableStateOf("") }          // move / tag / trash
     var saveDialog by remember { mutableStateOf(false) }
     var tagDialog by remember { mutableStateOf<String?>(null) }
+    var notebookDialog by remember { mutableStateOf(false) }
+    var notebookMenu by remember { mutableStateOf<String?>(null) }   // ⋮ 를 누른 노트북
     var deleteSaved by remember { mutableStateOf<Saved?>(null) }
     var searchFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -222,11 +224,16 @@ fun App(model: NotesModel) {
                         }
                     }
                     item { Text("노트북", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 28.dp, top = 14.dp, bottom = 4.dp)) }
+                    item {
+                        NavigationDrawerItem(label = { Text("+  새 노트북") }, selected = false,
+                            onClick = { notebookDialog = true }, modifier = Modifier.padding(horizontal = 12.dp))
+                    }
                     items(model.folders, key = { "f:$it" }) { f ->
                         val depth = f.count { it == '/' }
                         NavigationDrawerItem(
                             label = { Text(f.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            selected = model.folder == f, badge = { Text("${model.folderCounts[f] ?: 0}") },
+                            selected = model.folder == f,
+                            badge = { Row(verticalAlignment = Alignment.CenterVertically) { Text("${model.folderCounts[f] ?: 0}"); TextButton(onClick = { notebookMenu = f }) { DotsIcon() } } },
                             onClick = { model.changeFolder(f); model.changeTag(null); scope.launch { drawer.close() } },
                             modifier = Modifier.padding(start = (12 + depth * 16).dp, end = 12.dp)
                         )
@@ -447,6 +454,32 @@ fun App(model: NotesModel) {
                 dismissButton = { TextButton(onClick = { model.shared = null }) { Text("취소") } }
             )
         }
+    }
+    if (notebookDialog) {
+        var name by remember { mutableStateOf("") }
+        var parent by remember { mutableStateOf(model.folder ?: "") }
+        AlertDialog(
+            onDismissRequest = { notebookDialog = false }, title = { Text("새 노트북") },
+            text = {
+                Column {
+                    OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text("노트북 이름") })
+                    MenuButton("위치: " + (if (parent.isEmpty()) "(맨 위)" else parent.substringAfterLast('/'))) { close ->
+                        DropdownMenuItem(text = { Text("(맨 위)") }, onClick = { parent = ""; close() })
+                        for (f in model.folders) DropdownMenuItem(text = { Text("  ".repeat(f.count { it == '/' }) + f.substringAfterLast('/')) }, onClick = { parent = f; close() })
+                    }
+                }
+            },
+            confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { notebookDialog = false; model.createNotebook(parent, name); scope.launch { drawer.close() } }) { Text("만들기") } },
+            dismissButton = { TextButton(onClick = { notebookDialog = false }) { Text("취소") } }
+        )
+    }
+    notebookMenu?.let { nb ->
+        AlertDialog(
+            onDismissRequest = { notebookMenu = null }, title = { Text(nb.substringAfterLast('/')) },
+            text = { Text("노트 ${model.folderCounts[nb] ?: 0}개가 든 이 노트북(하위 노트북 포함)을 통째로 휴지통으로 보낼까요? 컴퓨터의 iamtalkernote 에서 복원할 수 있습니다.") },
+            confirmButton = { TextButton(onClick = { notebookMenu = null; model.deleteNotebook(nb) }) { Text("휴지통으로") } },
+            dismissButton = { TextButton(onClick = { notebookMenu = null }) { Text("취소") } }
+        )
     }
     model.message?.let { m ->
         AlertDialog(onDismissRequest = { model.message = null }, text = { Text(m) }, confirmButton = { TextButton(onClick = { model.message = null }) { Text("닫기") } })

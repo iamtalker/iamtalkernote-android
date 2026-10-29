@@ -26,10 +26,15 @@ object NoteRepo {
     /** 점으로 시작하는 폴더(.history .trash .resources …)와 _resources 는 데스크톱 앱처럼 건너뛴다 */
     private fun skipDir(name: String) = name.startsWith(".") || name == "_resources"
 
+    /** 마지막 scan 에서 찾은 모든 노트북(폴더): 경로 → 문서 id. 노트가 없는 빈 노트북도 들어 있다 */
+    @Volatile var dirs: Map<String, String> = emptyMap()
+
     fun scan(ctx: Context, tree: Uri, onProgress: (Int) -> Unit = {}): List<Note> {
         val out = ArrayList<Note>()
+        val found = HashMap<String, String>()
         val rootId = DocumentsContract.getTreeDocumentId(tree)
         fun walk(docId: String, folder: String) {
+            if (folder.isNotEmpty()) found[folder] = docId
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId)
             val dirs = ArrayList<Pair<String, String>>()
             ctx.contentResolver.query(children, columns, null, null, null)?.use { c ->
@@ -47,6 +52,7 @@ object NoteRepo {
             for ((id, f) in dirs) walk(id, f)
         }
         walk(rootId, "")
+        dirs = found
         return out
     }
 
@@ -124,6 +130,45 @@ object NoteRepo {
     }
 
     /** 휴지통(.trash/<번호>/item + meta.json)으로 옮긴다 — 데스크톱 앱에서 복원할 수 있다. 어느 단계든 실패하면 지우지 않고 예외를 던진다. */
+    /** 새 노트북(폴더)을 만든다 → 만든 폴더의 문서 id */
+    fun createFolder(ctx: Context, tree: Uri, parentId: String, name: String): String {
+        val clean = safeName(name)
+        val u = DocumentsContract.createDocument(ctx.contentResolver, DocumentsContract.buildDocumentUriUsingTree(tree, parentId), Document.MIME_TYPE_DIR, clean)
+            ?: throw IllegalStateException("노트북을 만들 수 없습니다")
+        clearCache()
+        return DocumentsContract.getDocumentId(u)
+    }
+
+    /** 노트북(폴더) 통째로 휴지통(.trash/<번호>/item + meta.json, dir=true)으로 옮긴다 — 데스크톱에서 복원할 수 있다 */
+    fun trashFolder(ctx: Context, tree: Uri, path: String, folderId: String, parentId: String) {
+        val r = ctx.contentResolver
+        clearCache()
+        val rootId = DocumentsContract.getTreeDocumentId(tree)
+        fun docUri(id: String) = DocumentsContract.buildDocumentUriUsingTree(tree, id)
+        val trashId = children(ctx, tree, rootId)[".trash"]
+            ?: DocumentsContract.createDocument(r, docUri(rootId), Document.MIME_TYPE_DIR, ".trash")?.let { DocumentsContract.getDocumentId(it) }
+            ?: throw IllegalStateException("휴지통 폴더를 만들 수 없습니다")
+        val tid = "${System.currentTimeMillis()}-" + Integer.toHexString((Math.random() * 0xFFFFFF).toInt()).padStart(6, '0')
+        val tidId = DocumentsContract.createDocument(r, docUri(trashId), Document.MIME_TYPE_DIR, tid)?.let { DocumentsContract.getDocumentId(it) }
+            ?: throw IllegalStateException("휴지통 항목을 만들 수 없습니다")
+        try {
+            val meta = DocumentsContract.createDocument(r, docUri(tidId), "application/json", "meta.json")
+                ?: throw IllegalStateException("휴지통 정보를 만들 수 없습니다")
+            write(ctx, meta, "{\"rel\": " + org.json.JSONObject.quote(path) + ", \"deleted\": " + (System.currentTimeMillis() / 1000.0) + ", \"dir\": true}")
+            val moved = DocumentsContract.moveDocument(r, docUri(folderId), docUri(parentId), docUri(tidId))
+                ?: throw IllegalStateException("이 폴더에서는 노트북을 옮길 수 없습니다")
+            if (DocumentsContract.renameDocument(r, moved, "item") == null) {
+                runCatching { DocumentsContract.moveDocument(r, moved, docUri(tidId), docUri(parentId)) }
+                throw IllegalStateException("휴지통 항목 이름을 정하지 못해 되돌렸습니다")
+            }
+        } catch (e: Exception) {
+            runCatching { DocumentsContract.deleteDocument(r, docUri(tidId)) }
+            throw e
+        } finally {
+            clearCache()
+        }
+    }
+
     fun trash(ctx: Context, tree: Uri, note: Note) {
         val r = ctx.contentResolver
         clearCache()
