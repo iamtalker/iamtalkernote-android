@@ -209,7 +209,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                     Text(if (findQ.isEmpty()) "" else if (hits.isEmpty()) " 0" else " ${findIdx.coerceAtLeast(0) + 1}/${hits.size}", fontSize = 12.sp)
                     TextButton(onClick = { goFind(-1) }) { Text("▲") }
                     TextButton(onClick = { goFind(1) }) { Text("▼") }
-                    TextButton(onClick = { findOpen = false; findQ = "" }) { Text("✕") }
+                    TextButton(onClick = { findOpen = false; findQ = "" }) { Text("×") }
                 }
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {

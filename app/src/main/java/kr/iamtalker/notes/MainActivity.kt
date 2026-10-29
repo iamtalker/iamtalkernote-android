@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
 fun MenuButton(label: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
-        TextButton(onClick = { open = true }) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        TextButton(onClick = { open = true }) { if (label == "⋮") DotsIcon() else Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) { content { open = false } }
     }
 }
@@ -152,6 +152,8 @@ fun App(model: NotesModel) {
     }
 
     var screen by remember { mutableStateOf("") }
+    var openDoc by remember { mutableStateOf<Doc?>(null) }
+    openDoc?.let { dd -> DocScreen(dd, model, onBack = { openDoc = null }); return }
     if (screen == "trash") { TrashScreen(model, onBack = { screen = ""; model.refresh() }); return }
     if (screen == "conflicts") { ConflictsScreen(model, onBack = { screen = "" }); return }
     if (screen == "dups") { DuplicatesScreen(model, onBack = { screen = "" }, onOpen = { screen = ""; open = it }); return }
@@ -191,18 +193,29 @@ fun App(model: NotesModel) {
                     }
                     item {
                         NavigationDrawerItem(
-                            label = { Text("모든 노트") }, selected = model.folder == null && model.tag == null,
+                            label = { Text("모든 노트") }, selected = !model.showDocs && model.folder == null && model.tag == null,
                             badge = { Text("${model.notes.size}") },
                             onClick = { model.changeFolder(null); model.changeTag(null); scope.launch { drawer.close() } },
                             modifier = Modifier.padding(horizontal = 12.dp)
                         )
+                    }
+                    if (model.docs.isNotEmpty()) {
+                        item { Text("가져온 파일 (컴퓨터)", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 28.dp, top = 14.dp, bottom = 4.dp)) }
+                        item {
+                            NavigationDrawerItem(label = { Text("모든 가져온 파일") }, selected = model.showDocs && model.docFolder == null, badge = { Text("${model.docs.size}") },
+                                onClick = { model.selectDocs(null); scope.launch { drawer.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                        }
+                        items(model.docFolders, key = { "d:" + it.first }) { (name, n) ->
+                            NavigationDrawerItem(label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, selected = model.showDocs && model.docFolder == name,
+                                badge = { Text("$n") }, onClick = { model.selectDocs(name); scope.launch { drawer.close() } }, modifier = Modifier.padding(start = 28.dp, end = 12.dp))
+                        }
                     }
                     if (model.saved.isNotEmpty()) {
                         item { Text("저장된 검색", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 28.dp, top = 14.dp, bottom = 4.dp)) }
                         items(model.saved, key = { "s:" + it.name }) { sv ->
                             NavigationDrawerItem(
                                 label = { Text("🔎 " + sv.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, selected = false,
-                                badge = { TextButton(onClick = { deleteSaved = sv }) { Text("✕") } },
+                                badge = { TextButton(onClick = { deleteSaved = sv }) { Text("×") } },
                                 onClick = { model.applySaved(sv); scope.launch { drawer.close() } },
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
@@ -224,11 +237,32 @@ fun App(model: NotesModel) {
                             NavigationDrawerItem(
                                 label = { Text("#$t", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 selected = model.tag.equals(t, ignoreCase = true),
-                                badge = { Row(verticalAlignment = Alignment.CenterVertically) { Text("$n"); TextButton(onClick = { tagDialog = t }) { Text("⋮") } } },
+                                badge = { Row(verticalAlignment = Alignment.CenterVertically) { Text("$n"); TextButton(onClick = { tagDialog = t }) { DotsIcon() } } },
                                 onClick = { model.changeFolder(null); model.changeTag(t); scope.launch { drawer.close() } },
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
                         }
+                    }
+                    item { HorizontalDivider(Modifier.padding(top = 14.dp, bottom = 4.dp)) }
+                    item { Text("도구", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 28.dp, top = 8.dp, bottom = 4.dp)) }
+                    val tools = listOf(
+                        "🗑  휴지통" to "trash",
+                        "🕘  전체 변경 이력" to "journal",
+                        "⚠  동기화 충돌" + (if (model.conflicts.isEmpty()) "" else " (${model.conflicts.size})") to "conflicts",
+                        "🧹  중복 노트 찾기" to "dups",
+                        "🖼  안 쓰는 미디어" to "media"
+                    )
+                    items(tools, key = { "tool:" + it.second }) { (label, target) ->
+                        NavigationDrawerItem(label = { Text(label) }, selected = false,
+                            onClick = { screen = target; scope.launch { drawer.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                    }
+                    item {
+                        NavigationDrawerItem(label = { Text("🔄  새로고침") }, selected = false,
+                            onClick = { model.refresh(); scope.launch { drawer.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                    }
+                    item {
+                        NavigationDrawerItem(label = { Text("📁  다른 폴더 고르기") }, selected = false,
+                            onClick = { picker.launch(null); scope.launch { drawer.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
                     }
                     item { Spacer(Modifier.height(24.dp)) }
                 }
@@ -239,11 +273,12 @@ fun App(model: NotesModel) {
             topBar = {
                 TopAppBar(
                     navigationIcon = {
-                        if (selecting) TextButton(onClick = { model.clearSelect() }) { Text("✕", fontSize = 20.sp) }
-                        else if (model.tree != null) TextButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", fontSize = 20.sp) }
+                        if (selecting) TextButton(onClick = { model.clearSelect() }) { Text("×", fontSize = 20.sp) }
+                        else if (model.tree != null) TextButton(onClick = { scope.launch { drawer.open() } }) { HamburgerIcon() }
                     },
                     title = {
-                        Text(if (selecting) "${model.selected.size}개 선택" else model.tag?.let { "#$it" } ?: model.folder?.substringAfterLast('/') ?: "모든 노트",
+                        Text(if (selecting) "${model.selected.size}개 선택" else if (model.showDocs) "가져온 파일" + (model.docFolder?.let { " · $it" } ?: "")
+                            else model.tag?.let { "#$it" } ?: model.folder?.substringAfterLast('/') ?: "모든 노트",
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
                     actions = {
@@ -255,12 +290,12 @@ fun App(model: NotesModel) {
                                 DropdownMenuItem(text = { Text("휴지통으로") }, onClick = { batchDialog = "trash"; close() })
                             }
                         } else if (model.tree != null) {
-                            MenuButton("정렬") { close ->
+                            MenuButton("⋮") { close ->
                                 for (s in Sort.values()) DropdownMenuItem(
-                                    text = { Text((if (s == model.sort) "✓ " else "    ") + s.label) }, onClick = { model.changeSort(s); close() })
+                                    text = { Text((if (s == model.sort) "● " else "    ") + s.label) }, onClick = { model.changeSort(s); close() })
                                 HorizontalDivider()
                                 for (p in Period.values()) DropdownMenuItem(
-                                    text = { Text((if (p == model.period) "✓ " else "    ") + p.label) }, onClick = { model.changePeriod(p); close() })
+                                    text = { Text((if (p == model.period) "● " else "    ") + p.label) }, onClick = { model.changePeriod(p); close() })
                                 HorizontalDivider()
                                 DropdownMenuItem(text = { Text("지금 검색 저장…") }, onClick = { saveDialog = true; close() })
                                 HorizontalDivider()
@@ -294,7 +329,7 @@ fun App(model: NotesModel) {
                 OutlinedTextField(
                     value = model.query, onValueChange = { model.changeQuery(it) }, singleLine = true,
                     placeholder = { Text("검색  (공백=AND  \"구절\"  -제외  #태그)") },
-                    trailingIcon = { if (model.query.isNotEmpty()) TextButton(onClick = { model.changeQuery("") }) { Text("✕") } },
+                    trailingIcon = { if (model.query.isNotEmpty()) TextButton(onClick = { model.changeQuery("") }) { Text("×") } },
                     shape = RoundedCornerShape(28.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { model.addRecent(model.query); focusManager.clearFocus() }),
@@ -310,11 +345,21 @@ fun App(model: NotesModel) {
                         }
                     }
                 }
+                Row(Modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    MenuButton(model.sort.label + " ▾") { close ->
+                        for (s in Sort.values()) DropdownMenuItem(text = { Text((if (s == model.sort) "● " else "    ") + s.label) }, onClick = { model.changeSort(s); close() })
+                    }
+                    MenuButton(model.period.label + " ▾") { close ->
+                        for (p in Period.values()) DropdownMenuItem(text = { Text((if (p == model.period) "● " else "    ") + p.label) }, onClick = { model.changePeriod(p); close() })
+                    }
+                    MenuButton("검색 저장") { close -> DropdownMenuItem(text = { Text("지금 검색 저장…") }, onClick = { saveDialog = true; close() }) }
+                }
                 Row(Modifier.padding(start = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = model.inBody, onCheckedChange = { model.changeInBody(it) })
                     Text("본문까지", style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.weight(1f))
-                    Text(model.status + if (model.shown.size != model.notes.size) " · 검색 ${model.shown.size}개" else "",
+                    Text(if (model.showDocs) "가져온 파일 ${model.docs.size}개 · 보기 ${model.shownDocs.size}개"
+                        else model.status + if (model.shown.size != model.notes.size) " · 검색 ${model.shown.size}개" else "",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
                 if (model.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -324,7 +369,7 @@ fun App(model: NotesModel) {
                     }
                 }
                 val fmt = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                if (model.showDocs) DocList(model) { openDoc = it } else LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(model.shown, key = { it.uri.toString() }) { n ->
                         val chosen = n.uri.toString() in model.selected
@@ -336,7 +381,7 @@ fun App(model: NotesModel) {
                                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
                         ) {
                             Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Text((if (chosen) "✓ " else "") + (if (n.uri.toString() in model.pins) "★ " else "") + n.title, fontWeight = FontWeight.SemiBold,
+                                Text((if (chosen) "● " else "") + (if (n.uri.toString() in model.pins) "★ " else "") + n.title, fontWeight = FontWeight.SemiBold,
                                     style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (n.snip.isNotEmpty()) Text(n.snip, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f), modifier = Modifier.padding(top = 2.dp))

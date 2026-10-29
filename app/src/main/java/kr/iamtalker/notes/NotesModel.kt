@@ -108,8 +108,44 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
 
     fun changeQuery(q: String) { query = q; reapply() }
     fun changeInBody(b: Boolean) { inBody = b; prefs.edit().putBoolean("inBody", b).apply(); reapply() }
-    fun changeFolder(f: String?) { folder = f; reapply() }
-    fun changeTag(t: String?) { tag = t; reapply() }
+    fun changeFolder(f: String?) { folder = f; showDocs = false; reapply() }
+    fun changeTag(t: String?) { tag = t; showDocs = false; reapply() }
+
+    // ---- 가져온 파일(데스크톱이 내보낸 요약, 읽기 전용)
+    var docs by mutableStateOf<List<Doc>>(emptyList())
+        private set
+    var shownDocs by mutableStateOf<List<Doc>>(emptyList())
+        private set
+    var docFolders by mutableStateOf<List<Pair<String, Int>>>(emptyList())
+        private set
+    var showDocs by mutableStateOf(false)
+        private set
+    var docFolder by mutableStateOf<String?>(null)
+        private set
+
+    /** 서랍에서 가져온 파일을 고른다(folder=null 이면 모두) */
+    fun selectDocs(folder: String?) { showDocs = true; docFolder = folder; reapply() }
+    fun selectNotes() { showDocs = false; reapply() }
+
+    private suspend fun syncDocs() {
+        val t = tree ?: return
+        try {
+            val list = withContext(Dispatchers.IO) {
+                DocsRepo.sync(getApplication(), t, index(), prefs)
+                index().listDocs()
+            }
+            docs = list
+            docFolders = list.groupBy { it.folder }.map { it.key to it.value.size }.sortedBy { it.first }
+            if (docs.isEmpty()) showDocs = false
+            reapply()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            CrashLog.save(getApplication(), e)
+        }
+    }
+
+    fun docText(d: Doc): String = runCatching { index().docText(d.id) }.getOrDefault("")
     fun changeSort(s: Sort) { sort = s; prefs.edit().putInt("sort2", s.ordinal).apply(); reapply() }
     fun changePeriod(p: Period) { period = p; reapply() }
 
@@ -199,6 +235,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 indexed = have.keys
                 publish(merge(scanned, have))
                 loading = false
+                syncDocs()
                 syncIndex(scanned, have)
             } catch (e: CancellationException) {
                 throw e
@@ -356,6 +393,48 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 if (pinned.isEmpty()) ordered else ordered.filter { it.uri.toString() in pinned } + ordered.filter { it.uri.toString() !in pinned }
             }
             shown = result
+        }
+        reapplyDocs()
+    }
+
+    private var docJob: Job? = null
+
+    private fun reapplyDocs() {
+        docJob?.cancel()
+        val all = docs
+        val showing = showDocs
+        if (!showing) { shownDocs = emptyList(); return }
+        docJob = viewModelScope.launch {
+            delay(120)
+            val q = QueryParser.parse(query)
+            val f = docFolder
+            val body = inBody
+            val sorter = sort
+            val per = period
+            val result = withContext(Dispatchers.IO) {
+                var list = all
+                if (f != null) list = list.filter { it.folder == f }
+                if (per != Period.ALL) {
+                    val since = System.currentTimeMillis() - per.days * 86_400_000L
+                    list = list.filter { it.mtime >= since }
+                }
+                if (q != null) {
+                    val args = ArrayList<String>()
+                    val where = QueryParser.toSql(q, args)
+                    val hit = runCatching { index().searchDocs(where, args.toTypedArray(), body) }.getOrDefault(emptySet())
+                    list = list.filter { it.id in hit }
+                }
+                val terms = if (q != null) QueryParser.terms(q) else emptyList()
+                when (sorter) {
+                    Sort.RELEVANCE ->
+                        if (terms.isEmpty()) list.sortedByDescending { it.mtime }
+                        else list.sortedWith(compareByDescending<Doc> { d -> val ti = d.title.lowercase(); terms.count { ti.contains(it) } * 10 }.thenByDescending { it.mtime })
+                    Sort.DATE_ASC -> list.sortedBy { it.mtime }
+                    Sort.TITLE -> list.sortedBy { it.title.lowercase() }
+                    else -> list.sortedByDescending { it.mtime }
+                }
+            }
+            shownDocs = result
         }
     }
 

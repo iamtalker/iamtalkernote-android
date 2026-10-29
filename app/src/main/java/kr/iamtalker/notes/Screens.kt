@@ -344,3 +344,57 @@ fun ConflictsScreen(model: NotesModel, onBack: () -> Unit) {
         )
     }
 }
+
+/** 가져온 파일 목록(카드): 확장자 · 제목 · 미리보기 글 · 폴더/날짜/태그 */
+@Composable
+fun DocList(model: NotesModel, onOpen: (Doc) -> Unit) {
+    val fmt = remember { SimpleDateFormat("yyyy.MM.dd", Locale.KOREA) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(model.shownDocs, key = { it.id }) { d ->
+            androidx.compose.material3.Card(
+                onClick = { onOpen(d) }, modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Text("[" + d.ext.uppercase() + "] " + d.title, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (d.snip.isNotEmpty()) Text(d.snip, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f), modifier = Modifier.padding(top = 2.dp))
+                    Text(d.folder + " · " + fmt.format(Date(d.mtime)) + (if (d.tags.isEmpty()) "" else "  " + d.tags.take(4).joinToString(" ") { "#$it" }) +
+                        (if (d.memo.isNotEmpty()) "  📝" else ""),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+        item { androidx.compose.foundation.layout.Spacer(Modifier.padding(36.dp)) }
+    }
+}
+
+/** 가져온 파일 보기(읽기 전용): 컴퓨터가 뽑아 둔 글 앞부분과 태그·메모. 원본은 컴퓨터에 있다 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DocScreen(doc: Doc, model: NotesModel, onBack: () -> Unit) {
+    var text by remember { mutableStateOf<String?>(null) }
+    val fmt = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
+    LaunchedEffect(doc.id) { text = withContext(Dispatchers.IO) { model.docText(doc) } }
+    BackHandler { onBack() }
+    Scaffold(topBar = {
+        TopAppBar(title = { Text(doc.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } })
+    }) { pad ->
+        Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+            Text("컴퓨터의 가져온 폴더 ‘${doc.folder}’ · ${doc.rel}", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+            Text("${doc.ext.uppercase()} · %,dKB · ${fmt.format(Date(doc.mtime))}".format(doc.size / 1024), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+            if (doc.tags.isNotEmpty()) Text(doc.tags.joinToString(" ") { "#$it" }, modifier = Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.primary)
+            if (doc.memo.isNotEmpty()) Text("메모: " + doc.memo, modifier = Modifier.padding(top = 8.dp))
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+            val t = text
+            if (t == null) CircularProgressIndicator()
+            else if (t.isEmpty()) Text("뽑아 둔 글이 없습니다(글자가 없는 파일이거나 컴퓨터에서 글을 읽지 않도록 한 경우).", color = MaterialTheme.colorScheme.outline)
+            else androidx.compose.foundation.text.selection.SelectionContainer { Text(t, fontSize = 14.sp, lineHeight = 21.sp) }
+            Text("읽기 전용입니다. 원본 파일은 컴퓨터에 있고, 글은 앞부분 최대 2만 자만 내보냅니다.", fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 16.dp))
+        }
+    }
+}

@@ -8,7 +8,7 @@ import android.net.Uri
 
 /** 색인 DB: 노트별 수정 시각·태그와 검색용 본문 사본. 파일이 원본이고 이 DB 는 언제든 지우고 다시 만들 수 있는 캐시다. 폴더(트리)마다 따로 둔다. */
 class Index(ctx: Context, tree: Uri) :
-    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 3) {
+    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 4) {
 
     init {
         setWriteAheadLoggingEnabled(true)   // 색인하는 동안에도 검색이 막히지 않게
@@ -18,11 +18,67 @@ class Index(ctx: Context, tree: Uri) :
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT, snip TEXT, created INTEGER)")
+        createDocs(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
-        db.execSQL("DROP TABLE IF EXISTS notes")
-        onCreate(db)
+        if (old < 3) {
+            db.execSQL("DROP TABLE IF EXISTS notes")
+            db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT, snip TEXT, created INTEGER)")
+        }
+        createDocs(db)   // 4: 데스크톱이 내보낸 가져온 파일 요약
+    }
+
+    private fun createDocs(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS docs (id TEXT PRIMARY KEY, folder TEXT, rel TEXT, ext TEXT, size INTEGER, mtime INTEGER, title TEXT, " +
+            "tags TEXT, memo TEXT, snip TEXT, hay TEXT, nhay TEXT, text TEXT)")
+    }
+
+    /** 가져온 파일 한 줄(Docs.kt 가 만든다). hay=이름·경로·글·태그·메모, nhay=글만 뺀 것 */
+    data class DocRow(
+        val id: String, val folder: String, val rel: String, val ext: String, val size: Long, val mtime: Long, val title: String,
+        val tags: List<String>, val memo: String, val snip: String, val text: String, val hay: String, val nhay: String
+    )
+
+    fun docCount(): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM docs", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+    fun replaceDocs(rows: List<DocRow>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("docs", null, null)
+            for (r in rows) {
+                val v = ContentValues()
+                v.put("id", r.id); v.put("folder", r.folder); v.put("rel", r.rel); v.put("ext", r.ext); v.put("size", r.size); v.put("mtime", r.mtime)
+                v.put("title", r.title); v.put("tags", r.tags.joinToString("\n")); v.put("memo", r.memo); v.put("snip", r.snip)
+                v.put("hay", r.hay); v.put("nhay", r.nhay); v.put("text", r.text)
+                db.insertWithOnConflict("docs", null, v, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /** 가져온 파일 목록(글 본문은 읽지 않는다) */
+    fun listDocs(): List<Doc> {
+        val out = ArrayList<Doc>()
+        readableDatabase.rawQuery("SELECT id, folder, rel, ext, size, mtime, title, tags, memo, snip FROM docs", null).use { c ->
+            while (c.moveToNext()) out.add(Doc(c.getString(0), c.getString(1).orEmpty(), c.getString(2).orEmpty(), c.getString(3).orEmpty(), c.getLong(4), c.getLong(5),
+                c.getString(6).orEmpty(), c.getString(7).orEmpty().split('\n').filter { it.isNotEmpty() }, c.getString(8).orEmpty(), c.getString(9).orEmpty()))
+        }
+        return out
+    }
+
+    fun docText(id: String): String =
+        readableDatabase.rawQuery("SELECT text FROM docs WHERE id=?", arrayOf(id)).use { c -> if (c.moveToFirst()) c.getString(0).orEmpty() else "" }
+
+    /** 검색식 조건(QueryParser.toSql)에 맞는 가져온 파일의 id. withText=false 면 이름·경로·태그·메모로만 찾는다 */
+    fun searchDocs(where: String, args: Array<String>, withText: Boolean): Set<String> {
+        val cond = if (withText) where else where.replace("hay LIKE", "nhay LIKE")
+        val out = HashSet<String>()
+        readableDatabase.rawQuery("SELECT id FROM docs WHERE $cond", args).use { c -> while (c.moveToNext()) out.add(c.getString(0)) }
+        return out
     }
 
     /** 색인에 있는 모든 노트의 요약(본문은 읽지 않는다) */

@@ -11,8 +11,8 @@ android {
         applicationId = "kr.iamtalker.notes"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "0.9.0"
+        versionCode = 12
+        versionName = "1.0.0"
     }
     buildTypes {
         release {
@@ -44,4 +44,5 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20231013")
 }
