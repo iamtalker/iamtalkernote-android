@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
@@ -31,6 +33,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashLog.install(this)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF6D4AFF))) {
                 Surface(Modifier.fillMaxSize()) { App(model) }
@@ -46,6 +49,16 @@ fun App(model: NotesModel) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) model.pick(uri) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
 
+    var crash by remember { mutableStateOf(CrashLog.take(ctx)) }
+    crash?.let { text ->
+        AlertDialog(
+            onDismissRequest = { crash = null },
+            title = { Text("지난 실행에서 오류가 났습니다") },
+            text = { androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(text.take(1800), fontSize = 11.sp, modifier = Modifier.verticalScroll(rememberScrollState())) } },
+            confirmButton = { TextButton(onClick = { crash = null }) { Text("닫기") } }
+        )
+    }
     val cur = open
     if (cur != null) {
         Editor(cur, onClose = { open = null; model.refresh() })

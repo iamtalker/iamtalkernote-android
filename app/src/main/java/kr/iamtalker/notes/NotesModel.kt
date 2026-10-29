@@ -38,8 +38,11 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun pick(uri: Uri) {
-        getApplication<Application>().contentResolver.takePersistableUriPermission(
-            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        // 기억하지 못해도(일부 기기) 이번 실행에서는 쓸 수 있으니 실패해도 앱을 죽이지 않는다
+        runCatching {
+            getApplication<Application>().contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }
         prefs.edit().putString("tree", uri.toString()).apply()
         tree = uri
         bodies.clear()
@@ -52,11 +55,18 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         job = viewModelScope.launch {
             loading = true
             status = "노트를 찾는 중…"
-            val list = withContext(Dispatchers.IO) {
-                NoteRepo.scan(getApplication(), t) { n -> status = "노트를 찾는 중… $n" }
+            try {
+                val list = withContext(Dispatchers.IO) {
+                    NoteRepo.scan(getApplication(), t) { n -> status = "노트를 찾는 중… $n" }
+                }
+                notes = list.sortedByDescending { it.modified }
+                status = "노트 ${list.size}개"
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                status = "폴더를 읽지 못했습니다: ${e.javaClass.simpleName} ${e.message ?: ""}"
+                CrashLog.save(getApplication(), e)
             }
-            notes = list.sortedByDescending { it.modified }
-            status = "노트 ${list.size}개"
             loading = false
         }
     }
