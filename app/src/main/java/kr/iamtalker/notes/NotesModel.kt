@@ -261,17 +261,36 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         val parent = if (f == null) null else notes.firstOrNull { it.folder == f }?.parentId
         val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else f ?: "", title) ?: return null
         publish(listOf(n.copy(updated = System.currentTimeMillis())) + notes)
+        bg { History.journal(getApplication(), t, "create", History.relOf(n)) }
         return n
     }
 
     // ---- 노트 하나에 하는 일(편집 화면의 ⋮ 메뉴). 백그라운드에서 부르고, 실패하면 예외(노트는 그대로)
-    fun renameNote(n: Note, title: String): Note = NoteRepo.rename(getApplication(), n, title)
+    /** 백그라운드에서 한 번 실행(화면이 닫혀도 끝까지 간다). 실패는 무시 */
+    fun bg(block: () -> Unit) { viewModelScope.launch(Dispatchers.IO) { runCatching(block) } }
+
+    fun renameNote(n: Note, title: String): Note {
+        val r = NoteRepo.rename(getApplication(), n, title)
+        runCatching {
+            History.moveHistory(getApplication(), tree!!, History.relOf(n), History.relOf(r))
+            History.journal(getApplication(), tree!!, "rename", History.relOf(n), History.relOf(r))
+        }
+        return r
+    }
 
     fun moveNote(n: Note, dstFolder: String): Note {
         val id = folderIds[dstFolder] ?: if (dstFolder.isEmpty()) android.provider.DocumentsContract.getTreeDocumentId(tree!!)
             else throw IllegalStateException("이 노트북으로는 옮길 수 없습니다")
-        return NoteRepo.move(getApplication(), tree!!, n, dstFolder, id)
+        val r = NoteRepo.move(getApplication(), tree!!, n, dstFolder, id)
+        runCatching {
+            History.moveHistory(getApplication(), tree!!, History.relOf(n), History.relOf(r))
+            History.journal(getApplication(), tree!!, "move", History.relOf(n), History.relOf(r))
+        }
+        return r
     }
 
-    fun trashNote(n: Note) = NoteRepo.trash(getApplication(), tree!!, n)
+    fun trashNote(n: Note) {
+        NoteRepo.trash(getApplication(), tree!!, n)
+        History.journal(getApplication(), tree!!, "delete", History.relOf(n), detail = "휴지통")
+    }
 }

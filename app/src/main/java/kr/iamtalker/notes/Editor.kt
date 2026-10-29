@@ -78,10 +78,20 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     }
 
     /** 바뀐 글이 있으면 파일에 쓴다(머리말에 updated 가 있으면 지금 시각으로, 데스크톱과 같게) */
+    var firstSave by remember { mutableStateOf(true) }   // 노트를 연 뒤 처음 고칠 때는 그 직전 내용을 꼭 버전으로 남긴다(데스크톱과 같게)
     fun persist(t: String) {
         if (t == saved) return
-        NoteRepo.write(ctx, note.uri, NoteText.touchUpdated(t, System.currentTimeMillis()))
+        val old = saved
+        val force = firstSave
+        val n = note
+        NoteRepo.write(ctx, n.uri, NoteText.touchUpdated(t, System.currentTimeMillis()))
         saved = t
+        firstSave = false
+        val tree = model.tree ?: return
+        model.bg {
+            History.snapshot(ctx, tree, History.relOf(n), old, t, force)
+            History.journal(ctx, tree, "edit", History.relOf(n))
+        }
     }
     fun save() { tfv?.let { persist(it.text) } }
 
@@ -134,6 +144,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                     MenuButton("⋮") { close ->
                         DropdownMenuItem(text = { Text("문서에서 찾기") }, onClick = { close(); findOpen = true })
                         DropdownMenuItem(text = { Text("태그 편집") }, onClick = { close(); dialog = "tags" })
+                        DropdownMenuItem(text = { Text("이전 버전") }, onClick = { close(); dialog = "versions" })
                         DropdownMenuItem(text = { Text("속성") }, onClick = { close(); dialog = "props" })
                         HorizontalDivider()
                         DropdownMenuItem(text = { Text(if (pinned) "고정 해제" else "맨 위에 고정") }, onClick = { model.togglePin(note); close() })
@@ -273,6 +284,56 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                     }
                 },
                 confirmButton = { TextButton(onClick = { dialog = "" }) { Text("닫기") } }
+            )
+        }
+        "versions" -> {
+            val tree = model.tree!!
+            var vs by remember { mutableStateOf<List<History.Version>?>(null) }
+            var pick by remember { mutableStateOf<History.Version?>(null) }
+            var preview by remember { mutableStateOf("") }
+            val fmt = remember { SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.KOREA) }
+            LaunchedEffect(note.uri) {
+                vs = withContext(Dispatchers.IO) { runCatching { History.versions(ctx, tree, History.relOf(note)) }.getOrDefault(emptyList()) }
+            }
+            LaunchedEffect(pick) {
+                val p = pick ?: return@LaunchedEffect
+                preview = withContext(Dispatchers.IO) { runCatching { History.readVersion(ctx, tree, p) }.getOrDefault("(읽지 못했습니다)") }
+            }
+            AlertDialog(
+                onDismissRequest = { dialog = "" }, title = { Text("이전 버전") },
+                text = {
+                    val list = vs
+                    if (list == null) CircularProgressIndicator()
+                    else if (list.isEmpty()) Text("저장된 이전 버전이 없습니다.")
+                    else Column {
+                        LazyColumn(Modifier.weight(1f, fill = false)) {
+                            items(list) { v ->
+                                Text(fmt.format(Date(v.ms)) + "   %,dB".format(v.size),
+                                    color = if (v == pick) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.fillMaxWidth().clickable { pick = v }.padding(vertical = 8.dp))
+                            }
+                        }
+                        if (pick != null) Text(preview.take(300), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, maxLines = 8,
+                            modifier = Modifier.padding(top = 8.dp))
+                    }
+                },
+                confirmButton = {
+                    TextButton(enabled = pick != null, onClick = {
+                        val p = pick ?: return@TextButton
+                        dialog = ""
+                        scope.launch {
+                            val old = withContext(Dispatchers.IO) { runCatching { History.readVersion(ctx, tree, p) }.getOrNull() }
+                            if (old == null) { error = "버전을 읽지 못했습니다"; return@launch }
+                            save()
+                            // 지금 내용은 새 버전으로 남기고(다시 돌아올 수 있게), 고른 버전으로 바꾼다
+                            val cur = tfv?.text ?: ""
+                            withContext(Dispatchers.IO) { runCatching { History.snapshot(ctx, tree, History.relOf(note), cur, old, true) } }
+                            tfv = TextFieldValue(old)
+                            firstSave = false
+                        }
+                    }) { Text("이 버전으로 되돌리기") }
+                },
+                dismissButton = { TextButton(onClick = { dialog = "" }) { Text("닫기") } }
             )
         }
         "move" -> AlertDialog(
