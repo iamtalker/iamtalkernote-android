@@ -1,5 +1,7 @@
 # iamtalkernote 안드로이드
 
+> **짝이 되는 저장소 — 개발할 때는 둘 다 읽으세요.** 데스크톱 앱 [iamtalkernote](https://github.com/iamtalker/iamtalkernote)(로컬 `C:\MyData\claude program\1. 개발중\iamtalkernote`, 이 폴더의 `..\iamtalkernote`)의 README 에 있는 "이어서 작업하기"와 로드맵을 함께 보세요. 두 앱은 같은 노트 폴더의 파일 형식(머리말, `태그:` 줄, `.history/`, `.trash/`, `.resources/`, `.imported/docs.jsonl`)을 공유하므로 한쪽을 바꾸면 다른 쪽도 확인해야 합니다.
+
 [iamtalkernote](https://github.com/iamtalker/iamtalkernote)(윈도 노트·문서 앱)의 안드로이드 짝입니다. 컴퓨터의 iamtalkernote 와 **같은 노트 폴더(마크다운 파일)** 를 폰에서 읽고 고치는 앱입니다. 현재 **1.1.0** 입니다. **개발 PC 에서 기기나 에뮬레이터로 실행해 보지 못하고**(빌드와 순수 로직 시험만) 사용자가 폰에서 써 보며 알려 준 문제를 고쳐 왔습니다.
 
 ## 설치
