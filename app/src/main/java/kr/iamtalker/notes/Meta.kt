@@ -60,6 +60,27 @@ object Meta {
         return Info(updated, tags.values.toList())
     }
 
+    private val mdMarks = Regex("!\\[[^\\]]*\\]\\([^)]*\\)|\\[([^\\]]*)\\]\\([^)]*\\)|[#>*_`~|]+|^\\s*(?:[-+]|\\d+[.)])\\s+|\\[[ xX]\\]")
+
+    /** 목록 카드에 보이는 미리보기 글: 머리말·첫 제목 줄·마크다운 기호를 빼고 공백을 한 칸으로 줄인 앞부분 */
+    fun snippet(text: String, title: String, max: Int = 110): String {
+        var body = split(text).second.trimStart()
+        val first = body.lineSequence().firstOrNull()?.trim().orEmpty()
+        if (first.startsWith("#") && first.trimStart('#').trim() == title.trim()) body = body.substringAfter('\n', "")
+        val sb = StringBuilder()
+        var fence = false
+        for (line in body.lineSequence()) {
+            if (line.trimStart().startsWith("```")) { fence = !fence; continue }
+            if (fence) continue
+            val t = mdMarks.replace(line) { it.groupValues.getOrNull(1).orEmpty() }.replace(Regex("\\s+"), " ").trim()
+            if (t.isEmpty()) continue
+            if (sb.isNotEmpty()) sb.append(' ')
+            sb.append(t)
+            if (sb.length >= max) break
+        }
+        return sb.take(max).toString()
+    }
+
     /** `2024-05-01T12:30:00.000Z`, `2024-05-01 12:30`, `2024.05.01` … → 밀리초(읽을 수 없으면 0) */
     fun parseDate(s: String): Long {
         val m = date.find(s) ?: return 0

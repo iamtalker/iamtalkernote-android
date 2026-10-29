@@ -73,6 +73,23 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     var sort by mutableStateOf(Sort.values().getOrElse(prefs.getInt("sort", 0)) { Sort.DATE_DESC })
         private set
 
+    /** 고정(즐겨찾기)한 노트의 uri — 이 폰에만 저장한다(파일에는 쓰지 않는다) */
+    var pins by mutableStateOf<Set<String>>(prefs.getStringSet("pins", emptySet())!!.toSet())
+        private set
+    var folderCounts by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+
+    /** 노트북 이름 → 문서 id (노트가 있는 폴더만). 맨 위 폴더는 "" */
+    var folderIds by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    fun togglePin(n: Note) {
+        val u = n.uri.toString()
+        pins = if (u in pins) pins - u else pins + u
+        prefs.edit().putStringSet("pins", pins).apply()
+        reapply()
+    }
+
     private val main = Handler(Looper.getMainLooper())
 
     /** 백그라운드 스레드에서 상태 글을 바꿀 때: Compose 상태는 메인 스레드에서만 쓸 수 있다(아니면 IllegalStateException) */
@@ -98,6 +115,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("tree", uri.toString()).apply()
         tree = uri
         idx = null
+        NoteRepo.clearCache()
         notes = emptyList(); shown = emptyList()
         folder = null; tag = null
         refresh()
@@ -135,12 +153,25 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
 
     private fun merge(scanned: List<Note>, have: Map<String, Index.Row>): List<Note> = scanned.map { n ->
         val r = have[n.uri.toString()]
-        if (r != null && r.size == n.size && r.mtime == n.modified) n.copy(updated = r.updated, tags = r.tags) else n
+        if (r != null && r.size == n.size && r.mtime == n.modified) n.copy(updated = r.updated, tags = r.tags, snip = r.snip) else n
     }
 
     private fun publish(list: List<Note>) {
         notes = list
         folders = NoteRepo.folders(list)
+        val fc = HashMap<String, Int>()
+        val ids = HashMap<String, String>()
+        for (n in list) {
+            var f = n.folder
+            ids.putIfAbsent(n.folder, n.parentId)
+            while (true) {
+                fc[f] = (fc[f] ?: 0) + 1
+                if (f.isEmpty()) break
+                f = f.substringBeforeLast('/', "")
+            }
+        }
+        folderCounts = fc
+        folderIds = ids
         val counts = LinkedHashMap<String, Pair<String, Int>>()
         for (n in list) for (t in n.tags) {
             val k = t.lowercase()
@@ -167,8 +198,9 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                         val text = if (n.size in 0..2_000_000) runCatching { NoteRepo.read(getApplication(), n.uri) }.getOrDefault("") else ""
                         val info = Meta.parse(text)
                         val hay = (n.title + "\n" + text).lowercase().take(300_000)
-                        ix.put(db, n.uri.toString(), n.size, n.modified, info.updated, info.tags, hay)
-                        rows[n.uri.toString()] = Index.Row(n.size, n.modified, info.updated, info.tags)
+                        val snip = Meta.snippet(text, n.title)
+                        ix.put(db, n.uri.toString(), n.size, n.modified, info.updated, info.tags, hay, snip)
+                        rows[n.uri.toString()] = Index.Row(n.size, n.modified, info.updated, info.tags, snip)
                     }
                     db.setTransactionSuccessful()
                 } finally {
@@ -195,6 +227,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             val body = inBody
             val sorter = sort
             val seen = indexed
+            val pinned = pins
             val result = withContext(Dispatchers.IO) {
                 var list = base
                 if (f != null) list = list.filter { it.folder == f || it.folder.startsWith("$f/") }
@@ -210,11 +243,12 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                         list = list.filter { val u = it.uri.toString(); u in hit || (u !in seen && titleMatch(it)) }
                     } else list = list.filter(::titleMatch)
                 }
-                when (sorter) {
+                val ordered = when (sorter) {
                     Sort.DATE_DESC -> list.sortedByDescending { it.date }
                     Sort.DATE_ASC -> list.sortedBy { it.date }
                     Sort.TITLE -> list.sortedBy { it.title.lowercase() }
                 }
+                if (pinned.isEmpty()) ordered else ordered.filter { it.uri.toString() in pinned } + ordered.filter { it.uri.toString() !in pinned }
             }
             shown = result
         }
@@ -229,4 +263,15 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         publish(listOf(n.copy(updated = System.currentTimeMillis())) + notes)
         return n
     }
+
+    // ---- 노트 하나에 하는 일(편집 화면의 ⋮ 메뉴). 백그라운드에서 부르고, 실패하면 예외(노트는 그대로)
+    fun renameNote(n: Note, title: String): Note = NoteRepo.rename(getApplication(), n, title)
+
+    fun moveNote(n: Note, dstFolder: String): Note {
+        val id = folderIds[dstFolder] ?: if (dstFolder.isEmpty()) android.provider.DocumentsContract.getTreeDocumentId(tree!!)
+            else throw IllegalStateException("이 노트북으로는 옮길 수 없습니다")
+        return NoteRepo.move(getApplication(), tree!!, n, dstFolder, id)
+    }
+
+    fun trashNote(n: Note) = NoteRepo.trash(getApplication(), tree!!, n)
 }

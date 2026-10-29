@@ -8,16 +8,16 @@ import android.net.Uri
 
 /** 색인 DB: 노트별 수정 시각·태그와 검색용 본문 사본. 파일이 원본이고 이 DB 는 언제든 지우고 다시 만들 수 있는 캐시다. 폴더(트리)마다 따로 둔다. */
 class Index(ctx: Context, tree: Uri) :
-    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 1) {
+    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 2) {
 
     init {
         setWriteAheadLoggingEnabled(true)   // 색인하는 동안에도 검색이 막히지 않게
     }
 
-    data class Row(val size: Long, val mtime: Long, val updated: Long, val tags: List<String>)
+    data class Row(val size: Long, val mtime: Long, val updated: Long, val tags: List<String>, val snip: String = "")
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT)")
+        db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT, snip TEXT)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
@@ -28,20 +28,20 @@ class Index(ctx: Context, tree: Uri) :
     /** 색인에 있는 모든 노트의 요약(본문은 읽지 않는다) */
     fun load(): Map<String, Row> {
         val out = HashMap<String, Row>()
-        readableDatabase.rawQuery("SELECT uri, size, mtime, updated, tags FROM notes", null).use { c ->
+        readableDatabase.rawQuery("SELECT uri, size, mtime, updated, tags, snip FROM notes", null).use { c ->
             while (c.moveToNext()) {
                 val tags = c.getString(4).orEmpty().split('\n').filter { it.isNotEmpty() }
-                out[c.getString(0)] = Row(c.getLong(1), c.getLong(2), c.getLong(3), tags)
+                out[c.getString(0)] = Row(c.getLong(1), c.getLong(2), c.getLong(3), tags, c.getString(5).orEmpty())
             }
         }
         return out
     }
 
     /** 노트 하나를 색인한다(여러 개는 begin/commit 으로 묶어 부른다) */
-    fun put(db: SQLiteDatabase, uri: String, size: Long, mtime: Long, updated: Long, tags: List<String>, hay: String) {
+    fun put(db: SQLiteDatabase, uri: String, size: Long, mtime: Long, updated: Long, tags: List<String>, hay: String, snip: String) {
         val v = ContentValues()
         v.put("uri", uri); v.put("size", size); v.put("mtime", mtime); v.put("updated", updated)
-        v.put("tags", tags.joinToString("\n") { it }); v.put("hay", hay)
+        v.put("tags", tags.joinToString("\n") { it }); v.put("hay", hay); v.put("snip", snip)
         db.insertWithOnConflict("notes", null, v, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
