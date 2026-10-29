@@ -3,6 +3,8 @@ package kr.iamtalker.notes
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -71,6 +73,11 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     var sort by mutableStateOf(Sort.values().getOrElse(prefs.getInt("sort", 0)) { Sort.DATE_DESC })
         private set
 
+    private val main = Handler(Looper.getMainLooper())
+
+    /** 백그라운드 스레드에서 상태 글을 바꿀 때: Compose 상태는 메인 스레드에서만 쓸 수 있다(아니면 IllegalStateException) */
+    private fun say(s: String) { main.post { status = s } }
+
     private var idx: Index? = null
     private var indexed: Set<String> = emptySet()
     private var job: Job? = null
@@ -110,7 +117,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             loading = true
             status = "노트를 찾는 중…"
             try {
-                val scanned = withContext(Dispatchers.IO) { NoteRepo.scan(getApplication(), t) { n -> status = "노트를 찾는 중… $n" } }
+                val scanned = withContext(Dispatchers.IO) { NoteRepo.scan(getApplication(), t) { n -> say("노트를 찾는 중… $n") } }
                 val have = withContext(Dispatchers.IO) { index().load() }
                 indexed = have.keys
                 publish(merge(scanned, have))
@@ -168,7 +175,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     db.endTransaction()
                 }
                 done += chunk.size
-                status = "색인 중… $done/${todo.size}"
+                say("색인 중… $done/${todo.size}")
             }
             ix.removeMissing(scanned.map { it.uri.toString() }.toSet())
         }
