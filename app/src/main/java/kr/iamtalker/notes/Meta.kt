@@ -74,6 +74,7 @@ object Meta {
         for (line in body.lineSequence()) {
             if (line.trimStart().startsWith("```")) { fence = !fence; continue }
             if (fence) continue
+            if (Regex("^\\s*태그\\s*:").containsMatchIn(line)) continue
             val t = mdMarks.replace(line) { it.groupValues.getOrNull(1).orEmpty() }.replace(Regex("\\s+"), " ").trim()
             if (t.isEmpty()) continue
             if (sb.isNotEmpty()) sb.append(' ')

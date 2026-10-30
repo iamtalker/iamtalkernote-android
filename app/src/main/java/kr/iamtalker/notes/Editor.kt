@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -152,12 +153,13 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     val pinned = note.uri.toString() in model.pins
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(note.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { TextButton(onClick = { save(); onClose() }) { Text("←", fontSize = 20.sp) } },
-                actions = {
-                    TextButton(onClick = { save(); editing = !editing }) { Text(if (editing) "보기" else "편집") }
-                    MenuButton("⋮") { close ->
+            Surface(color = Bar, contentColor = androidx.compose.ui.graphics.Color.White) { Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+                BarButton({ save(); onClose() }) { BackIcon(androidx.compose.ui.graphics.Color.White) }
+                Text(note.title, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = androidx.compose.ui.graphics.Color.White,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                run {
+                    TextButton(onClick = { save(); editing = !editing }) { Text(if (editing) "보기" else "편집", color = androidx.compose.ui.graphics.Color.White) }
+                    BarMenu({ DotsIcon(androidx.compose.ui.graphics.Color.White) }) { close ->
                         DropdownMenuItem(text = { Text("문서에서 찾기") }, onClick = { close(); findOpen = true })
                         DropdownMenuItem(text = { Text("태그 편집") }, onClick = { close(); dialog = "tags" })
                         DropdownMenuItem(text = { Text("이전 버전") }, onClick = { close(); dialog = "versions" })
@@ -175,7 +177,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         DropdownMenuItem(text = { Text("휴지통으로") }, onClick = { close(); dialog = "delete" })
                     }
                 }
-            )
+            } }
         },
         bottomBar = {
             if (editing && tfv != null) {
