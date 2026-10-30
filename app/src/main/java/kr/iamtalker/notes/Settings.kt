@@ -163,6 +163,8 @@ fun SettingsScreen(model: NotesModel, onBack: () -> Unit, onTool: (String) -> Un
                     }
                 }
                 "sync" -> {
+                    SyncWizard(model)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     var policy by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
                     var loaded by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
