@@ -91,6 +91,7 @@ fun SyncWizard(model: NotesModel) {
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         Text("연결 마법사", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
         Hint("Syncthing-Fork 를 이 앱이 대신 설정합니다. 처음 한 번만 하면 됩니다.")
+        OutlinedButton(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ForkSync.MANUAL_URL))) } }) { Text("사용 설명서 보기") }
 
         // API 키가 통하면 Fork 가 있다는 뜻이다(앱 이름이 달라 못 찾는 기기도 있어서)
         Step(1, "Syncthing-Fork 설치", forkOn || (report != null && err.isEmpty())) {

@@ -188,6 +188,8 @@ fun SettingsScreen(model: NotesModel, onBack: () -> Unit, onTool: (String) -> Un
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("컴퓨터 앱", "github.com/iamtalker/iamtalkernote")
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    TextRow("사용 설명서", "열기", onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.MANUAL_URL))) } })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("노트 폴더", model.tree?.lastPathSegment?.substringAfter(':') ?: "-")
                 }
             }

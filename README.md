@@ -1,5 +1,7 @@
 # iamtalkernote 안드로이드
 
+📘 **[사용 설명서](https://github.com/iamtalker/iamtalkernote/blob/main/docs/manual.md)** — 컴퓨터·폰 사용법과 동기화 연결, 문제 해결(앱 설정 → 정보 / 동기화 마법사에서도 열립니다).
+
 > **짝이 되는 저장소 — 개발할 때는 둘 다 읽으세요.** 데스크톱 앱 [iamtalkernote](https://github.com/iamtalker/iamtalkernote)(로컬 `C:\MyData\claude program\1. 개발중\iamtalkernote`, 이 폴더의 `..\iamtalkernote`)의 README 에 있는 "이어서 작업하기"와 로드맵을 함께 보세요. 두 앱은 같은 노트 폴더의 파일 형식(머리말, `태그:` 줄, `.history/`, `.trash/`, `.resources/`, `.imported/docs.jsonl`)을 공유하므로 한쪽을 바꾸면 다른 쪽도 확인해야 합니다.
 
 [iamtalkernote](https://github.com/iamtalker/iamtalkernote)(윈도 노트·문서 앱)의 안드로이드 짝입니다. 컴퓨터의 iamtalkernote 와 **같은 노트 폴더(마크다운 파일)** 를 폰에서 읽고 고치는 앱입니다. 현재 **1.2.0** 입니다. **개발 PC 에서 기기나 에뮬레이터로 실행해 보지 못하고**(빌드와 순수 로직 시험만) 사용자가 폰에서 써 보며 알려 준 문제를 고쳐 왔습니다.
@@ -13,6 +15,7 @@
 - **설정 화면** — 동기화·테마·일반(자동 새로고침, 폴더 다시 고르기)·에디터(바로 편집, 글자 크기)·도구(휴지통·이력·충돌·중복·안 쓰는 미디어)·정보.
 - **동기화 연결 마법사**(설정 → 동기화) — 폰의 Syncthing-Fork 를 이 앱이 대신 설정합니다. Fork 의 API 키와 컴퓨터 기기 ID 를 붙여넣고 *컴퓨터 추가*를 누르면, 컴퓨터가 허용한 뒤 보내는 공유 폴더를 노트 폴더 아래 알맞은 경로(노트·`.resources`·`.imported`·`.history`·`.trash`·노트북, 외부 폴더는 `<노트폴더>-files/`)로 자동 수락하고, `.sync/policy.json` 이 도착하면 방향(양방향·받기 전용·보내기 전용)을 맞춥니다. Fork 의 로컬 API(`https://127.0.0.1:8384`, 자체 서명 인증서 — 루프백에서만 검사를 끔)를 쓰므로 INTERNET 권한이 있습니다. 코드는 `ForkSync.kt`·`SyncWizard.kt`.
 - **태그 규칙을 데스크톱과 같게(1.3.1)** — 본문 `#태그`는 코드·주소·그림 속, `( [ / = - . : ? & #` 바로 뒤, 숫자로 시작하는 이름이 아니면 태그입니다(위키 각주 `](#cite_note-…)` 가 태그로 잡히던 문제 수정). 이름 바꾸기·삭제도 같은 규칙으로 찾은 자리만 고칩니다. 코드는 `HashTags.kt`(데스크톱 `notes.py` 의 `hashtags`·`mask_protected`·`line_tags` 와 같은 입력에서 같은 결과를 내는지 `HashTagsTest` 로 확인). 규칙이 바뀌어 처음 실행 때 노트 색인을 한 번 다시 만듭니다.
+- **동기화 시험(2026-10-30)** — 사용자 노트에서 무작위로 뽑은 복사본(노트 100·미디어 20·mp3/pdf 5 + 폰 쪽 파일)으로 에뮬레이터의 Syncthing-Fork 와 시험용 컴퓨터를 연결해 양방향 12/12, PC → 모바일 15/15, 모바일 → PC 12/12 통과(해시 비교). 자세한 내용과 한계는 컴퓨터 앱 저장소 README 의 *동기화 시험 기록*.
 - **API 키 안내와 오류(1.3.2)** — Fork 를 지웠다 다시 깔면 API 키가 새로 바뀝니다. 키는 Fork → 왼쪽 위 메뉴(☰) → Settings → Syncthing Options → ‘Syncthing API Key (click to copy)’ 에서 복사합니다. 붙여넣은 글에서 32자 키를 알아서 뽑고 글자 수를 보여 주며, 거절·꺼짐 같은 오류는 알아볼 말로 알려 줍니다.
 - **Syncthing-Fork 찾기(1.3.1)** — Fork 는 배포처마다 패키지 이름이 달라(`…syncthingandroid` 플레이·F-Droid, `…syncthingfork` GitHub 최신판, 공식 앱) 모두 찾고, API 키가 통하면 설치된 것으로 칩니다. 설치 버튼은 구글 플레이 → 플레이 웹 → F-Droid → GitHub 순서로 엽니다.
 - **볼트 폴더 구조 자동 준비** — 노트 폴더를 고르거나 앱을 열 때 `.history` `.trash` `.resources` `.imported` `.sync` 가 없으면 만듭니다(있는 폴더·노트는 건드리지 않음). 동기화 도구(Syncthing-Fork)에서 폴더 경로를 고를 때 이 폴더들이 이미 있어 편합니다.

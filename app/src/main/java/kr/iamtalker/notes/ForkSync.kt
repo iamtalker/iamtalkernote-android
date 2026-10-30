@@ -22,6 +22,8 @@ object ForkSync {
     const val STORE_PKG = "com.github.catfriend1.syncthingandroid"   // 스토어 목록에 있는 이름
     const val PORT = 8384
     const val ID_PREFIX = "inn-"
+    /** 사용 설명서(GitHub) */
+    const val MANUAL_URL = "https://github.com/iamtalker/iamtalkernote/blob/main/docs/manual.md"
 
     fun installedPkg(ctx: Context): String? = PKGS.firstOrNull { p -> runCatching { ctx.packageManager.getPackageInfo(p, 0); true }.getOrDefault(false) }
     fun installed(ctx: Context): Boolean = installedPkg(ctx) != null
