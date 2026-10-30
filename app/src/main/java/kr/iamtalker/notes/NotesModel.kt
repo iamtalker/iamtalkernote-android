@@ -223,8 +223,18 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 목록을 다시 읽고(폴더를 훑음), 바뀐 노트만 읽어 색인을 맞춘다 */
+    private var lastScan = 0L
+
+    /** 앱으로 돌아왔을 때: 동기화로 파일이 바뀌었을 수 있으니 마지막으로 읽은 지 minMs 가 지났으면 다시 읽는다. 읽는 중이거나 색인 중이면 건드리지 않는다 */
+    fun refreshIfStale(minMs: Long = 60_000) {
+        if (tree == null || loading || job?.isActive == true) return
+        if (System.currentTimeMillis() - lastScan < minMs) return
+        refresh()
+    }
+
     fun refresh() {
         val t = tree ?: return
+        lastScan = System.currentTimeMillis()
         job?.cancel()
         job = viewModelScope.launch {
             loading = true

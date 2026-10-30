@@ -100,6 +100,11 @@ class MainActivity : ComponentActivity() {
         model.handleSend(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        model.refreshIfStale()   // 백그라운드에서 동기화로 바뀐 노트·노트북이 앱으로 돌아오면 보이게
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CrashLog.install(this)
@@ -256,13 +261,6 @@ fun App(model: NotesModel) {
                             go { model.changeFolder(null); model.changeTag(null) }
                         }
                     }
-                    if (model.docs.isNotEmpty()) {
-                        item { DrawerHeading("가져온 파일 (컴퓨터)") }
-                        item { DrawerRow("모든 가져온 파일", selected = model.showDocs && model.docFolder == null, badge = "${model.docs.size}") { go { model.selectDocs(null) } } }
-                        items(model.docFolders, key = { "d:" + it.first }) { (name, n) ->
-                            DrawerRow(name, selected = model.showDocs && model.docFolder == name, badge = "$n", indent = 16) { go { model.selectDocs(name) } }
-                        }
-                    }
                     if (model.saved.isNotEmpty()) {
                         item { DrawerHeading("저장된 검색") }
                         items(model.saved, key = { "s:" + it.name }) { sv ->
@@ -287,6 +285,15 @@ fun App(model: NotesModel) {
                                 onLongClick = { tagDialog = t }) {
                                 go { model.changeFolder(null); model.changeTag(t) }
                             }
+                        }
+                    }
+                    // 데스크톱처럼 노트북(md 폴더)이 위, 가져온 파일(컴퓨터)이 그 아래
+                    if (model.docs.isNotEmpty()) {
+                        item { HorizontalDivider(Modifier.padding(top = 8.dp)) }
+                        item { DrawerHeading("가져온 파일 (컴퓨터)") }
+                        item { DrawerRow("모든 가져온 파일", selected = model.showDocs && model.docFolder == null, badge = "${model.docs.size}") { go { model.selectDocs(null) } } }
+                        items(model.docFolders, key = { "d:" + it.first }) { (name, n) ->
+                            DrawerRow(name, selected = model.showDocs && model.docFolder == name, badge = "$n", indent = 16) { go { model.selectDocs(name) } }
                         }
                     }
                     item { HorizontalDivider(Modifier.padding(top = 8.dp)) }
