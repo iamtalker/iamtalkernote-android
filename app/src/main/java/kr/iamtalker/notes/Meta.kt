@@ -9,8 +9,6 @@ object Meta {
     data class Info(val updated: Long, val tags: List<String>, val created: Long = 0)
 
     private val front = Regex("^﻿?---[ \\t]*\\r?\\n([\\s\\S]*?)\\r?\\n---[ \\t]*(?:\\r?\\n|$)")
-    private val bodyTag = Regex("(?<![\\p{L}\\p{N}_&/#])#([\\p{L}\\p{N}_\\-]{1,40})")
-    private val tagLine = Regex("^[ \\t]*(?:태그|tags?)[ \\t]*[:：](.*)$", RegexOption.IGNORE_CASE)
     private val date = Regex("(\\d{4})[-./](\\d{1,2})[-./](\\d{1,2})(?:[T\\s]+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?)?(?:\\.\\d+)?\\s*(Z|[+-]\\d{2}:?\\d{2})?")
 
     /** (머리말 글, 본문) */
@@ -48,17 +46,8 @@ object Meta {
                 if (t.startsWith("-")) add(t.removePrefix("-")) else if (t.isNotEmpty()) inTagList = false
             }
         }
-        var fence = false
-        for (line in body.lineSequence()) {
-            if (line.trimStart().startsWith("```") || line.trimStart().startsWith("~~~")) { fence = !fence; continue }
-            if (fence) continue
-            val tl = tagLine.find(line)
-            if (tl != null) {
-                tl.groupValues[1].split(',', ' ').forEach { if (it.isNotBlank()) add(it) }
-                continue
-            }
-            if (line.contains('#') && !line.startsWith("#")) bodyTag.findAll(line).forEach { add(it.groupValues[1]) }
-        }
+        // 본문: 데스크톱(notes.py note_tags)과 같다 — '태그:' 줄 + 본문 #태그(코드·주소·각주 앵커 제외)
+        for (t in HashTags.ordered(body)) tags.putIfAbsent(t.lowercase(), t)
         return Info(updated, tags.values.toList(), created)
     }
 

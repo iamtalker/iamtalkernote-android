@@ -92,16 +92,21 @@ fun SyncWizard(model: NotesModel) {
         Text("연결 마법사", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
         Hint("Syncthing-Fork 를 이 앱이 대신 설정합니다. 처음 한 번만 하면 됩니다.")
 
-        Step(1, "Syncthing-Fork 설치", forkOn) {
-            if (!forkOn) {
-                Hint("폰에 Syncthing-Fork 앱이 필요합니다(파일을 실제로 옮기는 앱).")
+        // API 키가 통하면 Fork 가 있다는 뜻이다(앱 이름이 달라 못 찾는 기기도 있어서)
+        Step(1, "Syncthing-Fork 설치", forkOn || (report != null && err.isEmpty())) {
+            if (!forkOn && report == null) {
+                Hint("폰에 Syncthing-Fork 앱이 필요합니다(파일을 실제로 옮기는 앱). 이미 설치했다면 이 단계는 건너뛰고 아래 2번에 API 키를 넣으세요.")
                 Button(onClick = {
-                    val ok = runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${ForkSync.PKG}"))) }.isSuccess
-                    if (!ok) runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://f-droid.org/packages/${ForkSync.PKG}/"))) }
+                    fun open(uri: String) = runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri))) }.isSuccess
+                    // 구글 플레이 앱 → 플레이 웹페이지 → F-Droid → GitHub 순서로, 열리는 첫 곳
+                    open("market://details?id=${ForkSync.STORE_PKG}") || open("https://play.google.com/store/apps/details?id=${ForkSync.STORE_PKG}") ||
+                        open("https://f-droid.org/packages/${ForkSync.STORE_PKG}/") || open("https://github.com/Catfriend1/syncthing-android/releases")
                 }) { Text("설치 페이지 열기") }
             } else {
                 Hint("설치됨. 처음 실행하면 나오는 권한 안내(모든 파일 접근, 배터리 최적화 제외)를 모두 허용하세요.")
-                OutlinedButton(onClick = { ctx.packageManager.getLaunchIntentForPackage(ForkSync.PKG)?.let { ctx.startActivity(it) } }) { Text("Syncthing-Fork 열기") }
+                ForkSync.installedPkg(ctx)?.let { pkg ->
+                    OutlinedButton(onClick = { ctx.packageManager.getLaunchIntentForPackage(pkg)?.let { ctx.startActivity(it) } }) { Text("Syncthing-Fork 열기") }
+                }
             }
         }
 

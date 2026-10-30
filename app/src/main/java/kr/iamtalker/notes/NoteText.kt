@@ -98,8 +98,6 @@ object NoteText {
         items.firstOrNull { titleOf(it).equals(title.trim(), ignoreCase = true) }
 
     // ---- 태그 이름 바꾸기·삭제: 머리말 tags / 글 아래 '태그:' 줄 / 본문 #태그 세 군데를 모두 고친다(코드 블록은 건드리지 않음)
-    private val bodyTagRe = Regex("(?<![\\p{L}\\p{N}_&/#])#([\\p{L}\\p{N}_\\-]{1,40})")
-
     private fun sameTag(a: String, b: String) = a.trim().trimStart('#').equals(b.trim().trimStart('#'), ignoreCase = true)
 
     /** 태그 old 를 new 로 바꾼다(new 가 null 이면 지운다). 바뀐 곳이 없으면 같은 글을 돌려준다. 이름의 공백은 _ 로 바뀐다 */
@@ -156,11 +154,22 @@ object NoteText {
                     continue
                 }
             }
-            if (line.startsWith("#") && !line.startsWith("##") && line.length > 1 && line[1] == ' ') { out.add(line); continue }   // 제목 줄
-            out.add(if (line.contains('#')) bodyTagRe.replace(line) { m ->
-                if (!sameTag(m.groupValues[1], old)) m.value else if (nw != null) "#$nw" else ""
-            } else line)
+            out.add(line)
         }
-        return newHead + out.joinToString("\n")
+        // 본문 #태그: 데스크톱과 같은 규칙으로 찾은 자리만(코드·주소·각주 앵커 제외) 원문 위치 그대로 바꾼다
+        var bodyOut = out.joinToString("\n")
+        val hits = HashTags.find(bodyOut).filter { sameTag(it.second, old) }
+        if (hits.isNotEmpty()) {
+            val sb = StringBuilder()
+            var last = 0
+            for ((i, name) in hits) {
+                sb.append(bodyOut, last, i)
+                if (nw != null) sb.append('#').append(nw)
+                last = i + 1 + name.length
+            }
+            sb.append(bodyOut, last, bodyOut.length)
+            bodyOut = sb.toString()
+        }
+        return newHead + bodyOut
     }
 }

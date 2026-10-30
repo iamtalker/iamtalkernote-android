@@ -17,11 +17,14 @@ import org.json.JSONObject
 /** 폰의 Syncthing-Fork 를 이 앱이 대신 설정한다: 컴퓨터를 기기로 넣고, 컴퓨터가 보낸 폴더 공유 요청을 알맞은 경로로 받아 준다.
  *  Fork 의 로컬 REST API(127.0.0.1:8384, HTTPS, API 키 필요)를 쓴다. 컴퓨터 쪽 규칙은 컴퓨터 앱의 syncpolicy.py 와 같다. */
 object ForkSync {
-    const val PKG = "com.github.catfriend1.syncthingfork"
+    /** Syncthing-Fork 는 배포처·버전마다 패키지 이름이 다르다: 플레이·F-Droid 의 이름, GitHub 최신판의 이름, 공식 안드로이드 앱 */
+    val PKGS = listOf("com.github.catfriend1.syncthingandroid", "com.github.catfriend1.syncthingfork", "com.nutomic.syncthingandroid")
+    const val STORE_PKG = "com.github.catfriend1.syncthingandroid"   // 스토어 목록에 있는 이름
     const val PORT = 8384
     const val ID_PREFIX = "inn-"
 
-    fun installed(ctx: Context): Boolean = runCatching { ctx.packageManager.getPackageInfo(PKG, 0); true }.getOrDefault(false)
+    fun installedPkg(ctx: Context): String? = PKGS.firstOrNull { p -> runCatching { ctx.packageManager.getPackageInfo(p, 0); true }.getOrDefault(false) }
+    fun installed(ctx: Context): Boolean = installedPkg(ctx) != null
 
     // ------------------------------------------------------------ 순수 계산(시험하기 쉽게 안드로이드와 분리)
     /** 저장소 트리 문서 id("primary:Documents/demo", "1234-ABCD:data/iamtalkernote") → 실제 경로. Syncthing 은 파일 경로가 필요하다 */

@@ -8,7 +8,7 @@ import android.net.Uri
 
 /** 색인 DB: 노트별 수정 시각·태그와 검색용 본문 사본. 파일이 원본이고 이 DB 는 언제든 지우고 다시 만들 수 있는 캐시다. 폴더(트리)마다 따로 둔다. */
 class Index(ctx: Context, tree: Uri) :
-    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 5) {
+    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 6) {
 
     init {
         setWriteAheadLoggingEnabled(true)   // 색인하는 동안에도 검색이 막히지 않게
@@ -22,7 +22,7 @@ class Index(ctx: Context, tree: Uri) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
-        if (old < 5) {   // 5: 미리보기에서 ‘태그:’ 줄을 빼므로 노트 색인을 다시 만든다
+        if (old < 6) {   // 5: 미리보기에서 ‘태그:’ 줄 제외 · 6: 본문 #태그 규칙을 데스크톱과 같게 — 노트 색인을 다시 만든다
             db.execSQL("DROP TABLE IF EXISTS notes")
             db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT, snip TEXT, created INTEGER)")
         }

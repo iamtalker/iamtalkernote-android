@@ -3,7 +3,9 @@
     <!-- Syncthing-Fork 의 로컬 API(127.0.0.1)와 통신하는 데만 쓴다 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <queries>
+        <package android:name="com.github.catfriend1.syncthingandroid" />
         <package android:name="com.github.catfriend1.syncthingfork" />
+        <package android:name="com.nutomic.syncthingandroid" />
     </queries>
     <application
         android:allowBackup="false"
