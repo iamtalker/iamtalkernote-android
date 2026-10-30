@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         CrashLog.install(this)
         model.handleSend(intent)
+        model.watchFork()   // Fork 연결을 해 둔 경우 컴퓨터가 보낸 공유 폴더를 어느 화면에서든 자동으로 받는다
         setContent {
             val dark = when (model.themeMode) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
             val scheme = if (dark) darkColorScheme(primary = Color(0xFF5AAEF0), background = Color(0xFF15181C), surface = Color(0xFF15181C), surfaceVariant = Color(0xFF22262B),

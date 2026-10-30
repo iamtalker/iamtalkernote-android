@@ -67,26 +67,11 @@ fun SyncWizard(model: NotesModel) {
     var forkOn by remember { mutableStateOf(ForkSync.installed(ctx)) }
     var key by remember { mutableStateOf(prefs.getString("forkKey", "") ?: "") }
     var pcId by remember { mutableStateOf(prefs.getString("pcId", "") ?: "") }
-    var err by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    var report by remember { mutableStateOf<ForkSync.Report?>(null) }
-    val tree = model.tree
+    val report = model.forkReport            // 앱 전체에서 5초마다 도는 확인(NotesModel.watchFork)의 결과
+    val err = report?.error ?: ""
     val api = remember(key) { key.trim().takeIf { it.length >= 20 }?.let { ForkSync.Api(it) } }
-
-    // 5초마다: 설치 여부 확인, 컴퓨터가 보낸 공유 요청 받기, 방향 맞추기, 상태 갱신
-    LaunchedEffect(api, pcId) {
-        while (true) {
-            forkOn = ForkSync.installed(ctx)
-            if (api != null && tree != null) {
-                val r = withContext(Dispatchers.IO) {
-                    runCatching { ForkSync.tick(ctx, api, pcId.trim(), tree) }.getOrElse { ForkSync.Report(error = ForkSync.friendly(it)) }
-                }
-                report = r
-                err = r.error ?: ""
-            }
-            delay(5000)
-        }
-    }
+    LaunchedEffect(Unit) { while (true) { forkOn = ForkSync.installed(ctx); delay(3000) } }
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         Text("연결 마법사", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
@@ -121,7 +106,7 @@ fun SyncWizard(model: NotesModel) {
         }
 
         Step(3, "컴퓨터와 연결", report?.connected == true) {
-            Hint("컴퓨터 앱 → 옵션 → 동기화의 ‘이 컴퓨터의 기기 ID’ 를 복사해 붙여넣고 ‘컴퓨터 추가’를 누르세요. 그다음 컴퓨터 앱에 ‘연결을 요청한 기기’가 뜨면 [허용]을 누릅니다.")
+            Hint("컴퓨터 앱 → 옵션 → 동기화의 ‘이 컴퓨터의 기기 ID’ 를 복사해 붙여넣고 ‘컴퓨터 추가’를 누르세요. 그다음 컴퓨터 앱에 ‘연결을 요청한 기기’가 뜨면 [허용]을 누르면 끝입니다. 이후 폴더는 이 앱이 알아서 받으니 Fork 의 알림을 누르거나 폴더 경로를 쓸 필요가 없습니다.")
             OutlinedTextField(value = pcId, onValueChange = { pcId = it.replace(Regex("\\s"), "").uppercase(); prefs.edit().putString("pcId", pcId).apply() },
                 singleLine = true, label = { Text("컴퓨터 기기 ID") }, modifier = Modifier.fillMaxWidth())
             Row(Modifier.padding(top = 8.dp)) {
@@ -144,7 +129,8 @@ fun SyncWizard(model: NotesModel) {
 
         Step(4, "폴더 받기", (report?.folders?.isNotEmpty() == true)) {
             val r = report
-            if (r == null || r.folders.isEmpty()) Hint("연결이 허용되면 컴퓨터가 보낸 폴더를 이 앱이 알아서 받아 정해진 위치에 둡니다.")
+            r?.note?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) }
+            if (r == null || r.folders.isEmpty()) Hint("컴퓨터에서 [허용]을 누르면 컴퓨터가 보낸 폴더를 이 앱이 알아서 받아 정해진 위치에 둡니다(이 앱이 켜져 있는 동안 5초마다 확인하니 앱을 완전히 닫지 마세요).")
             else {
                 Hint(if (r.connected) "컴퓨터와 연결됨" else "컴퓨터와 연결 안 됨(같은 와이파이인지, 컴퓨터 앱이 켜져 있는지 확인)")
                 for (f in r.folders) {

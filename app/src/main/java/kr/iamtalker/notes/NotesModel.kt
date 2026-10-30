@@ -239,6 +239,30 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
     fun changeAutoRefresh(b: Boolean) { autoRefresh = b; prefs.edit().putBoolean("autoRefresh", b).apply() }
 
+    /** Syncthing-Fork 연결 상태(동기화 마법사가 보여 준다) */
+    var forkReport by mutableStateOf<ForkSync.Report?>(null)
+        private set
+    private var forkJob: Job? = null
+
+    /** Fork API 키가 저장돼 있으면, 앱이 켜져 있는 동안 어느 화면에 있든 5초마다 컴퓨터가 보낸 공유 폴더를 받아 정해진 위치에 둔다
+     *  (마법사 화면을 벗어나면 Fork 의 알림을 직접 눌러 경로를 써야 했던 문제) */
+    fun watchFork() {
+        if (forkJob?.isActive == true) return
+        forkJob = viewModelScope.launch {
+            while (true) {
+                val key = prefs.getString("forkKey", "").orEmpty().trim()
+                val t = tree
+                if (key.length >= 20 && t != null) {
+                    val pc = prefs.getString("pcId", "").orEmpty().trim()
+                    forkReport = withContext(Dispatchers.IO) {
+                        runCatching { ForkSync.tick(getApplication(), ForkSync.Api(key), pc, t) }.getOrElse { ForkSync.Report(error = ForkSync.friendly(it)) }
+                    }
+                }
+                delay(5000)
+            }
+        }
+    }
+
     /** 앱으로 돌아왔을 때: 동기화로 파일이 바뀌었을 수 있으니 마지막으로 읽은 지 minMs 가 지났으면 다시 읽는다. 읽는 중이거나 색인 중이면 건드리지 않는다 */
     fun refreshIfStale(minMs: Long = 60_000) {
         if (!autoRefresh || tree == null || loading || job?.isActive == true) return

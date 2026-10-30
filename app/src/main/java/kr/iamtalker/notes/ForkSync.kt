@@ -127,6 +127,11 @@ object ForkSync {
                 .put("addresses", JSONArray().put("dynamic")).put("autoAcceptFolders", false).put("paused", false))
         }
 
+        fun deviceIds(): List<String> {
+            val a = config().getJSONArray("devices")
+            return (0 until a.length()).map { a.getJSONObject(it).getString("deviceID") }
+        }
+
         fun hasDevice(id: String): Boolean {
             val a = config().getJSONArray("devices")
             return (0 until a.length()).any { a.getJSONObject(it).getString("deviceID") == id }
@@ -134,7 +139,7 @@ object ForkSync {
 
         /** 컴퓨터가 우리에게 공유하려는 폴더들: 폴더 ID → (이름표, 보낸 기기 ID 들) */
         fun pendingFolders(): Map<String, Pair<String, Set<String>>> {
-            val o = runCatching { JSONObject(call("/rest/cluster/pending/folders")) }.getOrNull() ?: return emptyMap()
+            val o = JSONObject(call("/rest/cluster/pending/folders"))   // 못 읽으면 예외 — 호출한 쪽이 화면에 알린다
             val out = LinkedHashMap<String, Pair<String, Set<String>>>()
             for (fid in o.keys()) {
                 val by = o.getJSONObject(fid).optJSONObject("offeredBy") ?: continue
@@ -181,19 +186,28 @@ object ForkSync {
     }
 
     data class FolderLine(val label: String, val state: String, val needBytes: Long, val totalBytes: Long)
-    data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0, val error: String? = null)
+    data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0,
+                      val note: String = "", val error: String? = null)
 
     /** 5초마다 한 번: 컴퓨터가 보낸 공유 요청을 받고, 정책 파일이 생겼으면 방향(폴더 종류)을 맞추고, 상태를 모은다 */
     fun tick(ctx: Context, api: Api, pcId: String, tree: Uri): Report {
         val vaultPath = treePath(tree) ?: return Report(error = "이 저장소의 실제 경로를 알 수 없습니다(노트 폴더를 내장 메모리나 SD 카드에서 고르세요)")
         val me = api.myId()
         var accepted = 0
-        if (pcId.isNotEmpty() && api.hasDevice(pcId)) {
+        var note = ""
+        // Fork 에 이미 등록된 기기(컴퓨터 추가로 넣었거나 전에 연결한 기기)가 보낸 우리 폴더(inn-…)만 받는다. 컴퓨터 ID 를 정확히 안 넣었어도 된다
+        val known = api.deviceIds().filter { it != me }.toSet()
+        if (known.isEmpty()) note = "Fork 에 컴퓨터가 아직 등록되지 않았습니다. 3단계에서 ‘컴퓨터 추가’를 누르세요."
+        else try {
             for ((fid, v) in api.pendingFolders()) {
-                if (!fid.startsWith(ID_PREFIX) || pcId !in v.second) continue
-                api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first), "sendreceive", listOf(me, pcId))
+                if (!fid.startsWith(ID_PREFIX)) continue
+                val from = v.second.filter { it in known }
+                if (from.isEmpty()) continue
+                api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first), "sendreceive", listOf(me) + from)
                 accepted++
             }
+        } catch (e: Exception) {
+            note = "컴퓨터가 보낸 폴더 목록을 읽지 못했습니다(Fork 버전이 오래됐을 수 있습니다): ${friendly(e)}"
         }
         // 정책 파일이 도착하면 폴더마다 방향을 맞춘다(처음엔 모두 양방향으로 받는다)
         readPolicy(ctx, tree)?.let { pol ->
@@ -213,6 +227,7 @@ object ForkSync {
             val st = runCatching { api.folderStatus(it.getString("id")) }.getOrDefault(Triple("?", 0L, 0L))
             FolderLine(it.optString("label"), st.first, st.second, st.third)
         }
-        return Report(me, if (pcId.isEmpty()) false else runCatching { api.connected(pcId) }.getOrDefault(false), lines, accepted)
+        val connected = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { runCatching { api.connected(it) }.getOrDefault(false) }
+        return Report(me, connected, lines, accepted, note)
     }
 }
