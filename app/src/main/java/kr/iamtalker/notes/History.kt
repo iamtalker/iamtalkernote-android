@@ -39,6 +39,17 @@ object History {
         return DocumentsContract.getDocumentId(u)
     }
 
+    /** 볼트의 기본 폴더 구조(데스크톱과 같다). 동기화 도구에서 폴더 경로를 고를 수 있도록 빠진 것만 미리 만든다(있는 것은 건드리지 않는다) → 새로 만든 폴더 이름들 */
+    val LAYOUT = listOf(HISTORY, TRASH, ".resources", ".imported", ".sync")
+
+    fun ensureLayout(ctx: Context, tree: Uri): List<String> {
+        val root = rootId(tree)
+        val have = list(ctx, tree, root).filter { it.isDir }.map { it.name }.toSet()
+        val made = ArrayList<String>()
+        for (name in LAYOUT) if (name !in have && dir(ctx, tree, root, name) != null) made.add(name)
+        return made
+    }
+
     fun delete(ctx: Context, tree: Uri, id: String) {
         DocumentsContract.deleteDocument(ctx.contentResolver, docUri(tree, id))
     }

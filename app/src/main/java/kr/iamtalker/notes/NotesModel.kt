@@ -230,6 +230,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             loading = true
             status = "노트를 찾는 중…"
             try {
+                withContext(Dispatchers.IO) { runCatching { History.ensureLayout(getApplication(), t) } }   // 실패해도(읽기 전용 폴더 등) 노트 읽기는 계속한다
                 val scanned = withContext(Dispatchers.IO) { NoteRepo.scan(getApplication(), t) { n -> say("노트를 찾는 중… $n") } }
                 val have = withContext(Dispatchers.IO) { index().load() }
                 indexed = have.keys
