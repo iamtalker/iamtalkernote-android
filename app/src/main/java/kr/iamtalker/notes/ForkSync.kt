@@ -70,6 +70,21 @@ object ForkSync {
     /** 컴퓨터 앱의 syncpolicy.folder_id 와 같은 값 */
     fun folderId(vault: String, kind: String, mid: String) = "$ID_PREFIX$vault-${kind.take(3)}-" + sha1Hex(mid).take(8)
 
+    /** 붙여넣은 글에서 API 키를 뽑는다: Syncthing 의 키는 영문·숫자 32자. 앞뒤에 다른 글이 딸려 와도 32자 덩어리를 찾는다 */
+    fun keyFrom(text: String): String = Regex("[A-Za-z0-9]{32}").find(text)?.value ?: text.trim()
+
+    /** 연결 오류를 사용자가 알아볼 말로 */
+    fun friendly(e: Throwable): String {
+        val m = e.message.orEmpty()
+        return when {
+            e is java.net.ConnectException || m.contains("failed to connect", true) || m.contains("ECONNREFUSED") || m.contains("Connection refused", true) ->
+                "Syncthing-Fork 가 실행 중이 아닙니다. Fork 를 열고 ‘FORCE START’(실행 조건 무시하고 시작)를 누른 뒤 다시 시도하세요."
+            e is java.net.SocketTimeoutException -> "Syncthing-Fork 가 응답하지 않습니다. Fork 가 켜져 있는지 확인하세요."
+            m.isNotEmpty() -> m
+            else -> e.javaClass.simpleName
+        }
+    }
+
     // ------------------------------------------------------------ Fork API
     class Api(private val key: String, private val port: Int = PORT) {
         // 127.0.0.1 의 Fork 가 자체 서명 인증서를 쓰므로, 이 연결에만 인증서 검사를 끈다(주소가 루프백일 때만)
@@ -96,7 +111,9 @@ object ForkSync {
             }
             val code = c.responseCode
             val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw IllegalStateException(if (code == 403) "API 키가 맞지 않습니다" else "Fork 응답 $code ${text.take(120)}")
+            if (code !in 200..299) throw IllegalStateException(
+                if (code == 403) "Fork 가 이 API 키를 받아 주지 않습니다. Fork 를 지웠다 다시 설치했다면 키가 새로 바뀌니, 새 Fork 에서 키를 다시 복사하세요."
+                else "Fork 응답 $code ${text.take(120)}")
             return text
         }
 

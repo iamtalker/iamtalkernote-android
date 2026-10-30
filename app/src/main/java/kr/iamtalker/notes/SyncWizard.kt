@@ -79,7 +79,7 @@ fun SyncWizard(model: NotesModel) {
             forkOn = ForkSync.installed(ctx)
             if (api != null && tree != null) {
                 val r = withContext(Dispatchers.IO) {
-                    runCatching { ForkSync.tick(ctx, api, pcId.trim(), tree) }.getOrElse { ForkSync.Report(error = it.message ?: it.javaClass.simpleName) }
+                    runCatching { ForkSync.tick(ctx, api, pcId.trim(), tree) }.getOrElse { ForkSync.Report(error = ForkSync.friendly(it)) }
                 }
                 report = r
                 err = r.error ?: ""
@@ -111,9 +111,11 @@ fun SyncWizard(model: NotesModel) {
         }
 
         Step(2, "API 키 붙여넣기", err.isEmpty() && report != null) {
-            Hint("Syncthing-Fork → 오른쪽 위 메뉴 → Web GUI → 오른쪽 위 톱니 → Settings 에서 ‘API Key’ 를 복사해 붙여넣으세요.")
-            OutlinedTextField(value = key, onValueChange = { key = it.trim(); prefs.edit().putString("forkKey", key).apply() }, singleLine = true,
+            Hint("Syncthing-Fork 앱 → 왼쪽 위 메뉴(☰) → Settings(설정) → Syncthing Options → ‘Syncthing API Key (click to copy)’ 를 눌러 복사한 뒤 아래에 붙여넣으세요. (Fork 가 실행 중이어야 보입니다. 기기 ID 와는 다른 값입니다.)")
+            OutlinedTextField(value = key, onValueChange = { key = ForkSync.keyFrom(it); prefs.edit().putString("forkKey", key).apply() }, singleLine = true,
                 label = { Text("API 키") }, modifier = Modifier.fillMaxWidth())
+            if (key.isNotEmpty()) Text("${key.length}자" + (if (key.length != 32) " — API 키는 영문·숫자 32자입니다" else ""), fontSize = 12.sp,
+                color = if (key.length == 32) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
             if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp))
         }
 
