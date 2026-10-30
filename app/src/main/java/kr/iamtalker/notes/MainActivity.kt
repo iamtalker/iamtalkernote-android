@@ -11,6 +11,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.clip
@@ -226,6 +228,23 @@ fun NoteRow(n: Note, pinned: Boolean, chosen: Boolean, fmt: SimpleDateFormat, on
     }
 }
 
+/** 아래 ⋯ 메뉴: 업노트처럼 오른쪽 가장자리에 붙여 뜨고, 새 노트(연필) 버튼을 완전히 덮는다. 바깥을 누르면 닫힌다 */
+@Composable
+fun BoxScope.MoreMenu(onDismiss: () -> Unit, items: List<Pair<String, () -> Unit>>, dividerBefore: Int) {
+    Box(Modifier.matchParentSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() })
+    Surface(
+        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 6.dp, bottom = 58.dp).width(200.dp),
+        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp
+    ) {
+        Column(Modifier.padding(vertical = 6.dp)) {
+            items.forEachIndexed { i, (label, act) ->
+                if (i == dividerBefore) HorizontalDivider(Modifier.padding(horizontal = 14.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                Text(label, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { onDismiss(); act() }.padding(horizontal = 20.dp, vertical = 14.dp))
+            }
+        }
+    }
+}
+
 /** 눌러서 고르는 목록 단추 */
 @Composable
 fun MenuButton(label: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
@@ -318,6 +337,7 @@ fun App(model: NotesModel) {
     var tagsOpen by remember { mutableStateOf(false) }
     var docsOpen by remember { mutableStateOf(false) }
     var collapsed by remember { mutableStateOf(setOf<String>()) }  // 접어 둔 노트북
+    BackHandler(enabled = moreOpen) { moreOpen = false }
     BackHandler(enabled = inSearch && !drawer.isOpen && !selecting) { searching = false; model.changeQuery(""); focusManager.clearFocus() }
     LaunchedEffect(searching) { if (searching) runCatching { searchFocus.requestFocus() } }
     val fmt = remember { SimpleDateFormat("M월 d일, a h:mm", Locale.KOREA) }
@@ -399,6 +419,7 @@ fun App(model: NotesModel) {
             }
         }
     ) {
+        Box(Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
             topBar = {
@@ -453,17 +474,7 @@ fun App(model: NotesModel) {
                     Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                         BarButton({ scope.launch { drawer.open() } }) { BookIcon() }
                         BarButton({ searching = true }) { SearchIcon(MaterialTheme.colorScheme.outline) }
-                        Box {
-                            BarButton({ moreOpen = true }) { HDotsIcon() }
-                            DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
-                                DropdownMenuItem(text = { Text("새 노트북") }, onClick = { moreOpen = false; notebookDialog = true })
-                                DropdownMenuItem(text = { Text("노트 필터") }, onClick = { moreOpen = false; listDialog = "filter" })
-                                DropdownMenuItem(text = { Text("노트 정렬") }, onClick = { moreOpen = false; listDialog = "sort" })
-                                DropdownMenuItem(text = { Text("노트 선택") }, onClick = { moreOpen = false; selectMode = true })
-                                HorizontalDivider()
-                                DropdownMenuItem(text = { Text("설정") }, onClick = { moreOpen = false; screen = "settings" })
-                            }
-                        }
+                        BarButton({ moreOpen = true }) { HDotsIcon() }
                     }
                 }
             },
@@ -541,6 +552,12 @@ fun App(model: NotesModel) {
                     item { Spacer(Modifier.height(80.dp)) }
                 }
             }
+        }
+        if (moreOpen) MoreMenu(
+            onDismiss = { moreOpen = false }, dividerBefore = 4,
+            items = listOf("새 노트북" to { notebookDialog = true }, "노트 필터" to { listDialog = "filter" }, "노트 정렬" to { listDialog = "sort" },
+                "노트 선택" to { selectMode = true }, "설정" to { screen = "settings" })
+        )
         }
     }
     if (listDialog.isNotEmpty()) {
