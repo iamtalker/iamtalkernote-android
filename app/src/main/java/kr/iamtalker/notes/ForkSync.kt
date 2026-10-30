@@ -67,6 +67,27 @@ object ForkSync {
         else -> null
     }
 
+    // ---- 새 방식(노트 폴더 하나·방향 하나): 컴퓨터 앱 syncpolicy.py 의 SIMPLE_OPTIONS·plan 과 같은 규칙
+    private val SIMPLE_OPTIONS = listOf("media" to ".resources", "imported" to ".imported", "history" to ".history", "trash" to ".trash")
+    private val COMMON_IGNORE = listOf("(?d)Thumbs.db", "(?d)desktop.ini", "(?d).DS_Store", "~*.tmp")
+
+    /** 새 방식에서 노트 폴더 Syncthing 폴더가 가져야 할 제외 목록: 보내지 않기로 한 것 + 복원 지점(컴퓨터 전용) + 공통 */
+    fun ignoreLines(simple: JSONObject): List<String> {
+        val inc = simple.optJSONObject("include")
+        val out = ArrayList<String>()
+        for ((key, dir) in SIMPLE_OPTIONS) if (inc?.optBoolean(key, false) != true) out.add("/$dir")
+        out.add("/.snapshots")
+        out.addAll(COMMON_IGNORE)
+        return out
+    }
+
+    /** 새 방식으로 바뀌면 따로 둘 이유가 없어진 옛 폴더 종류(미디어·가져온 요약·이력·휴지통·노트북) */
+    fun staleKindsForSimple(): Set<String> = setOf("med", "imp", "his", "tra", "not")
+
+    /** Fork 에 등록된 폴더 ID 들 중 이 볼트의 옛 폴더(새 방식에서는 지울 것). 외부 폴더(ext)와 다른 볼트·다른 앱의 폴더는 건드리지 않는다 */
+    fun staleFolders(ids: List<String>, vault: String): List<String> =
+        ids.filter { it.startsWith("$ID_PREFIX$vault-") && kindOf(it) in staleKindsForSimple() }
+
     private fun sha1Hex(s: String) = MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
     /** 컴퓨터 앱의 syncpolicy.folder_id 와 같은 값 */
@@ -162,6 +183,20 @@ object ForkSync {
             call("/rest/config/folders/$id", "PUT", f)
         }
 
+        fun ignores(id: String): List<String> {
+            val a = JSONObject(call("/rest/db/ignores?folder=$id")).optJSONArray("ignore") ?: return emptyList()
+            return (0 until a.length()).map { a.getString(it) }
+        }
+
+        fun setIgnores(id: String, lines: List<String>) {
+            call("/rest/db/ignores?folder=$id", "POST", JSONObject().put("ignore", JSONArray().also { arr -> lines.forEach { arr.put(it) } }))
+        }
+
+        /** Fork 의 폴더 설정만 지운다(폰의 파일은 그대로) */
+        fun removeFolder(id: String) {
+            call("/rest/config/folders/$id", "DELETE")
+        }
+
         fun setFolderType(folder: JSONObject, type: String) {
             folder.put("type", type)
             call("/rest/config/folders/" + folder.getString("id"), "PUT", folder)
@@ -185,6 +220,19 @@ object ForkSync {
         return runCatching { JSONObject(NoteRepo.read(ctx, History.docUri(tree, file.id))) }.getOrNull()
     }
 
+    /** 새 방식 정책일 때의 뒷정리. 돌려주는 값: 화면에 알릴 말(없으면 빈 글) */
+    private fun simpleNote(api: Api, vault: String, sm: JSONObject, vaultPath: String): String {
+        val have = api.folders()
+        val mar = have.firstOrNull { it.getString("id") == folderId(vault, "markdown", "markdown") } ?: return ""   // 아직 못 받았으면 다음 확인 때
+        val id = mar.getString("id")
+        val want = ignoreLines(sm)
+        if (api.ignores(id) != want) api.setIgnores(id, want)
+        staleFolders(have.map { it.getString("id") }, vault).forEach { api.removeFolder(it) }
+        val at = mar.optString("path").trimEnd('/', '\\')
+        // 경로만 바꾸면 Syncthing 이 파일이 사라진 것으로 보고 삭제를 전할 수 있어 자동으로 바꾸지 않는다
+        return if (at != vaultPath.trimEnd('/')) "Fork 에 등록된 노트 폴더 경로($at)가 앱의 노트 폴더($vaultPath)와 다릅니다. Fork 에서 이 앱이 만든 폴더(ID 가 inn- 로 시작)를 지우고 다시 받으세요(폰의 파일은 그대로입니다)." else ""
+    }
+
     data class FolderLine(val label: String, val state: String, val needBytes: Long, val totalBytes: Long)
     data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0,
                       val note: String = "", val error: String? = null)
@@ -195,12 +243,16 @@ object ForkSync {
         val me = api.myId()
         var accepted = 0
         var note = ""
+        val policy = runCatching { readPolicy(ctx, tree) }.getOrNull()
+        // 새 방식 정책이면 옛 종류의 폴더(미디어·이력 등)는 받지 않는다(컴퓨터가 아직 공유 중이어도 노트 폴더 안에서 함께 보낸다)
+        val simpleVault = if (policy?.optJSONObject("simple") != null) policy.optString("vault") else ""
         // Fork 에 이미 등록된 기기(컴퓨터 추가로 넣었거나 전에 연결한 기기)가 보낸 우리 폴더(inn-…)만 받는다. 컴퓨터 ID 를 정확히 안 넣었어도 된다
         val known = api.deviceIds().filter { it != me }.toSet()
         if (known.isEmpty()) note = "Fork 에 컴퓨터가 아직 등록되지 않았습니다. 3단계에서 ‘컴퓨터 추가’를 누르세요."
         else try {
             for ((fid, v) in api.pendingFolders()) {
                 if (!fid.startsWith(ID_PREFIX)) continue
+                if (simpleVault.isNotEmpty() && fid in staleFolders(listOf(fid), simpleVault)) continue
                 val from = v.second.filter { it in known }
                 if (from.isEmpty()) continue
                 api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first), "sendreceive", listOf(me) + from)
@@ -210,7 +262,7 @@ object ForkSync {
             note = "컴퓨터가 보낸 폴더 목록을 읽지 못했습니다(Fork 버전이 오래됐을 수 있습니다): ${friendly(e)}"
         }
         // 정책 파일이 도착하면 폴더마다 방향을 맞춘다(처음엔 모두 양방향으로 받는다)
-        readPolicy(ctx, tree)?.let { pol ->
+        policy?.let { pol ->
             val vault = pol.optString("vault")
             val mods = pol.optJSONObject("modules")
             if (vault.isNotEmpty() && mods != null) {
@@ -221,6 +273,8 @@ object ForkSync {
                     val f = have[folderId(vault, m.optString("kind"), mid)] ?: continue
                     if (f.optString("type") != want) api.setFolderType(f, want)
                 }
+                // 새 방식(노트 폴더 하나·방향 하나): 제외 목록을 컴퓨터와 같게 하고, 쓸 일 없어진 옛 폴더를 정리한다
+                pol.optJSONObject("simple")?.let { sm -> simpleNote(api, vault, sm, vaultPath).takeIf { it.isNotEmpty() }?.let { note = it } }
             }
         }
         val lines = api.folders().filter { it.getString("id").startsWith(ID_PREFIX) }.map {
