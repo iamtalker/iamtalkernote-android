@@ -67,7 +67,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     var note by remember { mutableStateOf(start) }
     var tfv by remember { mutableStateOf<TextFieldValue?>(null) }
     var saved by remember { mutableStateOf("") }
-    var editing by remember { mutableStateOf(start.size == 0L) }   // 새 노트는 바로 편집, 기존 노트는 보기부터
+    var editing by remember { mutableStateOf(start.size == 0L || model.openEditing) }   // 새 노트는 바로 편집, 기존 노트는 보기부터
     var dialog by remember { mutableStateOf("") }                   // rename / move / delete / props / tags
     var error by remember { mutableStateOf<String?>(null) }
     var findOpen by remember { mutableStateOf(false) }
@@ -153,13 +153,13 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     val pinned = note.uri.toString() in model.pins
     Scaffold(
         topBar = {
-            Surface(color = Bar, contentColor = androidx.compose.ui.graphics.Color.White) { Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-                BarButton({ save(); onClose() }) { BackIcon(androidx.compose.ui.graphics.Color.White) }
-                Text(note.title, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = androidx.compose.ui.graphics.Color.White,
+            Column { Surface(color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) { Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+                BarButton({ save(); onClose() }) { BackIcon(MaterialTheme.colorScheme.onSurface) }
+                Text(note.title, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 run {
-                    TextButton(onClick = { save(); editing = !editing }) { Text(if (editing) "보기" else "편집", color = androidx.compose.ui.graphics.Color.White) }
-                    BarMenu({ DotsIcon(androidx.compose.ui.graphics.Color.White) }) { close ->
+                    TextButton(onClick = { save(); editing = !editing }) { Text(if (editing) "보기" else "편집", color = MaterialTheme.colorScheme.primary) }
+                    BarMenu({ DotsIcon(MaterialTheme.colorScheme.onSurface) }) { close ->
                         DropdownMenuItem(text = { Text("문서에서 찾기") }, onClick = { close(); findOpen = true })
                         DropdownMenuItem(text = { Text("태그 편집") }, onClick = { close(); dialog = "tags" })
                         DropdownMenuItem(text = { Text("이전 버전") }, onClick = { close(); dialog = "versions" })
@@ -178,6 +178,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                     }
                 }
             } }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
         },
         bottomBar = {
             if (editing && tfv != null) {
@@ -220,7 +221,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                 } else if (editing) {
                     BasicTextField(
                         value = v, onValueChange = { tfv = it },
-                        textStyle = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = TextStyle(fontSize = model.editorFont.sp, lineHeight = (model.editorFont * 1.5f).sp, color = MaterialTheme.colorScheme.onSurface),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         modifier = Modifier.fillMaxSize().padding(16.dp).focusRequester(focus)
                     )

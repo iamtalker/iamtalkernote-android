@@ -225,9 +225,23 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     /** 목록을 다시 읽고(폴더를 훑음), 바뀐 노트만 읽어 색인을 맞춘다 */
     private var lastScan = 0L
 
+    // ---- 설정 화면의 값(이 폰에만 저장)
+    var themeMode by mutableStateOf(prefs.getInt("theme", 0))   // 0 시스템 · 1 밝게 · 2 어둡게
+        private set
+    var openEditing by mutableStateOf(prefs.getBoolean("openEditing", false))   // 노트를 열 때 바로 편집
+        private set
+    var editorFont by mutableStateOf(prefs.getInt("editorFont", 15))
+        private set
+    var autoRefresh by mutableStateOf(prefs.getBoolean("autoRefresh", true))
+        private set
+    fun changeTheme(m: Int) { themeMode = m; prefs.edit().putInt("theme", m).apply() }
+    fun changeOpenEditing(b: Boolean) { openEditing = b; prefs.edit().putBoolean("openEditing", b).apply() }
+    fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
+    fun changeAutoRefresh(b: Boolean) { autoRefresh = b; prefs.edit().putBoolean("autoRefresh", b).apply() }
+
     /** 앱으로 돌아왔을 때: 동기화로 파일이 바뀌었을 수 있으니 마지막으로 읽은 지 minMs 가 지났으면 다시 읽는다. 읽는 중이거나 색인 중이면 건드리지 않는다 */
     fun refreshIfStale(minMs: Long = 60_000) {
-        if (tree == null || loading || job?.isActive == true) return
+        if (!autoRefresh || tree == null || loading || job?.isActive == true) return
         if (System.currentTimeMillis() - lastScan < minMs) return
         refresh()
     }

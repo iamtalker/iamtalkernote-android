@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 노트 한 장 -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M38,30 h26 a4,4 0 0 1 4,4 v40 a4,4 0 0 1 -4,4 h-26 a4,4 0 0 1 -4,-4 v-40 a4,4 0 0 1 4,-4 z"/>
+    <!-- 글줄 -->
+    <path android:strokeColor="#9CC3E8" android:strokeWidth="2.4" android:strokeLineCap="round"
+        android:pathData="M41,42 H61 M41,50 H61 M41,58 H51"/>
+    <!-- 연필: 몸통 · 뾰족한 끝 · 지우개 -->
+    <path android:fillColor="#FFC83D" android:pathData="M70,44 L76,50 L58,68 L52,62 Z"/>
+    <path android:fillColor="#F3D9B1" android:pathData="M52,62 L58,68 L49,73 Z"/>
+    <path android:fillColor="#3B4048" android:pathData="M49,73 L51,67.5 L54.5,71 Z"/>
+    <path android:fillColor="#F26D5B" android:pathData="M70,44 L76,50 L79,47 L73,41 Z"/>
+</vector>
