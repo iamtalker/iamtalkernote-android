@@ -43,12 +43,17 @@ import kotlinx.coroutines.withContext
 /** 폴더별 진행 상황 줄(Fork 마법사와 같은 표시) */
 @Composable
 fun FolderLines(r: ForkSync.Report) {
+    val ov = EmbeddedSync.overall
     for (f in r.folders) {
-        val frac = if (f.totalBytes > 0) (f.totalBytes - f.needBytes).toFloat() / f.totalBytes else 1f
+        // 노트 폴더는 컴퓨터가 지금 열어 준 파일이 아니라 단계 목록 전체(숨긴 단계 포함) 기준으로 센다
+        val whole = ov != null && ov.all > 0 && f.label == "iamtalkernote"
+        val frac = if (whole) ov!!.have.toFloat() / ov.all else if (f.totalBytes > 0) (f.totalBytes - f.needBytes).toFloat() / f.totalBytes else 1f
         val pct = (frac * 100).toInt()
-        val done = f.state == "idle" && f.needBytes == 0L
+        val idleDone = f.state == "idle" && f.needBytes == 0L
+        val done = idleDone && (!whole || ov!!.have >= ov.all)
         val s = when {
             done -> "최신"
+            idleDone && whole -> "다음 범위 기다리는 중"
             f.state == "idle" -> "대기 중"
             f.state.startsWith("sync") -> "받는 중"
             f.state.startsWith("scan") -> "확인 중"
@@ -62,9 +67,10 @@ fun FolderLines(r: ForkSync.Report) {
             }
             androidx.compose.material3.LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             val small = MaterialTheme.colorScheme.outline
-            Text("파일 전체 ${f.totalFiles}개 · 받음 ${got}개 · 남음 ${f.needFiles}개", fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
+            if (whole) Text("전체 %,d개 중 받음 %,d개 · 남음 %,d개".format(ov!!.all, ov.have, (ov.all - ov.have).coerceAtLeast(0)), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
+            else Text("파일 전체 ${f.totalFiles}개 · 받음 ${got}개 · 남음 ${f.needFiles}개", fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
             if (f.failed > 0) Text("받지 못한 파일 ${f.failed}개 (자동으로 다시 시도합니다): ${f.firstError.take(120)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
-            if (!done) Text("용량 ${Eta.size((f.totalBytes - f.needBytes).coerceAtLeast(0))} / ${Eta.size(f.totalBytes)}" +
+            if (!idleDone) Text((if (whole) "지금 받는 범위 " else "") + "용량 ${Eta.size((f.totalBytes - f.needBytes).coerceAtLeast(0))} / ${Eta.size(f.totalBytes)}" +
                 (if (f.rate > 0) " · 속도 ${Eta.size(f.rate.toLong())}/초 · 남은 시간 ${Eta.text(Eta.seconds(f.needBytes, f.rate))}" else ""), fontSize = 12.5.sp, color = small)
         }
     }
@@ -226,6 +232,7 @@ private fun OverallProgress() {
                     tree?.let { ForkSync.treePath(it) }?.let { Overall.count(java.io.File(it)) }
                 }.getOrNull()
             }
+            EmbeddedSync.overall = o
             delay(30000)
         }
     }

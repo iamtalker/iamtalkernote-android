@@ -18,6 +18,8 @@ object EmbeddedSync {
     /** 서비스가 5초마다 갱신하는 상태(설정 화면이 보여 준다) */
     var report by mutableStateOf<ForkSync.Report?>(null)
     var running by mutableStateOf(false)
+    /** 컴퓨터의 단계 목록 전체 기준 진행(글·그림 따로). 상태 카드의 진행 막대가 쓴다 */
+    var overall by mutableStateOf<Overall?>(null)
 
     fun binary(ctx: Context) = File(ctx.applicationInfo.nativeLibraryDir, BIN)
     fun available(ctx: Context) = binary(ctx).isFile

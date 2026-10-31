@@ -93,7 +93,15 @@ object NoteRepo {
             ".." -> if (segs.isNotEmpty()) segs.removeAt(segs.size - 1) else return null
             else -> segs.add(p)
         }
-        var id = DocumentsContract.getTreeDocumentId(tree)
+        // 빠른 길: 노트 폴더의 실제 경로를 알면 폴더 목록을 읽지 않고 파일이 있는지만 본다.
+        // (.resources 에는 파일이 수만 개라 안드로이드 저장소 API 로 목록을 읽으면 그림마다 몇십 초가 걸려 노트가 계속 '로딩'에 머물렀다)
+        val base = ForkSync.treePath(tree)
+        val treeId = DocumentsContract.getTreeDocumentId(tree)
+        if (base != null) {
+            val rel2 = segs.joinToString("/")
+            return if (java.io.File(base, rel2).exists()) DocumentsContract.buildDocumentUriUsingTree(tree, if (rel2.isEmpty()) treeId else treeId.trimEnd('/') + "/" + rel2) else null
+        }
+        var id = treeId
         for (s in segs) id = children(ctx, tree, id)[s] ?: return null
         return DocumentsContract.buildDocumentUriUsingTree(tree, id)
     }
