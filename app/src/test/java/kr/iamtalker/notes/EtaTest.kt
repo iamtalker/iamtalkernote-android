@@ -25,3 +25,14 @@ class EtaTest {
         assertEquals("12MB", Eta.size(12L shl 20))
     }
 }
+
+class StuckKickTest {
+    private val line = ForkSync.FolderLine("x", "idle", 10, 100, needFiles = 5, totalFiles = 50)
+    @Test fun kicksOnlyAfterIdleTwoMinutes() {
+        val api = ForkSync.Api("k", 1, plain = true)
+        assertEquals(false, ForkSync.kickIfStuck(api, "t1", line, true, 0))             // 처음 본 때
+        assertEquals(false, ForkSync.kickIfStuck(api, "t1", line, true, 60_000))        // 아직 1분
+        assertEquals(false, ForkSync.kickIfStuck(api, "t1", line.copy(state = "syncing"), true, 200_000))   // 받는 중이면 아무것도 안 함
+        assertEquals(false, ForkSync.kickIfStuck(api, "t2", line, false, 0))            // 연결 안 됨
+    }
+}

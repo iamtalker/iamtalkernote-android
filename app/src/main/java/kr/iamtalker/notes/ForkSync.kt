@@ -209,6 +209,21 @@ object ForkSync {
             call("/rest/config/folders/$id", "PUT", f)
         }
 
+        /** 폴더를 잠깐 멈췄다 다시 시작한다. 받기에 실패해 '몇 시간 뒤 재시도'로 밀린 대기가 풀린다 */
+        fun kick(id: String) {
+            val f = folders().firstOrNull { it.getString("id") == id } ?: return
+            f.put("paused", true)
+            call("/rest/config/folders/$id", "PUT", f)
+            f.put("paused", false)
+            call("/rest/config/folders/$id", "PUT", f)
+        }
+
+        /** 받지 못한 파일들: (경로, 오류 글) */
+        fun folderErrors(id: String): List<Pair<String, String>> = runCatching {
+            val a = JSONObject(call("/rest/folder/errors?folder=$id")).optJSONArray("errors") ?: return emptyList()
+            (0 until a.length()).map { a.getJSONObject(it).let { e -> e.optString("path") to e.optString("error") } }
+        }.getOrDefault(emptyList())
+
         fun setFolderType(folder: JSONObject, type: String) {
             folder.put("type", type)
             call("/rest/config/folders/" + folder.getString("id"), "PUT", folder)
@@ -270,9 +285,21 @@ object ForkSync {
     }
 
     private val etas = HashMap<String, Eta>()
+    private val stuckSince = HashMap<String, Long>()   // 받을 것이 남았는데 놀고 있기 시작한 때
+    private val lastKick = HashMap<String, Long>()
+
+    /** 남은 것이 있는데 2분 넘게 놀면(받기 실패로 몇 시간 뒤 재시도에 밀린 경우) 5분에 한 번 폴더를 다시 시작해 바로 재시도시킨다. 돌려주는 값: 시작했는가 */
+    fun kickIfStuck(api: Api, id: String, d: FolderLine, connected: Boolean, now: Long): Boolean {
+        if (!(connected && d.state == "idle" && d.needFiles > 0)) { stuckSince.remove(id); return false }
+        val since = stuckSince.getOrPut(id) { now }
+        if (now - since < 120_000 || now - (lastKick[id] ?: 0L) < 300_000) return false
+        lastKick[id] = now
+        return runCatching { api.kick(id); true }.getOrDefault(false)
+    }
 
     data class FolderLine(val label: String, val state: String, val needBytes: Long, val totalBytes: Long,
-                          val needFiles: Long = 0, val totalFiles: Long = 0, val rate: Double = 0.0)
+                          val needFiles: Long = 0, val totalFiles: Long = 0, val rate: Double = 0.0,
+                          val failed: Int = 0, val firstError: String = "")
     data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0,
                       val note: String = "", val error: String? = null)
 
@@ -331,7 +358,10 @@ object ForkSync {
             val id = it.getString("id")
             val d = runCatching { api.folderDetail(id) }.getOrDefault(FolderLine("", "?", 0L, 0L))
             val rate = etas.getOrPut(id) { Eta() }.update(System.currentTimeMillis(), d.needBytes)
-            d.copy(label = it.optString("label"), rate = rate)
+            val conn = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { c -> runCatching { api.connected(c) }.getOrDefault(false) }
+            if (kickIfStuck(api, id, d, conn, System.currentTimeMillis())) note = note.ifEmpty { "받기에 실패한 파일이 있어 다시 시도했습니다" }
+            val errs = if (d.needFiles > 0) api.folderErrors(id) else emptyList()
+            d.copy(label = it.optString("label"), rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
         }
         val connected = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { runCatching { api.connected(it) }.getOrDefault(false) }
         return Report(me, connected, lines, accepted, note)

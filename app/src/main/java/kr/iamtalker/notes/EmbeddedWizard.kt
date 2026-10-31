@@ -63,6 +63,7 @@ fun FolderLines(r: ForkSync.Report) {
             androidx.compose.material3.LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             val small = MaterialTheme.colorScheme.outline
             Text("파일 전체 ${f.totalFiles}개 · 받음 ${got}개 · 남음 ${f.needFiles}개", fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
+            if (f.failed > 0) Text("받지 못한 파일 ${f.failed}개 (자동으로 다시 시도합니다): ${f.firstError.take(120)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
             if (!done) Text("용량 ${Eta.size((f.totalBytes - f.needBytes).coerceAtLeast(0))} / ${Eta.size(f.totalBytes)}" +
                 (if (f.rate > 0) " · 속도 ${Eta.size(f.rate.toLong())}/초 · 남은 시간 ${Eta.text(Eta.seconds(f.needBytes, f.rate))}" else ""), fontSize = 12.5.sp, color = small)
         }
