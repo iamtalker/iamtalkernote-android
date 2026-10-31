@@ -264,7 +264,8 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     private var lastScan = 0L
 
     // ---- 설정 화면의 값(이 폰에만 저장)
-    var themeMode by mutableStateOf(prefs.getInt("theme", 0))   // 0 시스템 · 1 밝게 · 2 어둡게
+    /** 테마 이름(AppThemes): 컴퓨터 앱과 같은 이름. 예전 설정(0 시스템 · 1 밝게 · 2 어둡게)은 시스템/라이트 파랑/다크 파랑으로 옮긴다 */
+    var themeName by mutableStateOf(prefs.getString("themeName", null) ?: when (prefs.getInt("theme", 0)) { 1 -> "라이트 파랑"; 2 -> "다크 파랑"; else -> AppThemes.SYSTEM })
         private set
     var openEditing by mutableStateOf(prefs.getBoolean("openEditing", false))   // 노트를 열 때 바로 편집
         private set
@@ -272,7 +273,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         private set
     var autoRefresh by mutableStateOf(prefs.getBoolean("autoRefresh", true))
         private set
-    fun changeTheme(m: Int) { themeMode = m; prefs.edit().putInt("theme", m).apply() }
+    fun changeTheme(name: String) { themeName = name; prefs.edit().putString("themeName", name).apply() }
     fun changeOpenEditing(b: Boolean) { openEditing = b; prefs.edit().putBoolean("openEditing", b).apply() }
     fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
     var wikiAuto by mutableStateOf(prefs.getBoolean("wikiAuto", false).also { WikiAuto.enabled = it })

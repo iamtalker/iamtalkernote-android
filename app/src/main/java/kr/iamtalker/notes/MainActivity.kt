@@ -117,11 +117,7 @@ class MainActivity : ComponentActivity() {
         model.handleSend(intent)
         model.watchFork()   // Fork 연결을 해 둔 경우 컴퓨터가 보낸 공유 폴더를 어느 화면에서든 자동으로 받는다
         setContent {
-            val dark = when (model.themeMode) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
-            val scheme = if (dark) darkColorScheme(primary = Color(0xFF5AAEF0), background = Color(0xFF15181C), surface = Color(0xFF15181C), surfaceVariant = Color(0xFF22262B),
-                outline = Color(0xFF8C939B), outlineVariant = Color(0xFF30353B), onSurface = Color(0xFFE6E8EB))
-            else lightColorScheme(primary = Accent, background = Color.White, surface = Color.White, surfaceVariant = Color(0xFFF2F4F6),
-                outline = Color(0xFF8A9099), outlineVariant = Color(0xFFE5E8EB), onSurface = Color(0xFF22262B))
+            val (scheme, dark) = AppThemes.scheme(model.themeName, isSystemInDarkTheme())
             val view = androidx.compose.ui.platform.LocalView.current
             androidx.compose.runtime.SideEffect {
                 window.statusBarColor = scheme.surface.toArgb()

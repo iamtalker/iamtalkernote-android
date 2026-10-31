@@ -141,7 +141,7 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     SettingsRow(Teal, "정보", { onPage("info") }) { Text("i", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
                 }
                 "theme" -> {
-                    for ((i, label) in listOf("시스템 설정을 따라가기", "밝게", "어둡게").withIndex()) ChoiceRow(label, model.themeMode == i) { model.changeTheme(i) }
+                    for (name in AppThemes.names()) ChoiceRow(name, model.themeName == name) { model.changeTheme(name) }
                 }
                 "general" -> {
                     SwitchRow("앱으로 돌아올 때 자동 새로고침", "동기화로 바뀐 노트를 마지막으로 읽은 지 1분이 지났으면 다시 읽습니다", model.autoRefresh) { model.changeAutoRefresh(it) }
