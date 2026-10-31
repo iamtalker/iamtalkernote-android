@@ -25,6 +25,25 @@ import kotlinx.coroutines.launch
 class SyncService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
+    private var cpu: android.os.PowerManager.WakeLock? = null
+    private var wifi: android.net.wifi.WifiManager.WifiLock? = null
+
+    /** 받을 것이 남은 동안만 CPU 와 와이파이를 깨워 둔다. 화면이 꺼진 채 몇 시간 두면 CPU 가 잠들어 작은 파일 수만 개가 거의 안 받아지던 문제(read timeout)를 막는다.
+     *  15분짜리로 잡고 매번 새로 잡으므로, 어떤 일이 있어도 15분 넘게 새지 않는다 */
+    private fun hold(on: Boolean) {
+        runCatching {
+            if (on) {
+                if (cpu == null) cpu = getSystemService(android.os.PowerManager::class.java).newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "iamtalkernote:sync").also { it.setReferenceCounted(false) }
+                if (wifi == null) wifi = getApplicationContext().getSystemService(android.net.wifi.WifiManager::class.java)
+                    .createWifiLock(if (Build.VERSION.SDK_INT >= 29) android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY else android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "iamtalkernote:sync").also { it.setReferenceCounted(false) }
+                cpu?.acquire(15 * 60_000L)
+                if (wifi?.isHeld != true) wifi?.acquire()
+            } else {
+                if (cpu?.isHeld == true) cpu?.release()
+                if (wifi?.isHeld == true) wifi?.release()
+            }
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -98,6 +117,7 @@ class SyncService : Service() {
                     val rate = syncEta.update(System.currentTimeMillis(), f.needFiles)
                     eta = Eta.seconds(f.needFiles, rate)
                 } else { have = 0; all = 0; eta = -1L }
+                hold(r?.connected == true && all > 0 && have < all)
                 val txt = SyncNotice.text(r?.connected == true, r?.error, have, all, eta)
                 if (txt != lastText) {
                     lastText = txt
@@ -118,6 +138,7 @@ class SyncService : Service() {
     }
 
     override fun onDestroy() {
+        hold(false)
         scope.cancel()
         EmbeddedSync.stop()
         super.onDestroy()
