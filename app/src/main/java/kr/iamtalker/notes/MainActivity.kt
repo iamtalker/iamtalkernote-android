@@ -342,6 +342,7 @@ fun App(model: NotesModel) {
     var pinnedOpen by remember { mutableStateOf(true) }
     var listDialog by remember { mutableStateOf("") }              // sort / filter
     val vaultName = remember(model.tree) { model.tree?.let { ForkSync.treePath(it) }?.replace('\\', '/')?.trimEnd('/')?.substringAfterLast('/')?.ifEmpty { null } ?: "저장 폴더" }
+    var rootOpen by remember { mutableStateOf(true) }                // 저장 폴더 아래 노트북 목록 펼침
     var tagsOpen by remember { mutableStateOf(false) }
     var docsOpen by remember { mutableStateOf(false) }
     var collapsed by remember { mutableStateOf(setOf<String>()) }  // 접어 둔 노트북
@@ -396,11 +397,12 @@ fun App(model: NotesModel) {
                         Row(Modifier.fillMaxWidth().background(if (!model.showDocs && model.folder == "" && model.tag == null && !model.favOnly) soft else Color.Transparent)
                             .clickable { go { model.changeFolder(""); model.changeTag(null) } }.heightIn(min = 52.dp).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(vaultName, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            BarButton({ rootOpen = !rootOpen }) { ChevronIcon(!rootOpen, MaterialTheme.colorScheme.outline) }
                             BarButton({ go { notebookDialog = true } }) { Text("+", fontSize = 26.sp, color = accent) }
                         }
                     }
-                    val visible = model.folders.filter { f -> collapsed.none { c -> f.startsWith("$c/") } && f != "아웃라이너" && !f.startsWith("아웃라이너/") }
-                    items(visible, key = { "f:$it" }) { f ->
+                    val visible = model.folders.filter { f -> collapsed.none { c -> f.startsWith("$c/") } && f != "아웃라이너" && !f.startsWith("아웃라이너/") && f != "달력" && !f.startsWith("달력/") }
+                    items(if (rootOpen) visible else emptyList(), key = { "f:$it" }) { f ->
                         val depth = f.count { it == '/' } + 1
                         val hasKids = model.folders.any { it.startsWith("$f/") }
                         NotebookRow(f.substringAfterLast('/'), model.folderCounts[f] ?: 0, depth, model.folder == f, f,

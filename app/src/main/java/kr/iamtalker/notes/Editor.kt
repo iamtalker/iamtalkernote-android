@@ -76,6 +76,8 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     var editing by remember { mutableStateOf(start.size == 0L || model.openEditing) }   // 새 노트는 바로 편집, 기존 노트는 보기부터
     var dialog by remember { mutableStateOf("") }                   // rename / move / delete / props / tags
     var error by remember { mutableStateOf<String?>(null) }
+    val isOutl = model.outliner || note.folder == "아웃라이너" || note.folder.startsWith("아웃라이너/")
+    var rawEdit by remember { mutableStateOf(false) }                // 아웃라이너 노트를 항목 편집기 대신 원문으로 고치기
     var sheet by remember { mutableStateOf(false) }                 // ⋮ 메뉴(아래에서 올라오는 시트)
     var findOpen by remember { mutableStateOf(false) }
     var findQ by remember { mutableStateOf("") }
@@ -163,13 +165,22 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
         runCatching { focus.requestFocus() }
     }
 
-    BackHandler { save(); onClose() }
+    /** 나가기: 저장하고, 새로 만든 뒤 제목도 본문도 쓰지 않았으면 그 빈 노트를 지운다(실수로 연필을 눌러도 '제목 없음' 이 쌓이지 않게) */
+    fun leave() {
+        val empty = start.size == 0L && titleText.isBlank() && (tfv?.text ?: "").isBlank() && (saved).isBlank()
+        if (empty) {
+            runCatching { android.provider.DocumentsContract.deleteDocument(ctx.contentResolver, note.uri) }.onFailure { android.util.Log.w("iat", "빈 노트 지우기 실패", it) }
+            model.refresh()
+        } else save()
+        onClose()
+    }
+    BackHandler { leave() }
     val pinned = note.uri.toString() in model.pins
     val isFav = Favorites.relOf(note) in model.favs
     Scaffold(
         topBar = {
             Column { Surface(color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) { Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-                BarButton({ save(); onClose() }) { BackIcon(MaterialTheme.colorScheme.onSurface) }
+                BarButton({ leave() }) { BackIcon(MaterialTheme.colorScheme.onSurface) }
                 Text(note.title, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).clickable { dialog = "rename" })
                 run {
@@ -180,7 +191,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
         },
         bottomBar = {
-            if (editing && tfv != null) {
+            if (editing && tfv != null && !(isOutl && !rawEdit)) {
                 Surface(tonalElevation = 3.dp) {
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                         TextButton(onClick = { format { t, s, e -> NoteText.wrap(t, s, e, "**") } }) { Text("B") }
@@ -188,6 +199,8 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         TextButton(onClick = { format { t, s, e -> NoteText.wrap(t, s, e, "~~") } }) { Text("S") }
                         TextButton(onClick = { format { t, s, e -> NoteText.wrap(t, s, e, "`") } }) { Text("코드") }
                         TextButton(onClick = { format { t, s, e -> NoteText.linePrefix(t, s, e, "## ", heading = true) } }) { Text("제목") }
+                        TextButton(onClick = { format { t, s, e -> ListEnter.shift(t, s, e, true) } }) { Text("⇤") }
+                        TextButton(onClick = { format { t, s, e -> ListEnter.shift(t, s, e, false) } }) { Text("⇥") }
                         TextButton(onClick = { format { t, s, e -> NoteText.linePrefix(t, s, e, "- ") } }) { Text("•목록") }
                         TextButton(onClick = { format { t, s, e -> NoteText.linePrefix(t, s, e, "- [ ] ") } }) { Text("☐체크") }
                         TextButton(onClick = { format { t, s, e -> NoteText.linePrefix(t, s, e, "> ") } }) { Text("인용") }
@@ -228,8 +241,9 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                                 .onFocusChanged { if (!it.isFocused) commitTitle() }
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        BasicTextField(
-                            value = v, onValueChange = { tfv = it },
+                        if (isOutl && !rawEdit) OutlineEditor(v.text, model.editorFont, { t -> tfv = TextFieldValue(t, TextRange(t.length)) }, Modifier.weight(1f).fillMaxWidth())
+                        else BasicTextField(
+                            value = v, onValueChange = { n -> tfv = ListEnter.apply(v, n) },   // Enter 로 목록 이어가기
                             textStyle = TextStyle(fontSize = model.editorFont.sp, lineHeight = (model.editorFont * 1.5f).sp, color = MaterialTheme.colorScheme.onSurface),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp).focusRequester(focus)
@@ -279,6 +293,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                 item("문서에서 찾기") { findOpen = true }
                 item("이전 버전") { dialog = "versions" }
                 item(if (model.outliner) "✓ 아웃라이너 보기" else "아웃라이너 보기") { model.changeOutliner(!model.outliner) }
+                if (isOutl) item(if (rawEdit) "✓ 원문으로 편집" else "원문으로 편집") { rawEdit = !rawEdit; editing = true }
                 item(if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가") { model.toggleFavorite(note) }
                 item(if (pinned) "고정 해제" else "맨 위에 고정") { model.togglePin(note) }
                 item("이름 바꾸기") { dialog = "rename" }
