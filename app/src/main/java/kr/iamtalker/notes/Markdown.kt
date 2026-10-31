@@ -65,6 +65,9 @@ private val check = Regex("^\\[([ xX])\\]\\s+(.*)$")
 private val imageLine = Regex("^!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)\\s*$")
 private val inline = Regex("!\\[([^\\]]*)\\]\\(([^)]*)\\)|\\[([^\\]]+)\\]\\(([^)\\s]*)[^)]*\\)|\\*\\*(.+?)\\*\\*|__(.+?)__|`([^`]+)`|~~(.+?)~~|\\*([^*\\n]+?)\\*|\\[\\[([^\\]]+)\\]\\]")
 
+/** 목록 앞 공백의 깊이: 탭은 4칸, 두 칸이 한 단계 */
+fun indentOf(lead: String): Int = lead.replace("\t", "    ").length / 2
+
 fun parseBlocks(body: String): List<Block> {
     val out = ArrayList<Block>()
     val para = ArrayList<String>()
@@ -93,8 +96,8 @@ fun parseBlocks(body: String): List<Block> {
             li != null -> {
                 flushPara()
                 val c = check.find(li.groupValues[3])
-                if (c != null) out.add(Block.Li(li.groupValues[1].length / 2, li.groupValues[2], c.groupValues[2], c.groupValues[1] != " ", no))
-                else out.add(Block.Li(li.groupValues[1].length / 2, li.groupValues[2], li.groupValues[3], null, no))
+                if (c != null) out.add(Block.Li(indentOf(li.groupValues[1]), li.groupValues[2], c.groupValues[2], c.groupValues[1] != " ", no))
+                else out.add(Block.Li(indentOf(li.groupValues[1]), li.groupValues[2], li.groupValues[3], null, no))
             }
             line.startsWith(">") -> { flushPara(); out.add(Block.Quote(line.removePrefix(">").trim())) }
             else -> para.add(line)
@@ -247,7 +250,7 @@ fun MarkdownView(
     }
 
     val outlineOn = outliner && Outline.hasList(blocks)
-    var zoom by remember(text) { mutableStateOf<Int?>(null) }              // 줌인한 항목 번호(없으면 노트 전체)
+    var zoom by remember(cacheKey) { mutableStateOf<Int?>(null) }              // 줌인한 항목 번호(없으면 노트 전체)
     val nodes = remember(blocks) { Outline.nodes(blocks) }
     if (outlineOn && zoom != null) BackHandler { zoom = Outline.parentId(nodes, zoom!!) }   // 뒤로가기는 한 단계 위로
     val rows = remember(blocks, zoom, outlineOn) { if (outlineOn) Outline.rows(blocks, zoom) else emptyList() }
@@ -267,7 +270,7 @@ fun MarkdownView(
                         }
                         Row(Modifier.padding(top = 5.dp, bottom = 5.dp)) {
                             if (r.node.marker.first().isDigit()) Text(r.node.marker + " ", color = muted, fontSize = 15.sp)
-                            if (r.node.checked != null) Text(if (r.node.checked) "☑ " else "☐ ", fontSize = 15.sp, color = color)
+                            if (r.node.checked != null) Text(if (r.node.checked) "☑ " else "☐ ", fontSize = 18.sp, color = color, modifier = Modifier.clickable { onToggle(offset + r.node.line) })
                             Rich(r.node.text, 15, deco = if (r.node.checked == true) TextDecoration.LineThrough else null)
                         }
                     }

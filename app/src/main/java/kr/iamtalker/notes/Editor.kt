@@ -173,7 +173,6 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                 Text(note.title, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).clickable { dialog = "rename" })
                 run {
-                    TextButton(onClick = { model.toggleFavorite(note) }) { Text(if (isFav) "★" else "☆", fontSize = 22.sp, color = if (isFav) Color(0xFFE0A020) else MaterialTheme.colorScheme.outline) }
                     BarButton({ save(); editing = !editing }) { if (editing) BookIcon(MaterialTheme.colorScheme.onSurface) else PencilIcon(MaterialTheme.colorScheme.onSurface) }   // 조플린처럼 위 아이콘으로 보기·편집 전환
                     BarButton({ sheet = true }) { DotsIcon(MaterialTheme.colorScheme.onSurface) }
                 }
@@ -252,7 +251,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         },
                         onNoteLink = { title -> save(); onOpenTitle(title) },
                         cacheKey = note.uri.toString(),
-                        outliner = model.outliner,
+                        outliner = model.outliner || note.folder == "아웃라이너" || note.folder.startsWith("아웃라이너/"),
                         onImage = { src -> if (!(src.startsWith("http") || src.startsWith(":/"))) viewing = src }
                     )
                     viewing?.let { src ->

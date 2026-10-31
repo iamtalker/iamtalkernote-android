@@ -10,6 +10,18 @@ class OutlineTest {
     private val src = "# 계획\n\n메모 문단\n\n- A\n  - A1\n  - A2\n    - A2a\n- B\n\n끝 메모\n\n1. 번호 하나\n2. 번호 둘\n"
     private val blocks = parseBlocks(src)
 
+    @Test fun tabIndentCountsAsDepth() {
+        val n = Outline.nodes(parseBlocks("- A\n\t- A1\n\t\t- A1a\n- B\n"))
+        assertEquals(listOf(0, 1, 2, 0), n.map { it.depth })
+        val m = Outline.nodes(parseBlocks("- A\n    - A1\n        - A1a\n"))        // PC 앱은 4칸
+        assertEquals(listOf(0, 1, 2), m.map { it.depth })
+    }
+
+    @Test fun nodeKeepsSourceLine() {
+        val n = Outline.nodes(parseBlocks("- A\n  - [ ] B\n"))
+        assertEquals(listOf(0, 1), n.map { it.line })
+    }
+
     @Test fun nodesAndDepth() {
         val n = Outline.nodes(blocks)
         assertEquals(listOf("A", "A1", "A2", "A2a", "B", "번호 하나", "번호 둘"), n.map { it.text })

@@ -214,7 +214,6 @@ fun NoteRow(n: Note, pinned: Boolean, chosen: Boolean, fmt: SimpleDateFormat, on
         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (pinned) { PinIcon(MaterialTheme.colorScheme.primary); Spacer(Modifier.width(6.dp)) }
-                if (fav) Text("★ ", fontSize = 16.sp, color = Color(0xFFE0A020))
                 Text(n.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (n.snip.isNotEmpty()) Text(n.snip, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -378,8 +377,7 @@ fun App(model: NotesModel) {
                     item {
                         Row(Modifier.fillMaxWidth().background(if (model.favOnly) soft else Color.Transparent).clickable { go { model.changeFav(true) } }
                             .heightIn(min = 48.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("★", fontSize = 20.sp, color = Color(0xFFE0A020), modifier = Modifier.width(24.dp))
-                            Text("즐겨찾기", fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+                            Text("즐겨찾기", fontSize = 16.sp, modifier = Modifier.weight(1f))
                             Text("${model.favs.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                         }
                     }

@@ -3,7 +3,7 @@ package kr.iamtalker.notes
 /** 아웃라이너 보기(컴퓨터 앱 outline.py 와 같은 생각): 목록(-, *, 1.)을 점(●) 계층으로 보이게 하고, 점을 누르면 그 항목으로 줌인한다.
  *  목록이 아닌 글(문단·제목·인용·표·코드·그림)은 '메모' 블록으로 따로 보인다. 화면을 모르는 순수 계산이라 시험할 수 있다. */
 object Outline {
-    class Node(val id: Int, val depth: Int, val marker: String, val text: String, val checked: Boolean?, val parent: Node?) {
+    class Node(val id: Int, val depth: Int, val marker: String, val text: String, val checked: Boolean?, val parent: Node?, val line: Int = 0) {
         val children = ArrayList<Node>()
         val indent get() = depth
     }
@@ -26,7 +26,7 @@ object Outline {
             if (b !is Block.Li) { stack.clear(); continue }               // 목록 사이에 낀 다른 블록은 목록을 끊는다
             while (stack.isNotEmpty() && stack.last().first >= b.indent) stack.removeAt(stack.size - 1)
             val parent = stack.lastOrNull()?.second
-            val n = Node(out.size, stack.size, b.marker, b.text, b.checked, parent)
+            val n = Node(out.size, stack.size, b.marker, b.text, b.checked, parent, b.line)
             parent?.children?.add(n)
             out.add(n)
             stack.add(b.indent to n)
