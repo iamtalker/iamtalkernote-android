@@ -83,6 +83,28 @@ fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** 테마 한 줄: 라디오 + 색 견본(바탕색 원 안에 강조색 점) + 이름. 시스템은 밝음/어두움 반반 */
+@Composable
+private fun ThemeRow(name: String, selected: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(selected = selected, onClick = onClick)
+        val p = AppThemes.all[name]
+        val line = MaterialTheme.colorScheme.outlineVariant
+        androidx.compose.foundation.Canvas(Modifier.padding(start = 4.dp, end = 12.dp).size(26.dp)) {
+            val r = size.minDimension / 2
+            if (p == null) {                                                       // 시스템: 왼쪽 밝게 · 오른쪽 어둡게
+                drawArc(Color.White, 90f, 180f, true, size = size)
+                drawArc(Color(0xFF15181C), -90f, 180f, true, size = size)
+            } else {
+                drawCircle(Color(p.bg), r)
+                drawCircle(Color(p.accent), r * 0.5f)
+            }
+            drawCircle(line, r - 0.5.dp.toPx() / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+        }
+        Text(name, fontSize = 16.sp)
+    }
+}
+
 @Composable
 private fun SwitchRow(label: String, hint: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.heightIn(min = 60.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -141,7 +163,7 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     SettingsRow(Teal, "정보", { onPage("info") }) { Text("i", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
                 }
                 "theme" -> {
-                    for (name in AppThemes.names()) ChoiceRow(name, model.themeName == name) { model.changeTheme(name) }
+                    for (name in AppThemes.names()) ThemeRow(name, model.themeName == name) { model.changeTheme(name) }
                 }
                 "general" -> {
                     SwitchRow("앱으로 돌아올 때 자동 새로고침", "동기화로 바뀐 노트를 마지막으로 읽은 지 1분이 지났으면 다시 읽습니다", model.autoRefresh) { model.changeAutoRefresh(it) }
