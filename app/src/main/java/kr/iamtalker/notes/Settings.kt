@@ -58,7 +58,7 @@ private val Teal = Color(0xFF8A94A6)
 @Composable
 private fun SettingsRow(color: Color, label: String, onClick: () -> Unit, icon: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) { icon() }
+        Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) { icon() }   // 설정 아이콘 원은 테마 강조색을 따른다
         Text(label, fontSize = 17.sp, modifier = Modifier.padding(start = 16.dp).weight(1f))
         ChevronRight()
     }
@@ -66,10 +66,11 @@ private fun SettingsRow(color: Color, label: String, onClick: () -> Unit, icon: 
 
 @Composable
 private fun ChevronRight() {
+    val c = MaterialTheme.colorScheme.outline   // 화살표 색도 테마를 따른다
     androidx.compose.foundation.Canvas(Modifier.size(20.dp)) {
         val w = 2.0.dp.toPx(); val s = size.width
-        drawLine(Color(0xFFB0B5BC), androidx.compose.ui.geometry.Offset(s * .36f, s * .22f), androidx.compose.ui.geometry.Offset(s * .64f, s * .5f), strokeWidth = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        drawLine(Color(0xFFB0B5BC), androidx.compose.ui.geometry.Offset(s * .64f, s * .5f), androidx.compose.ui.geometry.Offset(s * .36f, s * .78f), strokeWidth = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawLine(c, androidx.compose.ui.geometry.Offset(s * .36f, s * .22f), androidx.compose.ui.geometry.Offset(s * .64f, s * .5f), strokeWidth = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawLine(c, androidx.compose.ui.geometry.Offset(s * .64f, s * .5f), androidx.compose.ui.geometry.Offset(s * .36f, s * .78f), strokeWidth = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
     }
 }
 
