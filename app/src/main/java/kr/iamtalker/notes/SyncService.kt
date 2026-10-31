@@ -32,7 +32,9 @@ class SyncService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "동기화", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL).setSmallIcon(R.mipmap.ic_launcher).setContentTitle("iamtalkernote 동기화")
-            .setContentText("컴퓨터와 노트를 맞추는 중입니다").setOngoing(true).build()
+            .setContentText("컴퓨터와 노트를 맞추는 중입니다").setOngoing(true)
+            .setContentIntent(android.app.PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).putExtra(OPEN_SYNC, true)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)).build()
         ServiceCompat.startForeground(this, 1, n, if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
         if (job?.isActive != true) job = scope.launch { loop() }
         return START_STICKY
@@ -76,3 +78,6 @@ class SyncService : Service() {
         }
     }
 }
+
+/** 동기화 알림을 눌러 앱을 열 때 붙이는 표시(설정 → 동기화 화면으로 간다) */
+const val OPEN_SYNC = "openSync"

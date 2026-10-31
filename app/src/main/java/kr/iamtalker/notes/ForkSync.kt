@@ -54,6 +54,7 @@ object ForkSync {
             "his" -> sub(".history")
             "tra" -> sub(".trash")
             "not" -> sub(label.substringAfter("노트북 · ", "").trim().ifEmpty { "notebook" })
+            "cfg" -> vaultPath.trimEnd('/') + "-settings"
             "ext" -> "$vaultPath-files/" + label.substringAfter("외부 폴더 · ", "").trim().ifEmpty { "external" }
             else -> "$vaultPath-files/" + label.ifEmpty { folderId }
         }
@@ -281,7 +282,11 @@ object ForkSync {
         val me = api.myId()
         var accepted = 0
         var note = ""
-        val policy = runCatching { readPolicy(ctx, tree) }.getOrNull()
+        // 컴퓨터가 준 정책에, 폰이나 컴퓨터가 더 최근에 바꾼 설정(설정 폴더의 settings.json)을 덮어 쓴다
+        val policy = runCatching { readPolicy(ctx, tree) }.getOrNull()?.let { pol ->
+            val base = SyncSettings.fromPolicy(pol)
+            if (base == null) pol else SyncSettings.overlay(pol, SyncSettings.effective(base, SyncSettings.read(vaultPath)))
+        }
         // 새 방식 정책이면 옛 종류의 폴더(미디어·이력 등)는 받지 않는다(컴퓨터가 아직 공유 중이어도 노트 폴더 안에서 함께 보낸다)
         val simpleVault = if (policy?.optJSONObject("simple") != null) policy.optString("vault") else ""
         // Fork 에 이미 등록된 기기(컴퓨터 추가로 넣었거나 전에 연결한 기기)가 보낸 우리 폴더(inn-…)만 받는다. 컴퓨터 ID 를 정확히 안 넣었어도 된다
@@ -322,7 +327,7 @@ object ForkSync {
                 }
             }
         }
-        val lines = api.folders().filter { it.getString("id").startsWith(ID_PREFIX) }.map {
+        val lines = api.folders().filter { it.getString("id").startsWith(ID_PREFIX) && kindOf(it.getString("id")) != "cfg" }.map {
             val id = it.getString("id")
             val d = runCatching { api.folderDetail(id) }.getOrDefault(FolderLine("", "?", 0L, 0L))
             val rate = etas.getOrPut(id) { Eta() }.update(System.currentTimeMillis(), d.needBytes)

@@ -293,6 +293,7 @@ fun App(model: NotesModel) {
     var settingsPage by remember { mutableStateOf("") }
     fun closeTool() { screen = if (fromSettings) "settings" else ""; fromSettings = false }
     var openDoc by remember { mutableStateOf<Doc?>(null) }
+    LaunchedEffect(model.openSync) { if (model.openSync) { model.openSync = false; openDoc = null; open = null; fromSettings = false; settingsPage = "sync"; screen = "settings" } }
     openDoc?.let { dd -> DocScreen(dd, model, onBack = { openDoc = null }); return }
     if (screen == "trash") { TrashScreen(model, onBack = { closeTool(); model.refresh() }); return }
     if (screen == "conflicts") { ConflictsScreen(model, onBack = { closeTool() }); return }

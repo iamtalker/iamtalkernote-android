@@ -534,7 +534,11 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     // ---- 다른 앱에서 공유로 받은 글: (제목 후보, 본문). 앱에서 노트북을 고르면 새 노트로 저장한다
     var shared by mutableStateOf<Pair<String, String>?>(null)
 
+    /** 알림을 눌러 열었을 때 설정 → 동기화 화면으로 가라는 신호 */
+    var openSync by mutableStateOf(false)
+
     fun handleSend(intent: Intent?) {
+        if (intent?.getBooleanExtra(OPEN_SYNC, false) == true) openSync = true
         if (intent == null || intent.action != Intent.ACTION_SEND || intent.type?.startsWith("text/") != true) return
         val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
         shared = (intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: "") to text

@@ -40,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -164,6 +166,7 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                 "sync" -> {
                     SyncWizard(model)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SyncControls(model)
                     var policy by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
                     var loaded by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
@@ -195,3 +198,37 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
         }
     }
 }
+
+/** 동기화 방향과 함께 보낼 항목을 폰에서 고친다. 컴퓨터와 '가장 최근에 바꾼 쪽'이 적용된다(설정 폴더로 주고받음, SyncSettings.kt) */
+@Composable
+private fun SyncControls(model: NotesModel) {
+    val ctx = LocalContext.current
+    val tree = model.tree ?: return
+    val vault = remember(tree) { ForkSync.treePath(tree) } ?: return
+    var pol by remember { mutableStateOf<JSONObject?>(null) }
+    var eff by remember { mutableStateOf<SyncSettings.S?>(null) }
+    var again by remember { mutableStateOf(0) }
+    LaunchedEffect(again) {
+        val p = withContext(Dispatchers.IO) { runCatching { ForkSync.readPolicy(ctx, tree) }.getOrNull() }
+        pol = p
+        eff = p?.let { SyncSettings.fromPolicy(it) }?.let { SyncSettings.effective(it, withContext(Dispatchers.IO) { SyncSettings.read(vault) }) }
+    }
+    val p = pol
+    val e = eff
+    if (p == null || e == null) return   // 컴퓨터의 새 방식 정책(.sync/policy.json)이 아직 없다
+    val scope = rememberCoroutineScope()
+    fun change(direction: String? = null, key: String? = null, on: Boolean? = null) {
+        scope.launch { withContext(Dispatchers.IO) { SyncSettings.change(vault, p, direction, key, on) }; again++ }
+    }
+    Text("동기화 방향", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+    for ((d, label) in listOf("both" to "양방향", "pc2mobile" to "컴퓨터 → 폰 (받기만)", "mobile2pc" to "폰 → 컴퓨터 (보내기만)", "off" to "동기화 안 함"))
+        ChoiceRow(label, e.direction == d) { change(direction = d) }
+    Text("함께 맞출 것", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+    for ((k, label, hint) in listOf(Triple("media", "미디어(그림·첨부)", "끄면 그림은 폰으로 오지 않습니다"), Triple("imported", "가져온 문서 요약", "폰 앱이 읽는 가져온 문서 파일"),
+        Triple("history", "변경 이력 (고급)", "파일이 아주 많습니다"), Triple("trash", "휴지통 (고급)", "지운 노트 보관본")))
+        SwitchRow(label, hint, e.include[k] == true) { change(key = k, on = it) }
+    Text("여기서 바꾸면 몇 초 안에 적용되고, 컴퓨터(0.6.3 이상)에도 반영됩니다. 양쪽에서 바꾸면 가장 최근에 바꾼 쪽이 이깁니다.",
+        fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
