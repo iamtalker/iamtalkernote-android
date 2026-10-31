@@ -341,7 +341,7 @@ fun App(model: NotesModel) {
     var moreOpen by remember { mutableStateOf(false) }
     var pinnedOpen by remember { mutableStateOf(true) }
     var listDialog by remember { mutableStateOf("") }              // sort / filter
-    var allOpen by remember { mutableStateOf(true) }               // 모든 노트 아래 항목
+    val vaultName = remember(model.tree) { model.tree?.let { ForkSync.treePath(it) }?.replace('\\', '/')?.trimEnd('/')?.substringAfterLast('/')?.ifEmpty { null } ?: "저장 폴더" }
     var tagsOpen by remember { mutableStateOf(false) }
     var docsOpen by remember { mutableStateOf(false) }
     var collapsed by remember { mutableStateOf(setOf<String>()) }  // 접어 둔 노트북
@@ -366,59 +366,42 @@ fun App(model: NotesModel) {
                     item { Spacer(Modifier.height(8.dp)) }
                     item {
                         Row(Modifier.fillMaxWidth().background(if (allSel) soft else Color.Transparent).clickable { go { model.changeFolder(null); model.changeTag(null) } }
-                            .heightIn(min = 52.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            .heightIn(min = 52.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             NotesIcon(accent)
-                            Text("모든 노트", fontSize = 17.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 14.dp))
+                            Text("모든 파일", fontSize = 17.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 14.dp))
                             Text("${model.notes.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 10.dp).weight(1f))
-                            BarButton({ allOpen = !allOpen }) { ChevronIcon(!allOpen, MaterialTheme.colorScheme.outline) }
                         }
                     }
-                    item { Text("바로가기", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = accent, modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 2.dp)) }
+                    item { Text("바로가기", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(start = 16.dp, top = 10.dp)) }
                     item {
                         Row(Modifier.fillMaxWidth().background(if (model.favOnly) soft else Color.Transparent).clickable { go { model.changeFav(true) } }
-                            .heightIn(min = 48.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            .heightIn(min = 44.dp).padding(start = 40.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("즐겨찾기", fontSize = 16.sp, modifier = Modifier.weight(1f))
                             Text("${model.favs.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                         }
                     }
                     if ("아웃라이너" in model.folders) item {
                         Row(Modifier.fillMaxWidth().background(if (!model.showDocs && model.folder == "아웃라이너" && model.tag == null) soft else Color.Transparent)
-                            .clickable { go { model.changeFolder("아웃라이너"); model.changeTag(null) } }.heightIn(min = 48.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("●", fontSize = 16.sp, color = accent, modifier = Modifier.width(24.dp))
-                            Text("아웃라이너", fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+                            .clickable { go { model.changeFolder("아웃라이너"); model.changeTag(null) } }.heightIn(min = 44.dp).padding(start = 40.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("아웃라이너", fontSize = 16.sp, modifier = Modifier.weight(1f))
                             Text("${model.folderCounts["아웃라이너"] ?: 0}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                         }
                     }
                     item {
-                        Row(Modifier.fillMaxWidth().clickable { go { screen = "planner" } }.heightIn(min = 48.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("▦", fontSize = 18.sp, color = accent, modifier = Modifier.width(24.dp))
-                            Text("달력·할일", fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+                        Row(Modifier.fillMaxWidth().clickable { go { screen = "planner" } }.heightIn(min = 44.dp).padding(start = 40.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("달력·할일", fontSize = 16.sp, modifier = Modifier.weight(1f))
                         }
-                    }
-                    if (allOpen) {
-                        val un = model.notes.count { it.folder.isEmpty() }
-                        item {
-                            Row(Modifier.fillMaxWidth().background(if (!model.showDocs && model.folder == "" && model.tag == null) soft else Color.Transparent)
-                                .clickable { go { model.changeFolder(""); model.changeTag(null) } }.heightIn(min = 48.dp).padding(start = 40.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                FilterIcon(Color(0xFF8B5FD6))
-                                Text("미분류", fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp))
-                                Text("$un", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 10.dp))
-                            }
-                        }
-                    }
-                    if (model.saved.isNotEmpty()) {
-                        item { NavHeading("저장된 검색") {} }
-                        items(model.saved, key = { "s:" + it.name }) { sv -> DrawerRow(sv.name, onLongClick = { deleteSaved = sv }) { go { model.applySaved(sv) } } }
                     }
                     item {
-                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(start = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("노트북", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = accent, modifier = Modifier.weight(1f))
+                        Row(Modifier.fillMaxWidth().background(if (!model.showDocs && model.folder == "" && model.tag == null && !model.favOnly) soft else Color.Transparent)
+                            .clickable { go { model.changeFolder(""); model.changeTag(null) } }.heightIn(min = 52.dp).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(vaultName, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             BarButton({ go { notebookDialog = true } }) { Text("+", fontSize = 26.sp, color = accent) }
                         }
                     }
-                    val visible = model.folders.filter { f -> collapsed.none { c -> f.startsWith("$c/") } }
+                    val visible = model.folders.filter { f -> collapsed.none { c -> f.startsWith("$c/") } && f != "아웃라이너" && !f.startsWith("아웃라이너/") }
                     items(visible, key = { "f:$it" }) { f ->
-                        val depth = f.count { it == '/' }
+                        val depth = f.count { it == '/' } + 1
                         val hasKids = model.folders.any { it.startsWith("$f/") }
                         NotebookRow(f.substringAfterLast('/'), model.folderCounts[f] ?: 0, depth, model.folder == f, f,
                             if (hasKids) (f in collapsed) else null, { collapsed = if (f in collapsed) collapsed - f else collapsed + f },
@@ -441,6 +424,10 @@ fun App(model: NotesModel) {
                                 DrawerRow(name, selected = model.showDocs && model.docFolder == name, badge = "$n", indent = 24) { go { model.selectDocs(name) } }
                             }
                         }
+                    }
+                    if (model.saved.isNotEmpty()) {
+                        item { NavHeading("저장된 검색") {} }
+                        items(model.saved, key = { "s:" + it.name }) { sv -> DrawerRow(sv.name, onLongClick = { deleteSaved = sv }) { go { model.applySaved(sv) } } }
                     }
                     if (model.conflicts.isNotEmpty()) item { NavHeading("동기화 충돌 (${model.conflicts.size})") { go { screen = "conflicts" } } }
                     item { NavHeading("휴지통") { go { screen = "trash" } } }
@@ -490,7 +477,7 @@ fun App(model: NotesModel) {
                             if (model.tree != null) Box(Modifier.align(Alignment.CenterStart)) { BarButton({ scope.launch { drawer.open() } }) { HamburgerIcon(MaterialTheme.colorScheme.outline) } }
                             Text(
                                 if (model.showDocs) "가져온 파일" + (model.docFolder?.let { " · $it" } ?: "")
-                                else model.tag?.let { "#$it" } ?: model.folder?.let { if (it.isEmpty()) "미분류" else it.substringAfterLast('/') } ?: "모든 노트",
+                                else model.tag?.let { "#$it" } ?: model.folder?.let { if (it.isEmpty()) vaultName else it.substringAfterLast('/') } ?: "모든 노트",
                                 fontSize = 20.sp, fontWeight = FontWeight.Medium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp)
                             )
