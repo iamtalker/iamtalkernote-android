@@ -2,6 +2,7 @@ package kr.iamtalker.notes
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -147,7 +148,7 @@ fun inlineText(s: String, link: Color, codeBg: Color, muted: Color): AnnotatedSt
 }
 
 @Composable
-private fun NoteImage(block: Block.Img, loader: suspend (String) -> ImageBitmap?) {
+private fun NoteImage(block: Block.Img, loader: suspend (String) -> ImageBitmap?, onOpen: (String) -> Unit) {
     var bmp by remember(block.src) { mutableStateOf<ImageBitmap?>(null) }
     var failed by remember(block.src) { mutableStateOf(false) }
     LaunchedEffect(block.src) {
@@ -157,7 +158,7 @@ private fun NoteImage(block: Block.Img, loader: suspend (String) -> ImageBitmap?
     }
     val b = bmp
     if (b != null) {
-        Image(bitmap = b, contentDescription = block.alt, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
+        Image(bitmap = b, contentDescription = block.alt, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().clickable { onOpen(block.src) }.padding(vertical = 6.dp))
     } else {
         Text(if (failed) "[그림을 찾지 못함: ${block.src.substringAfterLast('/')}]" else "[그림 불러오는 중…]",
             color = MaterialTheme.colorScheme.outline, fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
@@ -169,7 +170,8 @@ fun MarkdownView(
     text: String, modifier: Modifier = Modifier,
     loadImage: suspend (String) -> ImageBitmap? = { null },
     onToggle: (Int) -> Unit = {},
-    onNoteLink: (String) -> Unit = {}
+    onNoteLink: (String) -> Unit = {},
+    onImage: (String) -> Unit = {}
 ) {
     val parts = remember(text) {
         val (_, body) = Meta.split(text)
@@ -219,7 +221,7 @@ fun MarkdownView(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(codeBg).horizontalScroll(rememberScrollState()).padding(10.dp))
                 is Block.Table -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = color,
                     modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()))
-                is Block.Img -> NoteImage(b, loadImage)
+                is Block.Img -> NoteImage(b, loadImage, onImage)
                 Block.Rule -> HorizontalDivider(Modifier.padding(vertical = 10.dp))
             }
         }

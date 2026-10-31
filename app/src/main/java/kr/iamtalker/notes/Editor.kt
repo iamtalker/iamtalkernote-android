@@ -1,6 +1,7 @@
 package kr.iamtalker.notes
 
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -66,6 +67,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     val scope = rememberCoroutineScope()
     var note by remember { mutableStateOf(start) }
     var tfv by remember { mutableStateOf<TextFieldValue?>(null) }
+    var viewing by remember { mutableStateOf<String?>(null) }   // 크게 보는 그림
     var saved by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf(start.size == 0L || model.openEditing) }   // 새 노트는 바로 편집, 기존 노트는 보기부터
     var dialog by remember { mutableStateOf("") }                   // rename / move / delete / props / tags
@@ -239,8 +241,13 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                             tfv = TextFieldValue(n, v.selection)
                             runCatching { persist(n) }
                         },
-                        onNoteLink = { title -> save(); onOpenTitle(title) }
+                        onNoteLink = { title -> save(); onOpenTitle(title) },
+                        onImage = { src -> if (!(src.startsWith("http") || src.startsWith(":/"))) viewing = src }
                     )
+                    viewing?.let { src ->
+                        val u = remember(src) { NoteRepo.resolve(ctx, model.tree!!, note.folder, src) }
+                        if (u != null) ImageViewer(u, Uri.decode(src.substringBefore('?').substringAfterLast('/')), onClose = { viewing = null }) else viewing = null
+                    }
                 }
             }
         }
