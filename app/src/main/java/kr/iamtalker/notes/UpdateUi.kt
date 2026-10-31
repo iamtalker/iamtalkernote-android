@@ -32,14 +32,14 @@ fun UpdateProgress(color: androidx.compose.ui.graphics.Color = MaterialTheme.col
 fun UpdateDialog() {
     if (!Updater.dialog) return
     val steps = listOf(
-        "새 버전 받기" to 1,
-        "설치 준비" to 2,
-        "설치 확인 — 안드로이드 화면에서 ‘설치’(또는 ‘업데이트’)를 누르세요" to 3,
-        "설치 중 — 앱이 잠깐 꺼졌다가 새 버전으로 다시 켜집니다" to 4,
+        tr("새 버전 받기") to 1,
+        tr("설치 준비") to 2,
+        tr("설치 확인 — 안드로이드 화면에서 ‘설치’(또는 ‘업데이트’)를 누르세요") to 3,
+        tr("설치 중 — 앱이 잠깐 꺼졌다가 새 버전으로 다시 켜집니다") to 4,
     )
     androidx.compose.material3.AlertDialog(
         onDismissRequest = { if (!Updater.busy) Updater.dialog = false },
-        title = { Text("앱 업데이트") },
+        title = { Text(tr("앱 업데이트")) },
         text = {
             Column {
                 for ((label, n) in steps) {
@@ -54,7 +54,7 @@ fun UpdateDialog() {
                 if (Updater.status.isNotEmpty()) Text(Updater.status, fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 8.dp))
             }
         },
-        confirmButton = { androidx.compose.material3.TextButton(onClick = { Updater.dialog = false }, enabled = !Updater.busy) { Text(if (Updater.step == 3) "숨기기" else "닫기") } },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { Updater.dialog = false }, enabled = !Updater.busy) { Text(if (Updater.step == 3) tr("숨기기") else tr("닫기")) } },
     )
 }
 
@@ -66,7 +66,7 @@ fun UpdateBanner() {
     val scope = rememberCoroutineScope()
     Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth().clickable(enabled = !Updater.busy) { scope.launch { Updater.updateNow(ctx) } }) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Text("새 버전 ${info.version} 이 있습니다 — 눌러서 업데이트", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(trf("새 버전 %s 이 있습니다 — 눌러서 업데이트", info.version), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             UpdateProgress()
         }
     }

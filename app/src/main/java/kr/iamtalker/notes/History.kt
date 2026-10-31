@@ -178,10 +178,10 @@ object History {
     fun restore(ctx: Context, tree: Uri, item: TrashItem): String {
         val r = ctx.contentResolver
         val kids = list(ctx, tree, item.id)
-        val file = kids.firstOrNull { it.name == "item" && !it.isDir } ?: throw IllegalStateException("휴지통 항목에 노트가 없습니다")
+        val file = kids.firstOrNull { it.name == "item" && !it.isDir } ?: throw IllegalStateException(tr("휴지통 항목에 노트가 없습니다"))
         val parts = item.rel.split('/')
         var parent = rootId(tree)
-        for (seg in parts.dropLast(1)) parent = dir(ctx, tree, parent, seg, true) ?: throw IllegalStateException("노트북을 만들 수 없습니다: $seg")
+        for (seg in parts.dropLast(1)) parent = dir(ctx, tree, parent, seg, true) ?: throw IllegalStateException(trf("노트북을 만들 수 없습니다: %s", seg))
         val have = list(ctx, tree, parent).map { it.name }.toSet()
         var name = parts.last()
         var i = 0
@@ -189,11 +189,11 @@ object History {
             i++
             name = name.removeSuffix(".md").removeSuffix(".MD") + " (복원" + (if (i == 1) "" else "$i") + ").md"
         }
-        val renamed = DocumentsContract.renameDocument(r, docUri(tree, file.id), name) ?: throw IllegalStateException("이름을 정하지 못했습니다")
+        val renamed = DocumentsContract.renameDocument(r, docUri(tree, file.id), name) ?: throw IllegalStateException(tr("이름을 정하지 못했습니다"))
         val moved = DocumentsContract.moveDocument(r, renamed, docUri(tree, item.id), docUri(tree, parent))
         if (moved == null) {
             runCatching { DocumentsContract.renameDocument(r, renamed, "item") }   // 되돌려 놓는다
-            throw IllegalStateException("이 폴더에서는 옮길 수 없습니다")
+            throw IllegalStateException(tr("이 폴더에서는 옮길 수 없습니다"))
         }
         runCatching { delete(ctx, tree, item.id) }   // 남은 meta.json 이 든 빈 항목을 치운다
         return (parts.dropLast(1) + name).joinToString("/")

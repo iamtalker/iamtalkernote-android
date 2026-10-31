@@ -118,7 +118,7 @@ object NoteRepo {
     // ---- 노트 하나에 하는 일: 이름 바꾸기·이동·휴지통(데스크톱과 같은 .trash 형식)
     fun rename(ctx: Context, note: Note, title: String): Note {
         val name = safeName(title) + ".md"
-        val uri = DocumentsContract.renameDocument(ctx.contentResolver, note.uri, name) ?: throw IllegalStateException("이름을 바꾸지 못했습니다")
+        val uri = DocumentsContract.renameDocument(ctx.contentResolver, note.uri, name) ?: throw IllegalStateException(tr("이름을 바꾸지 못했습니다"))
         return note.copy(uri = uri, name = name)
     }
 
@@ -126,7 +126,7 @@ object NoteRepo {
         val r = ctx.contentResolver
         val uri = DocumentsContract.moveDocument(r, note.uri,
             DocumentsContract.buildDocumentUriUsingTree(tree, note.parentId), DocumentsContract.buildDocumentUriUsingTree(tree, dstParentId))
-            ?: throw IllegalStateException("이 폴더에서는 노트를 옮길 수 없습니다")
+            ?: throw IllegalStateException(tr("이 폴더에서는 노트를 옮길 수 없습니다"))
         // 깊이가 달라지면 그림 링크의 ../ 개수를 맞춘다(데스크톱과 같은 규칙)
         runCatching {
             val text = read(ctx, uri)
@@ -142,7 +142,7 @@ object NoteRepo {
     fun createFolder(ctx: Context, tree: Uri, parentId: String, name: String): String {
         val clean = safeName(name)
         val u = DocumentsContract.createDocument(ctx.contentResolver, DocumentsContract.buildDocumentUriUsingTree(tree, parentId), Document.MIME_TYPE_DIR, clean)
-            ?: throw IllegalStateException("노트북을 만들 수 없습니다")
+            ?: throw IllegalStateException(tr("노트북을 만들 수 없습니다"))
         clearCache()
         return DocumentsContract.getDocumentId(u)
     }
@@ -155,19 +155,19 @@ object NoteRepo {
         fun docUri(id: String) = DocumentsContract.buildDocumentUriUsingTree(tree, id)
         val trashId = children(ctx, tree, rootId)[".trash"]
             ?: DocumentsContract.createDocument(r, docUri(rootId), Document.MIME_TYPE_DIR, ".trash")?.let { DocumentsContract.getDocumentId(it) }
-            ?: throw IllegalStateException("휴지통 폴더를 만들 수 없습니다")
+            ?: throw IllegalStateException(tr("휴지통 폴더를 만들 수 없습니다"))
         val tid = "${System.currentTimeMillis()}-" + Integer.toHexString((Math.random() * 0xFFFFFF).toInt()).padStart(6, '0')
         val tidId = DocumentsContract.createDocument(r, docUri(trashId), Document.MIME_TYPE_DIR, tid)?.let { DocumentsContract.getDocumentId(it) }
-            ?: throw IllegalStateException("휴지통 항목을 만들 수 없습니다")
+            ?: throw IllegalStateException(tr("휴지통 항목을 만들 수 없습니다"))
         try {
             val meta = DocumentsContract.createDocument(r, docUri(tidId), "application/json", "meta.json")
-                ?: throw IllegalStateException("휴지통 정보를 만들 수 없습니다")
+                ?: throw IllegalStateException(tr("휴지통 정보를 만들 수 없습니다"))
             write(ctx, meta, "{\"rel\": " + org.json.JSONObject.quote(path) + ", \"deleted\": " + (System.currentTimeMillis() / 1000.0) + ", \"dir\": true}")
             val moved = DocumentsContract.moveDocument(r, docUri(folderId), docUri(parentId), docUri(tidId))
-                ?: throw IllegalStateException("이 폴더에서는 노트북을 옮길 수 없습니다")
+                ?: throw IllegalStateException(tr("이 폴더에서는 노트북을 옮길 수 없습니다"))
             if (DocumentsContract.renameDocument(r, moved, "item") == null) {
                 runCatching { DocumentsContract.moveDocument(r, moved, docUri(tidId), docUri(parentId)) }
-                throw IllegalStateException("휴지통 항목 이름을 정하지 못해 되돌렸습니다")
+                throw IllegalStateException(tr("휴지통 항목 이름을 정하지 못해 되돌렸습니다"))
             }
         } catch (e: Exception) {
             runCatching { DocumentsContract.deleteDocument(r, docUri(tidId)) }
@@ -184,21 +184,21 @@ object NoteRepo {
         fun docUri(id: String) = DocumentsContract.buildDocumentUriUsingTree(tree, id)
         val trashId = children(ctx, tree, rootId)[".trash"]
             ?: DocumentsContract.createDocument(r, docUri(rootId), Document.MIME_TYPE_DIR, ".trash")?.let { DocumentsContract.getDocumentId(it) }
-            ?: throw IllegalStateException("휴지통 폴더를 만들 수 없습니다")
+            ?: throw IllegalStateException(tr("휴지통 폴더를 만들 수 없습니다"))
         val tid = "${System.currentTimeMillis()}-" + Integer.toHexString((Math.random() * 0xFFFFFF).toInt()).padStart(6, '0')
         val tidId = DocumentsContract.createDocument(r, docUri(trashId), Document.MIME_TYPE_DIR, tid)?.let { DocumentsContract.getDocumentId(it) }
-            ?: throw IllegalStateException("휴지통 항목을 만들 수 없습니다")
+            ?: throw IllegalStateException(tr("휴지통 항목을 만들 수 없습니다"))
         try {
             val rel = if (note.folder.isEmpty()) note.name else note.folder + "/" + note.name
             val meta = DocumentsContract.createDocument(r, docUri(tidId), "application/json", "meta.json")
-                ?: throw IllegalStateException("휴지통 정보를 만들 수 없습니다")
+                ?: throw IllegalStateException(tr("휴지통 정보를 만들 수 없습니다"))
             val json = "{\"rel\": " + org.json.JSONObject.quote(rel) + ", \"deleted\": " + (System.currentTimeMillis() / 1000.0) + ", \"dir\": false}"
             write(ctx, meta, json)
             val moved = DocumentsContract.moveDocument(r, note.uri, docUri(note.parentId), docUri(tidId))
-                ?: throw IllegalStateException("이 폴더에서는 휴지통으로 옮길 수 없습니다")
+                ?: throw IllegalStateException(tr("이 폴더에서는 휴지통으로 옮길 수 없습니다"))
             if (DocumentsContract.renameDocument(r, moved, "item") == null) {
                 runCatching { DocumentsContract.moveDocument(r, moved, docUri(tidId), docUri(note.parentId)) }   // 되돌리기
-                throw IllegalStateException("휴지통 항목 이름을 정하지 못해 되돌렸습니다")
+                throw IllegalStateException(tr("휴지통 항목 이름을 정하지 못해 되돌렸습니다"))
             }
         } catch (e: Exception) {
             runCatching { DocumentsContract.deleteDocument(r, docUri(tidId)) }   // 빈 휴지통 항목만 치운다(노트는 그대로)

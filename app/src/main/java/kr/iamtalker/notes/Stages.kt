@@ -48,7 +48,7 @@ data class Overall(val notesHave: Int, val notesAll: Int, val mediaHave: Int, va
     val have get() = notesHave + mediaHave
     val all get() = notesAll + mediaAll
     private fun pct(a: Int, b: Int) = if (b > 0) a * 100 / b else 100
-    fun text(): String = "전체 %,d / %,d개 (%d%%)\n글 %,d / %,d개 (%d%%) · 그림 %,d / %,d개 (%d%%)".format(
+    fun text(): String = tr("전체 %,d / %,d개 (%d%%)\n글 %,d / %,d개 (%d%%) · 그림 %,d / %,d개 (%d%%)").format(
         have, all, pct(have, all), notesHave, notesAll, pct(notesHave, notesAll), mediaHave, mediaAll, pct(mediaHave, mediaAll))
 
     companion object {
@@ -81,7 +81,7 @@ data class Overall(val notesHave: Int, val notesAll: Int, val mediaHave: Int, va
 
         /** 개수를 못 셀 때 이유(엔진 로그에 남기려고) */
         fun why(vault: java.io.File): String =
-            if (!vault.isDirectory) "노트 폴더를 읽을 수 없음(${vault.path})" else if (totals(vault) == null) "컴퓨터가 보낸 총수 파일(설정 폴더 totals.json)도 단계 목록(.sync/stages.json)도 아직 폰에 없음" else "셀 수 있음"
+            if (!vault.isDirectory) "노트 폴더를 읽을 수 없음(${vault.path})" else if (totals(vault) == null) tr("컴퓨터가 보낸 총수 파일(설정 폴더 totals.json)도 단계 목록(.sync/stages.json)도 아직 폰에 없음") else tr("셀 수 있음")
 
         /** vault: 노트 폴더. 총수를 모르면 null */
         fun count(vault: java.io.File): Overall? {

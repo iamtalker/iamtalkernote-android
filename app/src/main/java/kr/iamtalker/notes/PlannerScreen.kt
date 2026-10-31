@@ -53,7 +53,7 @@ import java.time.YearMonth
 private fun DateField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
     OutlinedTextField(value, onChange, singleLine = true, placeholder = { Text(placeholder) }, modifier = modifier,
-        trailingIcon = { TextButton(onClick = { open = true }) { Text("달력") } })
+        trailingIcon = { TextButton(onClick = { open = true }) { Text(tr("달력")) } })
     if (open) {
         val init = PlannerCalc.parseLoose(value)?.let { LocalDate.parse(it).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli() }
         val st = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = init ?: System.currentTimeMillis())
@@ -61,8 +61,8 @@ private fun DateField(value: String, onChange: (String) -> Unit, placeholder: St
             confirmButton = { TextButton(onClick = {
                 st.selectedDateMillis?.let { ms -> onChange(java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()) }
                 open = false
-            }) { Text("선택") } },
-            dismissButton = { TextButton(onClick = { open = false }) { Text("취소") } }) {
+            }) { Text(tr("선택")) } },
+            dismissButton = { TextButton(onClick = { open = false }) { Text(tr("취소")) } }) {
             androidx.compose.material3.DatePicker(st)
         }
     }
@@ -81,7 +81,7 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val vault = remember(model.tree) { model.tree?.let { ForkSync.treePath(it) } }
     if (vault == null) {
-        Scaffold(topBar = { PageBar(title = { Text("달력·할일") }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } }) }) { Box(Modifier.padding(it).padding(24.dp)) { Text("노트 폴더를 먼저 고르세요.") } }
+        Scaffold(topBar = { PageBar(title = { Text(tr("달력·할일")) }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } }) }) { Box(Modifier.padding(it).padding(24.dp)) { Text(tr("노트 폴더를 먼저 고르세요.")) } }
         return
     }
     val store = remember(vault) { PlannerStore(vault) }
@@ -115,14 +115,14 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
 
     Scaffold(topBar = {
         PageBar(
-            title = { Text("달력·할일") },
+            title = { Text(tr("달력·할일")) },
             navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } },
             actions = {
                 BarButton({ menuOpen = true }) { DotsIcon(MaterialTheme.colorScheme.onSurface) }
                 DropdownMenu(menuOpen, { menuOpen = false }) {
-                    DropdownMenuItem(text = { Text(if (showGongsu) "✓ 공수달력" else "공수달력") }, onClick = { showGongsu = !showGongsu; prefs.edit().putBoolean("gongsu", showGongsu).apply(); menuOpen = false })
-                    if (showGongsu) DropdownMenuItem(text = { Text("단가·일비 설정") }, onClick = { priceDialog = true; menuOpen = false })
-                    DropdownMenuItem(text = { Text("파일 다시 읽기") }, onClick = { store.load(); rev++; menuOpen = false })
+                    DropdownMenuItem(text = { Text(if (showGongsu) "✓ " + tr("공수달력") else tr("공수달력")) }, onClick = { showGongsu = !showGongsu; prefs.edit().putBoolean("gongsu", showGongsu).apply(); menuOpen = false })
+                    if (showGongsu) DropdownMenuItem(text = { Text(tr("단가·일비 설정")) }, onClick = { priceDialog = true; menuOpen = false })
+                    DropdownMenuItem(text = { Text(tr("파일 다시 읽기")) }, onClick = { store.load(); rev++; menuOpen = false })
                 }
             })
     }) { pad ->
@@ -130,18 +130,18 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
             // 머리: ◀ 2026년 11월 ▶  오늘
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.clickable { month = month.minusMonths(1) }.padding(horizontal = 10.dp, vertical = 8.dp)) { ChevronSideIcon(true, outline) }
-                Text("${month.year}년 ${month.monthValue}월", fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                Text(trf("%s년 %s월", month.year, month.monthValue), fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 Box(Modifier.clickable { month = month.plusMonths(1) }.padding(horizontal = 10.dp, vertical = 8.dp)) { ChevronSideIcon(false, outline) }
-                Text("오늘", fontSize = 14.sp, color = accent, modifier = Modifier.clickable { month = YearMonth.now(); sel = today.toString() }.padding(horizontal = 10.dp, vertical = 8.dp))
+                Text(tr("오늘"), fontSize = 14.sp, color = accent, modifier = Modifier.clickable { month = YearMonth.now(); sel = today.toString() }.padding(horizontal = 10.dp, vertical = 8.dp))
             }
             if (showGongsu) {
-                Text("공수 합계 ${PlannerMd.fmt(sum.gongsu)}  ·  출근 ${sum.days}일  ·  일당 ${"%,d".format(sum.pay)}원 + 일비 ${"%,d".format(sum.meal)}원 = 총 ${"%,d".format(sum.sum)}원",
+                Text(trf("공수 합계 %s  ·  출근 %d일  ·  일당 %s원 + 일비 %s원 = 총 %s원", PlannerMd.fmt(sum.gongsu), sum.days, "%,d".format(sum.pay), "%,d".format(sum.meal), "%,d".format(sum.sum)),
                     fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp))
-                Text("단가 ${"%,d".format(wage)}원 · 일비 ${"%,d".format(meal)}원 (⋮ → 단가·일비 설정)", fontSize = 11.sp, color = outline, modifier = Modifier.padding(horizontal = 14.dp))
+                Text(trf("단가 %s원 · 일비 %s원 (⋮ → 단가·일비 설정)", "%,d".format(wage), "%,d".format(meal)), fontSize = 11.sp, color = outline, modifier = Modifier.padding(horizontal = 14.dp))
             }
             // 요일 줄
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                "일월화수목금토".forEachIndexed { i, d ->
+                Lang.weekdays().forEachIndexed { i, d ->
                     Text(d.toString(), fontSize = 12.sp, textAlign = TextAlign.Center, color = if (i == 0) Red else if (i == 6) Blue else outline, modifier = Modifier.weight(1f))
                 }
             }
@@ -152,7 +152,7 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
                 for (r in 0 until 6) Row(Modifier.fillMaxWidth().height(66.dp)) {
                     for (c in 0 until 7) {
                         val d = start.plusDays((r * 7 + c).toLong()); val ds = d.toString()
-                        val h = hol[ds]
+                        val h = hol[ds]?.let { tr(it) }
                         val red = d.dayOfWeek.value == 7 || h != null
                         var fg = if (red) Red else if (d.dayOfWeek.value == 6) Blue else MaterialTheme.colorScheme.onSurface
                         if (d.monthValue != month.monthValue) fg = outline
@@ -166,17 +166,17 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
                                 for (t in here.take(2)) Text(t.text.take(5) + (if (t.text.length > 5) "…" else ""), fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Clip,
                                     color = if (t.done) outline else MaterialTheme.colorScheme.onSurface)
                                 if (here.size > 2) Text("+${here.size - 2}", fontSize = 9.sp, color = outline)
-                                if (showGongsu && g != null) Text("공수 " + PlannerMd.fmt(g), fontSize = 9.sp, color = accent)
+                                if (showGongsu && g != null) Text(tr("공수 ") + PlannerMd.fmt(g), fontSize = 9.sp, color = accent)
                             }
                             DropdownMenu(dayMenu == ds, { dayMenu = null }) {
                                 if (showGongsu) {
-                                    for (v in listOf(0.5, 1.0, 1.5, 2.0)) DropdownMenuItem(text = { Text("공수 " + PlannerMd.fmt(v)) }, onClick = { change { store.setGongsu(ds, v) }; dayMenu = null })
-                                    DropdownMenuItem(text = { Text("공수 직접 입력…") }, onClick = { gongsuDialog = ds; dayMenu = null })
-                                    DropdownMenuItem(text = { Text("공수 지우기") }, onClick = { change { store.setGongsu(ds, 0.0) }; dayMenu = null })
+                                    for (v in listOf(0.5, 1.0, 1.5, 2.0)) DropdownMenuItem(text = { Text(tr("공수 ") + PlannerMd.fmt(v)) }, onClick = { change { store.setGongsu(ds, v) }; dayMenu = null })
+                                    DropdownMenuItem(text = { Text(tr("공수 직접 입력…")) }, onClick = { gongsuDialog = ds; dayMenu = null })
+                                    DropdownMenuItem(text = { Text(tr("공수 지우기")) }, onClick = { change { store.setGongsu(ds, 0.0) }; dayMenu = null })
                                     HorizontalDivider()
                                 }
-                                DropdownMenuItem(text = { Text("이 날 할일 추가…") }, onClick = { addDialog = ds; dayMenu = null })
-                                for (t in here) DropdownMenuItem(text = { Text("삭제: " + t.text.take(24)) }, onClick = { change { store.remove(t.id) }; dayMenu = null })
+                                DropdownMenuItem(text = { Text(tr("이 날 할일 추가…")) }, onClick = { addDialog = ds; dayMenu = null })
+                                for (t in here) DropdownMenuItem(text = { Text(tr("삭제: ") + t.text.take(24)) }, onClick = { change { store.remove(t.id) }; dayMenu = null })
                             }
                         }
                     }
@@ -184,18 +184,18 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
             }
             // 할일 목록
             Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("할일", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(tr("할일"), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 BarButton({ addDialog = "" }) { PlusIcon(accent) }
                 Box(Modifier.weight(1f))
-                Text("완료 숨기기", fontSize = 13.sp, color = if (hideDone) accent else outline, fontWeight = if (hideDone) FontWeight.Medium else FontWeight.Normal,
+                Text(tr("완료 숨기기"), fontSize = 13.sp, color = if (hideDone) accent else outline, fontWeight = if (hideDone) FontWeight.Medium else FontWeight.Normal,
                     modifier = Modifier.clickable { hideDone = !hideDone; prefs.edit().putBoolean("hideDone", hideDone).apply() }.padding(horizontal = 8.dp, vertical = 10.dp))
             }
             Row(Modifier.fillMaxWidth().background(soft).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text("추가한 날", fontSize = 11.sp, color = outline, modifier = Modifier.width(84.dp))
-                Text("완료한 날", fontSize = 11.sp, color = outline, modifier = Modifier.width(76.dp))
-                Text("할일", fontSize = 11.sp, color = outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (Lang.code == "en") "Added" else "추가한 날", fontSize = 11.sp, color = outline, modifier = Modifier.width(84.dp))
+                Text(if (Lang.code == "en") "Done" else "완료한 날", fontSize = 11.sp, color = outline, modifier = Modifier.width(76.dp))
+                Text(tr("할일"), fontSize = 11.sp, color = outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (shown.isEmpty()) Text("할일이 없습니다.", fontSize = 14.sp, color = outline, modifier = Modifier.padding(16.dp))
+            if (shown.isEmpty()) Text(tr("할일이 없습니다."), fontSize = 14.sp, color = outline, modifier = Modifier.padding(16.dp))
             LazyColumn(Modifier.weight(1f)) {
                 items(shown, key = { it.id }) { t ->
                     var m by remember { mutableStateOf("") }   // text | date | done
@@ -207,15 +207,15 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
                                 if (dl.isNotEmpty()) Text(dl, fontSize = 10.sp, color = if (dl == "D-day") Red else outline)
                             }
                             DropdownMenu(m == "date", { m = "" }) {
-                                DropdownMenuItem(text = { Text(if (t.date != null) "날짜 변경" else "날짜 만들기") }, onClick = { dateDialog = t to "date"; m = "" })
-                                if (t.date != null) DropdownMenuItem(text = { Text("날짜 삭제") }, onClick = { change { store.setDate(t.id, null) }; m = "" })
+                                DropdownMenuItem(text = { Text(if (t.date != null) tr("날짜 변경") else tr("날짜 만들기")) }, onClick = { dateDialog = t to "date"; m = "" })
+                                if (t.date != null) DropdownMenuItem(text = { Text(tr("날짜 삭제")) }, onClick = { change { store.setDate(t.id, null) }; m = "" })
                             }
                         }
                         Box(Modifier.width(76.dp).combinedClickable(onClick = {}, onLongClick = { m = "done" }).padding(vertical = 6.dp)) {
                             Text(t.doneOn ?: "", fontSize = 12.sp, color = outline)
                             DropdownMenu(m == "done", { m = "" }) {
-                                DropdownMenuItem(text = { Text(if (t.done) "날짜 변경" else "날짜 만들기") }, onClick = { dateDialog = t to "done"; m = "" })
-                                if (t.done) DropdownMenuItem(text = { Text("날짜 삭제") }, onClick = { change { store.setDone(t.id, false) }; m = "" })
+                                DropdownMenuItem(text = { Text(if (t.done) tr("날짜 변경") else tr("날짜 만들기")) }, onClick = { dateDialog = t to "done"; m = "" })
+                                if (t.done) DropdownMenuItem(text = { Text(tr("날짜 삭제")) }, onClick = { change { store.setDone(t.id, false) }; m = "" })
                             }
                         }
                         Box(Modifier.weight(1f).combinedClickable(onClick = {}, onLongClick = { m = "text" })) {
@@ -224,9 +224,9 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
                                 Text(t.text, fontSize = 14.sp, color = if (t.done) outline else MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(vertical = 8.dp))
                             }
                             DropdownMenu(m == "text", { m = "" }) {
-                                DropdownMenuItem(text = { Text("할일 생성") }, onClick = { addDialog = ""; m = "" })
-                                DropdownMenuItem(text = { Text("할일 변경") }, onClick = { textDialog = t; m = "" })
-                                DropdownMenuItem(text = { Text("할일 삭제") }, onClick = { change { store.remove(t.id) }; m = "" })
+                                DropdownMenuItem(text = { Text(tr("할일 생성")) }, onClick = { addDialog = ""; m = "" })
+                                DropdownMenuItem(text = { Text(tr("할일 변경")) }, onClick = { textDialog = t; m = "" })
+                                DropdownMenuItem(text = { Text(tr("할일 삭제")) }, onClick = { change { store.remove(t.id) }; m = "" })
                             }
                         }
                     }
@@ -239,59 +239,59 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
     addDialog?.let { ds ->
         var text by remember(ds) { mutableStateOf("") }
         var date by remember(ds) { mutableStateOf(ds) }
-        AlertDialog(onDismissRequest = { addDialog = null }, title = { Text("할일 만들기") },
+        AlertDialog(onDismissRequest = { addDialog = null }, title = { Text(tr("할일 만들기")) },
             text = { Column {
-                OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text("할일 내용") })
-                DateField(date, { date = it }, "날짜(비우면 날짜 없이) 예: 20261105", Modifier.padding(top = 8.dp))
+                OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text(tr("할일 내용")) })
+                DateField(date, { date = it }, tr("날짜(비우면 날짜 없이) 예: 20261105"), Modifier.padding(top = 8.dp))
             } },
             confirmButton = { TextButton(onClick = {
                 val d = if (date.isBlank()) null else PlannerCalc.parseLoose(date)
-                if (date.isNotBlank() && d == null) toast("날짜를 읽을 수 없습니다. 예: 2026-09-14 또는 20260914")
+                if (date.isNotBlank() && d == null) toast(tr("날짜를 읽을 수 없습니다. 예: 2026-09-14 또는 20260914"))
                 else { change { store.add(text, d) }; addDialog = null }
-            }) { Text("만들기") } },
-            dismissButton = { TextButton(onClick = { addDialog = null }) { Text("취소") } })
+            }) { Text(tr("만들기")) } },
+            dismissButton = { TextButton(onClick = { addDialog = null }) { Text(tr("취소")) } })
     }
     textDialog?.let { t ->
         var text by remember(t.id) { mutableStateOf(t.text) }
-        AlertDialog(onDismissRequest = { textDialog = null }, title = { Text("할일 바꾸기") },
+        AlertDialog(onDismissRequest = { textDialog = null }, title = { Text(tr("할일 바꾸기")) },
             text = { OutlinedTextField(text, { text = it }, singleLine = true) },
             confirmButton = { TextButton(onClick = { if (text.isNotBlank()) change { store.rename(t.id, text.trim().split(Regex("\\s+")).joinToString(" ")) }; textDialog = null }) { Text("저장") } },
-            dismissButton = { TextButton(onClick = { textDialog = null }) { Text("취소") } })
+            dismissButton = { TextButton(onClick = { textDialog = null }) { Text(tr("취소")) } })
     }
     dateDialog?.let { (t, field) ->
         var s by remember(t.id, field) { mutableStateOf((if (field == "date") t.date else t.doneOn) ?: today.toString()) }
-        AlertDialog(onDismissRequest = { dateDialog = null }, title = { Text(if (field == "date") "추가한 날" else "완료한 날") },
-            text = { DateField(s, { s = it }, "예: 2026-09-14, 20260914") },
+        AlertDialog(onDismissRequest = { dateDialog = null }, title = { Text(if (field == "date") tr("추가한 날") else tr("완료한 날")) },
+            text = { DateField(s, { s = it }, tr("예: 2026-09-14, 20260914")) },
             confirmButton = { TextButton(onClick = {
                 val d = PlannerCalc.parseLoose(s)
                 when {
-                    d == null -> toast("날짜를 읽을 수 없습니다. 예: 2026-09-14 또는 20260914")
-                    field == "date" && t.done && t.doneOn != null && d > t.doneOn -> toast("추가한 날이 완료한 날보다 늦을 수 없습니다.")
-                    field == "done" && t.date != null && d < t.date -> toast("완료한 날이 추가한 날보다 빠를 수 없습니다.")
+                    d == null -> toast(tr("날짜를 읽을 수 없습니다. 예: 2026-09-14 또는 20260914"))
+                    field == "date" && t.done && t.doneOn != null && d > t.doneOn -> toast(tr("추가한 날이 완료한 날보다 늦을 수 없습니다."))
+                    field == "done" && t.date != null && d < t.date -> toast(tr("완료한 날이 추가한 날보다 빠를 수 없습니다."))
                     else -> { change { if (field == "date") store.setDate(t.id, d) else store.setDone(t.id, true, d) }; dateDialog = null }
                 }
-            }) { Text("저장") } },
-            dismissButton = { TextButton(onClick = { dateDialog = null }) { Text("취소") } })
+            }) { Text(tr("저장")) } },
+            dismissButton = { TextButton(onClick = { dateDialog = null }) { Text(tr("취소")) } })
     }
     gongsuDialog?.let { ds ->
         var s by remember(ds) { mutableStateOf(store.gongsu[ds]?.let { PlannerMd.fmt(it) } ?: "") }
-        AlertDialog(onDismissRequest = { gongsuDialog = null }, title = { Text("공수") },
-            text = { OutlinedTextField(s, { s = it }, singleLine = true, label = { Text("$ds 공수(예: 1, 1.5, 2)") }) },
-            confirmButton = { TextButton(onClick = { s.toDoubleOrNull()?.let { v -> change { store.setGongsu(ds, v) } }; gongsuDialog = null }) { Text("저장") } },
-            dismissButton = { TextButton(onClick = { gongsuDialog = null }) { Text("취소") } })
+        AlertDialog(onDismissRequest = { gongsuDialog = null }, title = { Text(tr("공수")) },
+            text = { OutlinedTextField(s, { s = it }, singleLine = true, label = { Text(trf("%s 공수(예: 1, 1.5, 2)", ds)) }) },
+            confirmButton = { TextButton(onClick = { s.toDoubleOrNull()?.let { v -> change { store.setGongsu(ds, v) } }; gongsuDialog = null }) { Text(tr("저장")) } },
+            dismissButton = { TextButton(onClick = { gongsuDialog = null }) { Text(tr("취소")) } })
     }
     if (priceDialog) {
         var w by remember { mutableStateOf(wage.toString()) }
         var ml by remember { mutableStateOf(meal.toString()) }
-        AlertDialog(onDismissRequest = { priceDialog = false }, title = { Text("단가·일비") },
+        AlertDialog(onDismissRequest = { priceDialog = false }, title = { Text(tr("단가·일비")) },
             text = { Column {
-                OutlinedTextField(w, { w = it.filter(Char::isDigit) }, singleLine = true, label = { Text("단가(1공수)") })
-                OutlinedTextField(ml, { ml = it.filter(Char::isDigit) }, singleLine = true, label = { Text("일비(하루)") }, modifier = Modifier.padding(top = 8.dp))
+                OutlinedTextField(w, { w = it.filter(Char::isDigit) }, singleLine = true, label = { Text(tr("단가(1공수)")) })
+                OutlinedTextField(ml, { ml = it.filter(Char::isDigit) }, singleLine = true, label = { Text(tr("일비(하루)")) }, modifier = Modifier.padding(top = 8.dp))
             } },
             confirmButton = { TextButton(onClick = {
                 wage = w.toLongOrNull() ?: 0L; meal = ml.toLongOrNull() ?: 0L
                 prefs.edit().putLong("wage", wage).putLong("meal", meal).apply(); priceDialog = false
-            }) { Text("저장") } },
-            dismissButton = { TextButton(onClick = { priceDialog = false }) { Text("취소") } })
+            }) { Text(tr("저장")) } },
+            dismissButton = { TextButton(onClick = { priceDialog = false }) { Text(tr("취소")) } })
     }
 }

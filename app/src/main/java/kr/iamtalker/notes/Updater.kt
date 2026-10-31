@@ -69,7 +69,7 @@ object Updater {
     suspend fun check(ctx: Context, force: Boolean = false) {
         val p = prefs(ctx)
         if (!force && (!autoCheck(ctx) || System.currentTimeMillis() - p.getLong("updateChecked", 0L) < CHECK_EVERY_MS)) return
-        checkedMsg = "확인 중…"
+        checkedMsg = tr("확인 중…")
         val info = withContext(Dispatchers.IO) {
             runCatching {
                 val c = URL("https://api.github.com/repos/$REPO/releases/latest").openConnection() as HttpURLConnection
@@ -78,10 +78,10 @@ object Updater {
                 c.inputStream.bufferedReader().use { parseRelease(it.readText()) }
             }.getOrNull()
         }
-        if (info == null) { checkedMsg = "확인하지 못했습니다(인터넷 연결을 확인하세요)"; return }
+        if (info == null) { checkedMsg = tr("확인하지 못했습니다(인터넷 연결을 확인하세요)"); return }
         p.edit().putLong("updateChecked", System.currentTimeMillis()).apply()
-        if (newer(info.version, current(ctx))) { available = info; checkedMsg = "새 버전 ${info.version} 이 있습니다" }
-        else { available = null; checkedMsg = "최신 버전입니다" }
+        if (newer(info.version, current(ctx))) { available = info; checkedMsg = trf("새 버전 %s 이 있습니다", info.version) }
+        else { available = null; checkedMsg = tr("최신 버전입니다") }
     }
 
     /** 누르면: 설치 권한이 없으면 그 설정 화면으로 보내고, 있으면 받아서 설치 화면을 연다 */
@@ -89,7 +89,7 @@ object Updater {
         val info = available ?: return
         if (busy) return
         if (!ctx.packageManager.canRequestPackageInstalls()) {
-            status = "먼저 ‘이 출처 허용’을 켠 뒤 돌아와서 다시 누르세요"
+            status = tr("먼저 ‘이 출처 허용’을 켠 뒤 돌아와서 다시 누르세요")
             runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             return
         }
@@ -97,17 +97,17 @@ object Updater {
         dialog = true
         step = 1
         progress = 0f
-        status = "새 버전 ${info.version} 받는 중 0%"
+        status = trf("새 버전 %s 받는 중 0%%", info.version)
         try {
             val file = withContext(Dispatchers.IO) { download(ctx, info) }
             progress = -1f
             step = 2
-            status = "내려받기 완료 · 설치를 준비하는 중…"
-            notify(ctx, "설치를 준비하는 중…", -1)
+            status = tr("내려받기 완료 · 설치를 준비하는 중…")
+            notify(ctx, tr("설치를 준비하는 중…"), -1)
             withContext(Dispatchers.IO) { install(ctx, file) }
         } catch (e: Exception) {
             step = 0
-            status = "업데이트하지 못했습니다: ${e.message}"
+            status = trf("업데이트하지 못했습니다: %s", e.message)
         } finally {
             busy = false
             progress = -1f
@@ -131,12 +131,12 @@ object Updater {
                 if (pct != lastPct) {
                     lastPct = pct
                     progress = if (total > 0) got.toFloat() / total else -1f
-                    status = "새 버전 ${info.version} 받는 중 $pct%" + (if (total > 0) " (%.1f / %.1fMB)".format(got / 1048576.0, total / 1048576.0) else "")
-                    notify(ctx, "새 버전 ${info.version} 받는 중 $pct%", pct)
+                    status = trf("새 버전 %s 받는 중 %s%%", info.version, pct) + (if (total > 0) " (%.1f / %.1fMB)".format(got / 1048576.0, total / 1048576.0) else "")
+                    notify(ctx, trf("새 버전 %s 받는 중 %s%%", info.version, pct), pct)
                 }
             }
         } }
-        if (total > 0 && got != total) { tmp.delete(); throw IllegalStateException("받은 크기가 다릅니다") }
+        if (total > 0 && got != total) { tmp.delete(); throw IllegalStateException(tr("받은 크기가 다릅니다")) }
         out.delete(); tmp.renameTo(out)
         return out
     }
@@ -147,8 +147,8 @@ object Updater {
     private fun notify(ctx: Context, text: String, pct: Int) {
         runCatching {
             val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
-            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("update", "앱 업데이트", android.app.NotificationManager.IMPORTANCE_LOW))
-            val b = android.app.Notification.Builder(ctx, "update").setSmallIcon(R.mipmap.ic_launcher).setContentTitle("iamtalkernote 업데이트")
+            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("update", tr("앱 업데이트"), android.app.NotificationManager.IMPORTANCE_LOW))
+            val b = android.app.Notification.Builder(ctx, "update").setSmallIcon(R.mipmap.ic_launcher).setContentTitle(tr("iamtalkernote 업데이트"))
                 .setContentText(text).setOngoing(true).setOnlyAlertOnce(true)
             if (pct in 0..100) b.setProgress(100, pct, false) else b.setProgress(0, 0, true)
             nm.notify(NOTICE_ID, b.build())
@@ -159,10 +159,10 @@ object Updater {
     fun notifyDone(ctx: Context) {
         runCatching {
             val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
-            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("update", "앱 업데이트", android.app.NotificationManager.IMPORTANCE_LOW))
+            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("update", tr("앱 업데이트"), android.app.NotificationManager.IMPORTANCE_LOW))
             val open = android.app.PendingIntent.getActivity(ctx, 3, Intent(ctx, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
-            nm.notify(NOTICE_ID, android.app.Notification.Builder(ctx, "update").setSmallIcon(R.mipmap.ic_launcher).setContentTitle("iamtalkernote 업데이트 완료")
-                .setContentText("새 버전 ${current(ctx)} 로 바뀌었습니다").setAutoCancel(true).setContentIntent(open).build())
+            nm.notify(NOTICE_ID, android.app.Notification.Builder(ctx, "update").setSmallIcon(R.mipmap.ic_launcher).setContentTitle(tr("iamtalkernote 업데이트 완료"))
+                .setContentText(trf("새 버전 %s 로 바뀌었습니다", current(ctx))).setAutoCancel(true).setContentIntent(open).build())
         }
     }
 
@@ -202,10 +202,10 @@ class UpdateReceiver : BroadcastReceiver() {
                 confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 runCatching { ctx.startActivity(confirm) }
                 Updater.step = 3
-                Updater.status = "설치 확인 화면이 떴습니다 — ‘설치’(또는 ‘업데이트’)를 눌러 주세요"
+                Updater.status = tr("설치 확인 화면이 떴습니다 — ‘설치’(또는 ‘업데이트’)를 눌러 주세요")
             }
-            PackageInstaller.STATUS_SUCCESS -> { Updater.step = 5; Updater.status = "설치했습니다 — 앱이 새 버전으로 다시 시작됩니다" }
-            else -> Updater.status = "설치하지 못했습니다: " + (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "알 수 없는 오류")
+            PackageInstaller.STATUS_SUCCESS -> { Updater.step = 5; Updater.status = tr("설치했습니다 — 앱이 새 버전으로 다시 시작됩니다") }
+            else -> Updater.status = tr("설치하지 못했습니다: ") + (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: tr("알 수 없는 오류"))
         }
     }
 }

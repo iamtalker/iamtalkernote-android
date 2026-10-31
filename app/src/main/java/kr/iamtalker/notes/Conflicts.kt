@@ -29,14 +29,14 @@ object Conflicts {
         val theirs = NoteRepo.read(ctx, p.conflict.uri)
         when (choice) {
             Choice.KEEP_MINE -> {
-                val o = p.original ?: throw IllegalStateException("원래 노트가 없습니다")
+                val o = p.original ?: throw IllegalStateException(tr("원래 노트가 없습니다"))
                 // 상대 내용을 원래 노트의 버전으로 남긴 뒤 충돌 복사본은 휴지통으로
                 History.snapshot(ctx, tree, History.relOf(o), theirs, "", true)
                 model.trashNote(p.conflict)
                 History.journal(ctx, tree, "conflict", History.relOf(o), detail = "내 것 유지")
             }
             Choice.USE_THEIRS -> {
-                val o = p.original ?: throw IllegalStateException("원래 노트가 없습니다")
+                val o = p.original ?: throw IllegalStateException(tr("원래 노트가 없습니다"))
                 val mine = NoteRepo.read(ctx, o.uri)
                 History.snapshot(ctx, tree, History.relOf(o), mine, "", true)   // 내 내용은 이전 버전으로
                 NoteRepo.write(ctx, o.uri, theirs)
@@ -51,7 +51,7 @@ object Conflicts {
                 History.journal(ctx, tree, "conflict", History.relOf(renamed), detail = "둘 다 둠")
             }
             Choice.RESTORE_NAME -> {
-                val name = originalName(p.conflict.name) ?: throw IllegalStateException("원래 이름을 알 수 없습니다")
+                val name = originalName(p.conflict.name) ?: throw IllegalStateException(tr("원래 이름을 알 수 없습니다"))
                 val renamed = NoteRepo.rename(ctx, p.conflict, name.removeSuffix(".md"))
                 History.journal(ctx, tree, "conflict", History.relOf(renamed), detail = "원래 이름으로")
             }

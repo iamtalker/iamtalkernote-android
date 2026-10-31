@@ -75,72 +75,72 @@ fun SyncWizard(model: NotesModel) {
     LaunchedEffect(Unit) { while (true) { forkOn = ForkSync.installed(ctx); delay(3000) } }
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
-        Text("연결 마법사", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
-        Hint("Syncthing-Fork 를 이 앱이 대신 설정합니다. 처음 한 번만 하면 됩니다.")
-        OutlinedButton(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ForkSync.MANUAL_URL))) } }) { Text("사용 설명서 보기") }
+        Text(tr("연결 마법사"), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+        Hint(tr("Syncthing-Fork 를 이 앱이 대신 설정합니다. 처음 한 번만 하면 됩니다."))
+        OutlinedButton(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ForkSync.MANUAL_URL))) } }) { Text(tr("사용 설명서 보기")) }
 
         // API 키가 통하면 Fork 가 있다는 뜻이다(앱 이름이 달라 못 찾는 기기도 있어서)
-        Step(1, "Syncthing-Fork 설치", forkOn || (report != null && err.isEmpty())) {
+        Step(1, tr("Syncthing-Fork 설치"), forkOn || (report != null && err.isEmpty())) {
             if (!forkOn && report == null) {
-                Hint("폰에 Syncthing-Fork 앱이 필요합니다(파일을 실제로 옮기는 앱). 이미 설치했다면 이 단계는 건너뛰고 아래 2번에 API 키를 넣으세요.")
+                Hint(tr("폰에 Syncthing-Fork 앱이 필요합니다(파일을 실제로 옮기는 앱). 이미 설치했다면 이 단계는 건너뛰고 아래 2번에 API 키를 넣으세요."))
                 Button(onClick = {
                     fun open(uri: String) = runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri))) }.isSuccess
                     // 구글 플레이 앱 → 플레이 웹페이지 → F-Droid → GitHub 순서로, 열리는 첫 곳
                     open("market://details?id=${ForkSync.STORE_PKG}") || open("https://play.google.com/store/apps/details?id=${ForkSync.STORE_PKG}") ||
                         open("https://f-droid.org/packages/${ForkSync.STORE_PKG}/") || open("https://github.com/Catfriend1/syncthing-android/releases")
-                }) { Text("설치 페이지 열기") }
+                }) { Text(tr("설치 페이지 열기")) }
             } else {
-                Hint("설치됨. 처음 실행하면 나오는 권한 안내(모든 파일 접근, 배터리 최적화 제외)를 모두 허용하세요.")
+                Hint(tr("설치됨. 처음 실행하면 나오는 권한 안내(모든 파일 접근, 배터리 최적화 제외)를 모두 허용하세요."))
                 ForkSync.installedPkg(ctx)?.let { pkg ->
-                    OutlinedButton(onClick = { ctx.packageManager.getLaunchIntentForPackage(pkg)?.let { ctx.startActivity(it) } }) { Text("Syncthing-Fork 열기") }
+                    OutlinedButton(onClick = { ctx.packageManager.getLaunchIntentForPackage(pkg)?.let { ctx.startActivity(it) } }) { Text(tr("Syncthing-Fork 열기")) }
                 }
             }
         }
 
-        Step(2, "API 키 붙여넣기", err.isEmpty() && report != null) {
-            Hint("Syncthing-Fork 앱 → 왼쪽 위 메뉴(☰) → Settings(설정) → Syncthing Options → ‘Syncthing API Key (click to copy)’ 를 눌러 복사한 뒤 아래에 붙여넣으세요. (Fork 가 실행 중이어야 보입니다. 기기 ID 와는 다른 값입니다.)")
+        Step(2, tr("API 키 붙여넣기"), err.isEmpty() && report != null) {
+            Hint(tr("Syncthing-Fork 앱 → 왼쪽 위 메뉴(☰) → Settings(설정) → Syncthing Options → ‘Syncthing API Key (click to copy)’ 를 눌러 복사한 뒤 아래에 붙여넣으세요. (Fork 가 실행 중이어야 보입니다. 기기 ID 와는 다른 값입니다.)"))
             OutlinedTextField(value = key, onValueChange = { key = ForkSync.keyFrom(it); prefs.edit().putString("forkKey", key).apply() }, singleLine = true,
-                label = { Text("API 키") }, modifier = Modifier.fillMaxWidth())
-            if (key.isNotEmpty()) Text("${key.length}자" + (if (key.length != 32) " — API 키는 영문·숫자 32자입니다" else ""), fontSize = 12.sp,
+                label = { Text(tr("API 키")) }, modifier = Modifier.fillMaxWidth())
+            if (key.isNotEmpty()) Text("${key.length}자" + (if (key.length != 32) tr(" — API 키는 영문·숫자 32자입니다") else ""), fontSize = 12.sp,
                 color = if (key.length == 32) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
             if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp))
         }
 
-        Step(3, "컴퓨터와 연결", report?.connected == true) {
-            Hint("컴퓨터 앱 → 옵션 → 동기화의 ‘이 컴퓨터의 기기 ID’ 를 복사해 붙여넣고 ‘컴퓨터 추가’를 누르세요. 그다음 컴퓨터 앱에 ‘연결을 요청한 기기’가 뜨면 [허용]을 누르면 끝입니다. 이후 폴더는 이 앱이 알아서 받으니 Fork 의 알림을 누르거나 폴더 경로를 쓸 필요가 없습니다.")
+        Step(3, tr("컴퓨터와 연결"), report?.connected == true) {
+            Hint(tr("컴퓨터 앱 → 옵션 → 동기화의 ‘이 컴퓨터의 기기 ID’ 를 복사해 붙여넣고 ‘컴퓨터 추가’를 누르세요. 그다음 컴퓨터 앱에 ‘연결을 요청한 기기’가 뜨면 [허용]을 누르면 끝입니다. 이후 폴더는 이 앱이 알아서 받으니 Fork 의 알림을 누르거나 폴더 경로를 쓸 필요가 없습니다."))
             OutlinedTextField(value = pcId, onValueChange = { pcId = it.replace(Regex("\\s"), "").uppercase(); prefs.edit().putString("pcId", pcId).apply() },
-                singleLine = true, label = { Text("컴퓨터 기기 ID") }, modifier = Modifier.fillMaxWidth())
+                singleLine = true, label = { Text(tr("컴퓨터 기기 ID")) }, modifier = Modifier.fillMaxWidth())
             Row(Modifier.padding(top = 8.dp)) {
                 Button(enabled = api != null && pcId.length >= 56, onClick = {
                     scope.launch {
                         note = ""
                         val r = withContext(Dispatchers.IO) { runCatching { api!!.putDevice(pcId, "컴퓨터") } }
-                        note = if (r.isSuccess) "컴퓨터를 추가했습니다. 컴퓨터 앱에서 허용해 주세요." else "추가하지 못했습니다: ${r.exceptionOrNull()?.message}"
+                        note = if (r.isSuccess) tr("컴퓨터를 추가했습니다. 컴퓨터 앱에서 허용해 주세요.") else "추가하지 못했습니다: ${r.exceptionOrNull()?.message}"
                     }
-                }) { Text("컴퓨터 추가") }
+                }) { Text(tr("컴퓨터 추가")) }
             }
             if (note.isNotEmpty()) Text(note, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
             report?.takeIf { it.myId.isNotEmpty() }?.let { r ->
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("내 폰 ID  ${r.myId.take(7)}…", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = { clip.setText(AnnotatedString(r.myId)) }) { Text("복사") }
+                    Text(trf("내 폰 ID  %s…", r.myId.take(7)), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = { clip.setText(AnnotatedString(r.myId)) }) { Text(tr("복사")) }
                 }
             }
         }
 
-        Step(4, "폴더 받기", (report?.folders?.isNotEmpty() == true)) {
+        Step(4, tr("폴더 받기"), (report?.folders?.isNotEmpty() == true)) {
             val r = report
             r?.note?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) }
-            if (r == null || r.folders.isEmpty()) Hint("컴퓨터에서 [허용]을 누르면 컴퓨터가 보낸 폴더를 이 앱이 알아서 받아 정해진 위치에 둡니다(이 앱이 켜져 있는 동안 5초마다 확인하니 앱을 완전히 닫지 마세요).")
+            if (r == null || r.folders.isEmpty()) Hint(tr("컴퓨터에서 [허용]을 누르면 컴퓨터가 보낸 폴더를 이 앱이 알아서 받아 정해진 위치에 둡니다(이 앱이 켜져 있는 동안 5초마다 확인하니 앱을 완전히 닫지 마세요)."))
             else {
-                Hint(if (r.connected) "컴퓨터와 연결됨" else "컴퓨터와 연결 안 됨(같은 와이파이인지, 컴퓨터 앱이 켜져 있는지 확인)")
+                Hint(if (r.connected) tr("컴퓨터와 연결됨") else tr("컴퓨터와 연결 안 됨(같은 와이파이인지, 컴퓨터 앱이 켜져 있는지 확인)"))
                 for (f in r.folders) {
                     val pct = if (f.totalBytes > 0) ((f.totalBytes - f.needBytes) * 100 / f.totalBytes).toInt() else 100
                     val s = when {
-                        f.state == "idle" && f.needBytes == 0L -> "최신"
-                        f.state == "idle" -> "대기 중 $pct%"
-                        f.state.startsWith("sync") -> "받는 중 $pct%"
-                        f.state.startsWith("scan") -> "확인 중"
+                        f.state == "idle" && f.needBytes == 0L -> tr("최신")
+                        f.state == "idle" -> trf("대기 중 %s%%", pct)
+                        f.state.startsWith("sync") -> trf("받는 중 %s%%", pct)
+                        f.state.startsWith("scan") -> tr("확인 중")
                         else -> f.state
                     }
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {

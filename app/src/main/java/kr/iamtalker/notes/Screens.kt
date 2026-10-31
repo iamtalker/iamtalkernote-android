@@ -73,12 +73,12 @@ fun TrashScreen(model: NotesModel, onBack: () -> Unit) {
     BackHandler { onBack() }
     Scaffold(topBar = {
         PageBar(
-            title = { Text("휴지통") },
+            title = { Text(tr("휴지통")) },
             navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } },
             actions = {
                 MenuButton("⋮") { close ->
-                    DropdownMenuItem(text = { Text("30일 지난 것 정리") }, onClick = { close(); confirm = "old" })
-                    DropdownMenuItem(text = { Text("휴지통 비우기") }, onClick = { close(); confirm = "all" })
+                    DropdownMenuItem(text = { Text(tr("30일 지난 것 정리")) }, onClick = { close(); confirm = "old" })
+                    DropdownMenuItem(text = { Text(tr("휴지통 비우기")) }, onClick = { close(); confirm = "all" })
                 }
             }
         )
@@ -86,17 +86,17 @@ fun TrashScreen(model: NotesModel, onBack: () -> Unit) {
         val list = items
         Box(Modifier.padding(pad).fillMaxSize()) {
             if (list == null) CircularProgressIndicator(Modifier.align(Alignment.Center))
-            else if (list.isEmpty()) Text("휴지통이 비어 있습니다.", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
+            else if (list.isEmpty()) Text(tr("휴지통이 비어 있습니다."), Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
             else LazyColumn(Modifier.fillMaxSize()) {
                 items(list, key = { it.id }) { it ->
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                         val left = Math.max(0L, Math.ceil(30 - (System.currentTimeMillis() / 1000.0 - it.deleted) / 86400).toLong())
                         Text(it.rel.substringAfterLast('/').removeSuffix(".md").removeSuffix(".MD"), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text((if ('/' in it.rel) it.rel.substringBeforeLast('/') + " · " else "") + "삭제까지 ${left}일 · 지운 날 " + fmt.format(Date((it.deleted * 1000).toLong())) + if (it.isNote) "" else "  · 컴퓨터에서 복원하세요",
+                        Text((if ('/' in it.rel) it.rel.substringBeforeLast('/') + " · " else "") + "삭제까지 ${left}일 · 지운 날 " + fmt.format(Date((it.deleted * 1000).toLong())) + if (it.isNote) "" else tr("  · 컴퓨터에서 복원하세요"),
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                         Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                            if (it.isNote) TextButton(onClick = { run { "복원했습니다: " + History.restore(ctx, tree, it).also { rel -> History.journal(ctx, tree, "restore", rel, detail = "휴지통에서") } } }) { Text("복원") }
-                            TextButton(onClick = { run { History.purge(ctx, tree, it); null } }) { Text("완전 삭제") }
+                            if (it.isNote) TextButton(onClick = { run { tr("복원했습니다: ") + History.restore(ctx, tree, it).also { rel -> History.journal(ctx, tree, "restore", rel, detail = "휴지통에서") } } }) { Text(tr("복원")) }
+                            TextButton(onClick = { run { History.purge(ctx, tree, it); null } }) { Text(tr("완전 삭제")) }
                         }
                     }
                     HorizontalDivider()
@@ -111,17 +111,17 @@ fun TrashScreen(model: NotesModel, onBack: () -> Unit) {
         val old = confirm == "old"
         AlertDialog(
             onDismissRequest = { confirm = "" },
-            title = { Text(if (old) "30일 지난 것을 지울까요?" else "휴지통을 비울까요?") },
-            text = { Text("지운 노트는 되돌릴 수 없습니다.") },
+            title = { Text(if (old) tr("30일 지난 것을 지울까요?") else tr("휴지통을 비울까요?")) },
+            text = { Text(tr("지운 노트는 되돌릴 수 없습니다.")) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = ""
                     val limit = System.currentTimeMillis() / 1000.0 - 30 * 86400
                     val targets = (items ?: emptyList()).filter { !old || it.deleted < limit }
-                    run { for (t in targets) runCatching { History.purge(ctx, tree, t) }; "${targets.size}개를 지웠습니다" }
-                }) { Text("지우기") }
+                    run { for (t in targets) runCatching { History.purge(ctx, tree, t) }; trf("%s개를 지웠습니다", targets.size) }
+                }) { Text(tr("지우기")) }
             },
-            dismissButton = { TextButton(onClick = { confirm = "" }) { Text("취소") } }
+            dismissButton = { TextButton(onClick = { confirm = "" }) { Text(tr("취소")) } }
         )
     }
 }
@@ -134,19 +134,19 @@ fun JournalScreen(model: NotesModel, onBack: () -> Unit, onOpen: (Note) -> Unit)
     val tree = model.tree!!
     var recs by remember { mutableStateOf<List<History.Rec>?>(null) }
     val fmt = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
-    val names = mapOf("edit" to "수정", "create" to "새 노트", "delete" to "삭제", "restore" to "복원", "rename" to "이름 바꿈", "move" to "이동",
-        "cleanup" to "군더더기 정리", "tags" to "태그 정리", "external" to "앱 밖 수정")
+    val names = mapOf("edit" to tr("수정"), "create" to tr("새 노트"), "delete" to tr("삭제"), "restore" to tr("복원"), "rename" to tr("이름 바꿈"), "move" to tr("이동"),
+        "cleanup" to tr("군더더기 정리"), "tags" to tr("태그 정리"), "external" to tr("앱 밖 수정"))
     LaunchedEffect(Unit) {
         recs = withContext(Dispatchers.IO) { runCatching { History.readJournal(ctx, tree) }.getOrDefault(emptyList()) }
     }
     BackHandler { onBack() }
     Scaffold(topBar = {
-        PageBar(title = { Text("전체 변경 이력") }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } })
+        PageBar(title = { Text(tr("전체 변경 이력")) }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } })
     }) { pad ->
         val list = recs
         Box(Modifier.padding(pad).fillMaxSize()) {
             if (list == null) CircularProgressIndicator(Modifier.align(Alignment.Center))
-            else if (list.isEmpty()) Text("아직 기록이 없습니다.", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
+            else if (list.isEmpty()) Text(tr("아직 기록이 없습니다."), Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
             else LazyColumn(Modifier.fillMaxSize()) {
                 items(list.size) { i ->
                     val r = list[i]
@@ -176,29 +176,29 @@ fun DuplicatesScreen(model: NotesModel, onBack: () -> Unit, onOpen: (Note) -> Un
     BackHandler { onBack() }
     Scaffold(topBar = {
         PageBar(
-            title = { Text("중복 노트 찾기") },
+            title = { Text(tr("중복 노트 찾기")) },
             navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } },
             actions = {
                 val g = groups
-                if (!g.isNullOrEmpty()) TextButton(onClick = { confirm = g.flatMap { it.drop(1) } }) { Text("모두 정리") }
+                if (!g.isNullOrEmpty()) TextButton(onClick = { confirm = g.flatMap { it.drop(1) } }) { Text(tr("모두 정리")) }
             }
         )
     }) { pad ->
         val g = groups
         Box(Modifier.padding(pad).fillMaxSize()) {
             if (g == null) CircularProgressIndicator(Modifier.align(Alignment.Center))
-            else if (g.isEmpty()) Text("본문까지 똑같은 중복 노트가 없습니다.", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
+            else if (g.isEmpty()) Text(tr("본문까지 똑같은 중복 노트가 없습니다."), Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
             else LazyColumn(Modifier.fillMaxSize()) {
-                item { Text("제목이 같고 본문이 완전히 같은 노트 ${g.size}묶음. ‘정리’는 가장 최근 것만 남기고 나머지를 휴지통으로 보냅니다.",
+                item { Text(trf("제목이 같고 본문이 완전히 같은 노트 %s묶음. ‘정리’는 가장 최근 것만 남기고 나머지를 휴지통으로 보냅니다.", g.size),
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp)) }
                 items(g.size) { i ->
                     val group = g[i]
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        for ((k, n) in group.withIndex()) Text((if (k == 0) "남김  " else "중복  ") + History.relOf(n) + "  · " + fmt.format(Date(n.date)),
+                        for ((k, n) in group.withIndex()) Text((if (k == 0) tr("남김  ") else tr("중복  ")) + History.relOf(n) + "  · " + fmt.format(Date(n.date)),
                             maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp,
                             color = if (k == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.fillMaxWidth().clickable { onOpen(n) }.padding(vertical = 3.dp))
-                        TextButton(onClick = { confirm = group.drop(1) }, modifier = Modifier.align(Alignment.End)) { Text("정리") }
+                        TextButton(onClick = { confirm = group.drop(1) }, modifier = Modifier.align(Alignment.End)) { Text(tr("정리")) }
                     }
                     HorizontalDivider()
                 }
@@ -207,10 +207,10 @@ fun DuplicatesScreen(model: NotesModel, onBack: () -> Unit, onOpen: (Note) -> Un
     }
     confirm?.let { list ->
         AlertDialog(
-            onDismissRequest = { confirm = null }, title = { Text("${list.size}개를 휴지통으로?") },
-            text = { Text("가장 최근 노트만 남깁니다. 컴퓨터의 iamtalkernote 에서 복원할 수 있습니다.") },
-            confirmButton = { TextButton(onClick = { confirm = null; model.trashMany(list); onBack() }) { Text("휴지통으로") } },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("취소") } }
+            onDismissRequest = { confirm = null }, title = { Text(trf("%s개를 휴지통으로?", list.size)) },
+            text = { Text(tr("가장 최근 노트만 남깁니다. 컴퓨터의 iamtalkernote 에서 복원할 수 있습니다.")) },
+            confirmButton = { TextButton(onClick = { confirm = null; model.trashMany(list); onBack() }) { Text(tr("휴지통으로")) } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text(tr("취소")) } }
         )
     }
 }
@@ -221,7 +221,7 @@ fun DuplicatesScreen(model: NotesModel, onBack: () -> Unit, onOpen: (Note) -> Un
 fun UnusedMediaScreen(model: NotesModel, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var found by remember { mutableStateOf<List<Cleanup.Media>?>(null) }
-    var status by remember { mutableStateOf("준비 중…") }
+    var status by remember { mutableStateOf(tr("준비 중…")) }
     var picked by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirm by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
@@ -234,9 +234,9 @@ fun UnusedMediaScreen(model: NotesModel, onBack: () -> Unit) {
     BackHandler { onBack() }
     Scaffold(topBar = {
         PageBar(
-            title = { Text("안 쓰는 미디어") },
+            title = { Text(tr("안 쓰는 미디어")) },
             navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } },
-            actions = { if (!found.isNullOrEmpty()) TextButton(enabled = picked.isNotEmpty(), onClick = { confirm = true }) { Text("지우기") } }
+            actions = { if (!found.isNullOrEmpty()) TextButton(enabled = picked.isNotEmpty(), onClick = { confirm = true }) { Text(tr("지우기")) } }
         )
     }) { pad ->
         val list = found
@@ -244,9 +244,9 @@ fun UnusedMediaScreen(model: NotesModel, onBack: () -> Unit) {
             if (list == null) Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(); Text(status, Modifier.padding(top = 12.dp), fontSize = 12.sp)
             }
-            else if (list.isEmpty()) Text("안 쓰는 미디어 파일이 없습니다.", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
+            else if (list.isEmpty()) Text(tr("안 쓰는 미디어 파일이 없습니다."), Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
             else LazyColumn(Modifier.fillMaxSize()) {
-                item { Text("${list.size}개, 합계 ${mb(list.sumOf { it.size })}. 지우면 휴지통 없이 바로 삭제됩니다. 노트의 이전 버전 기록(.history)이 가리키는 그림은 확인하지 않으므로, 오래된 버전으로 되돌릴 때 그림이 빠질 수 있습니다.",
+                item { Text(trf("%s개, 합계 %s. 지우면 휴지통 없이 바로 삭제됩니다. 노트의 이전 버전 기록(.history)이 가리키는 그림은 확인하지 않으므로, 오래된 버전으로 되돌릴 때 그림이 빠질 수 있습니다.", list.size, mb(list.sumOf { it.size })),
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp)) }
                 items(list, key = { it.id }) { m ->
                     Row(Modifier.fillMaxWidth().clickable { picked = if (m.id in picked) picked - m.id else picked + m.id }.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -261,24 +261,24 @@ fun UnusedMediaScreen(model: NotesModel, onBack: () -> Unit) {
     }
     if (confirm) {
         AlertDialog(
-            onDismissRequest = { confirm = false }, title = { Text("${picked.size}개를 완전히 지울까요?") },
-            text = { Text("휴지통 없이 바로 삭제되어 되돌릴 수 없습니다.") },
+            onDismissRequest = { confirm = false }, title = { Text(trf("%s개를 완전히 지울까요?", picked.size)) },
+            text = { Text(tr("휴지통 없이 바로 삭제되어 되돌릴 수 없습니다.")) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
                     val targets = found.orEmpty().filter { it.id in picked }
                     scope.launch {
                         val n = withContext(Dispatchers.IO) { model.deleteMedia(targets) }
-                        result = "${n}개를 지웠습니다"
+                        result = trf("%s개를 지웠습니다", n)
                         found = found.orEmpty().filter { it.id !in picked }
                         picked = emptySet()
                     }
-                }) { Text("지우기") }
+                }) { Text(tr("지우기")) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("취소") } }
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(tr("취소")) } }
         )
     }
-    result?.let { m -> AlertDialog(onDismissRequest = { result = null }, text = { Text(m) }, confirmButton = { TextButton(onClick = { result = null }) { Text("닫기") } }) }
+    result?.let { m -> AlertDialog(onDismissRequest = { result = null }, text = { Text(m) }, confirmButton = { TextButton(onClick = { result = null }) { Text(tr("닫기")) } }) }
 }
 
 /** 동기화 충돌 화면: 원래 노트와 충돌 복사본을 비교해 하나를 고르거나 둘 다 둔다 */
@@ -290,29 +290,29 @@ fun ConflictsScreen(model: NotesModel, onBack: () -> Unit) {
     var compare by remember { mutableStateOf<Conflicts.Pair?>(null) }
     BackHandler { onBack() }
     Scaffold(topBar = {
-        PageBar(title = { Text("동기화 충돌") }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } })
+        PageBar(title = { Text(tr("동기화 충돌")) }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } })
     }) { pad ->
         val list = model.conflicts
         Box(Modifier.padding(pad).fillMaxSize()) {
-            if (list.isEmpty()) Text("충돌이 없습니다.", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
+            if (list.isEmpty()) Text(tr("충돌이 없습니다."), Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.outline)
             else LazyColumn(Modifier.fillMaxSize()) {
-                item { Text("양쪽에서 같은 노트를 고쳐 동기화 도구가 남긴 복사본입니다. 어느 쪽을 고르든 지는 쪽 내용은 노트 버전(또는 휴지통)에 남습니다.",
+                item { Text(tr("양쪽에서 같은 노트를 고쳐 동기화 도구가 남긴 복사본입니다. 어느 쪽을 고르든 지는 쪽 내용은 노트 버전(또는 휴지통)에 남습니다."),
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp)) }
                 items(list, key = { it.conflict.uri.toString() }) { p ->
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                         Text(History.relOf(p.original ?: p.conflict).removeSuffix(".md"), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
-                            if (p.original != null) "내 것 ${fmt.format(Date(p.original.date))} · 상대 ${fmt.format(Date(p.conflict.modified))}"
-                            else "원래 노트가 없습니다 · 복사본 ${fmt.format(Date(p.conflict.modified))}",
+                            if (p.original != null) trf("내 것 %s · 상대 %s", fmt.format(Date(p.original.date)), fmt.format(Date(p.conflict.modified)))
+                            else trf("원래 노트가 없습니다 · 복사본 %s", fmt.format(Date(p.conflict.modified))),
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.outline
                         )
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = { compare = p }) { Text("비교") }
+                            TextButton(onClick = { compare = p }) { Text(tr("비교")) }
                             if (p.original != null) {
-                                TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.KEEP_MINE) }) { Text("내 것") }
-                                TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.USE_THEIRS) }) { Text("상대 것") }
-                            } else TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.RESTORE_NAME) }) { Text("원래 이름으로") }
-                            TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.KEEP_BOTH) }) { Text("둘 다") }
+                                TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.KEEP_MINE) }) { Text(tr("내 것")) }
+                                TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.USE_THEIRS) }) { Text(tr("상대 것")) }
+                            } else TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.RESTORE_NAME) }) { Text(tr("원래 이름으로")) }
+                            TextButton(onClick = { model.resolveConflict(p, Conflicts.Choice.KEEP_BOTH) }) { Text(tr("둘 다")) }
                         }
                     }
                     HorizontalDivider()
@@ -321,26 +321,26 @@ fun ConflictsScreen(model: NotesModel, onBack: () -> Unit) {
         }
     }
     compare?.let { p ->
-        var mine by remember(p) { mutableStateOf("(읽는 중…)") }
-        var theirs by remember(p) { mutableStateOf("(읽는 중…)") }
+        var mine by remember(p) { mutableStateOf(tr("(읽는 중…)")) }
+        var theirs by remember(p) { mutableStateOf(tr("(읽는 중…)")) }
         LaunchedEffect(p) {
             withContext(Dispatchers.IO) {
-                mine = p.original?.let { runCatching { NoteRepo.read(ctx, it.uri) }.getOrDefault("(읽지 못했습니다)") } ?: "(원래 노트 없음)"
-                theirs = runCatching { NoteRepo.read(ctx, p.conflict.uri) }.getOrDefault("(읽지 못했습니다)")
+                mine = p.original?.let { runCatching { NoteRepo.read(ctx, it.uri) }.getOrDefault(tr("(읽지 못했습니다)")) } ?: tr("(원래 노트 없음)")
+                theirs = runCatching { NoteRepo.read(ctx, p.conflict.uri) }.getOrDefault(tr("(읽지 못했습니다)"))
             }
         }
         AlertDialog(
-            onDismissRequest = { compare = null }, title = { Text("비교") },
+            onDismissRequest = { compare = null }, title = { Text(tr("비교")) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
-                    Text("내 것", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    Text(tr("내 것"), fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                     Text(mine.take(1500), fontSize = 12.sp)
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    Text("상대 것 (충돌 복사본)", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    Text(tr("상대 것 (충돌 복사본)"), fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                     Text(theirs.take(1500), fontSize = 12.sp)
                 }
             },
-            confirmButton = { TextButton(onClick = { compare = null }) { Text("닫기") } }
+            confirmButton = { TextButton(onClick = { compare = null }) { Text(tr("닫기")) } }
         )
     }
 }
@@ -384,16 +384,16 @@ fun DocScreen(doc: Doc, model: NotesModel, onBack: () -> Unit) {
         PageBar(title = { Text(doc.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } })
     }) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text("컴퓨터의 가져온 폴더 ‘${doc.folder}’ · ${doc.rel}", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+            Text(trf("컴퓨터의 가져온 폴더 ‘%s’ · %s", doc.folder, doc.rel), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
             Text("${doc.ext.uppercase()} · %,dKB · ${fmt.format(Date(doc.mtime))}".format(doc.size / 1024), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
             if (doc.tags.isNotEmpty()) Text(doc.tags.joinToString(" ") { "#$it" }, modifier = Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.primary)
-            if (doc.memo.isNotEmpty()) Text("메모: " + doc.memo, modifier = Modifier.padding(top = 8.dp))
+            if (doc.memo.isNotEmpty()) Text(tr("메모: ") + doc.memo, modifier = Modifier.padding(top = 8.dp))
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             val t = text
             if (t == null) CircularProgressIndicator()
-            else if (t.isEmpty()) Text("뽑아 둔 글이 없습니다(글자가 없는 파일이거나 컴퓨터에서 글을 읽지 않도록 한 경우).", color = MaterialTheme.colorScheme.outline)
+            else if (t.isEmpty()) Text(tr("뽑아 둔 글이 없습니다(글자가 없는 파일이거나 컴퓨터에서 글을 읽지 않도록 한 경우)."), color = MaterialTheme.colorScheme.outline)
             else androidx.compose.foundation.text.selection.SelectionContainer { Text(t, fontSize = 14.sp, lineHeight = 21.sp) }
-            Text("읽기 전용입니다. 원본 파일은 컴퓨터에 있고, 글은 앞부분 최대 2만 자만 내보냅니다.", fontSize = 11.sp,
+            Text(tr("읽기 전용입니다. 원본 파일은 컴퓨터에 있고, 글은 앞부분 최대 2만 자만 내보냅니다."), fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 16.dp))
         }
     }

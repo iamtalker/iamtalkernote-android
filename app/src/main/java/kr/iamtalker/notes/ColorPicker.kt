@@ -78,7 +78,7 @@ fun ColorPickerDialog(title: String, initial: Long, onDismiss: () -> Unit, onPic
                 }
             }
         },
-        confirmButton = { TextButton({ onPick(color.toArgb().toLong() and 0xFFFFFFFFL) }) { Text("확인") } },
-        dismissButton = { TextButton(onDismiss) { Text("취소") } },
+        confirmButton = { TextButton({ onPick(color.toArgb().toLong() and 0xFFFFFFFFL) }) { Text(tr("확인")) } },
+        dismissButton = { TextButton(onDismiss) { Text(tr("취소")) } },
     )
 }

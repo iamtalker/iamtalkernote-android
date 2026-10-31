@@ -32,11 +32,11 @@ object PlannerAlert {
         val due = PlannerCalc.due(store.todos, today, store.notified)
         if (due.isEmpty()) return 0
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "달력·할일", NotificationManager.IMPORTANCE_DEFAULT))
+        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, tr("달력·할일"), NotificationManager.IMPORTANCE_DEFAULT))
         val open = PendingIntent.getActivity(ctx, 8, Intent(ctx, MainActivity::class.java).putExtra("screen", "planner"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val text = due.joinToString("\n") { (it.date?.substring(5) ?: "") + " " + it.text }
         val n = NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("오늘 할일 ${due.size}개").setContentText(due.first().text)
+            .setContentTitle(trf("오늘 할일 %s개", due.size)).setContentText(due.first().text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text)).setContentIntent(open).setAutoCancel(true).build()
         runCatching { nm.notify(4100, n) }
         store.markNotified(due.map { it.id }, today)

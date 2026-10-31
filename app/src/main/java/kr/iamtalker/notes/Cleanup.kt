@@ -45,16 +45,16 @@ object Cleanup {
     fun unusedMedia(ctx: Context, tree: Uri, index: Index, progress: (String) -> Unit = {}): List<Media> {
         val root = DocumentsContract.getTreeDocumentId(tree)
         val used = HashSet<String>()
-        progress("노트의 링크를 읽는 중…")
+        progress(tr("노트의 링크를 읽는 중…"))
         for (h in index.hayLike("%resources/%")) used.addAll(mediaRefs(h))
-        progress("휴지통의 노트를 읽는 중…")
+        progress(tr("휴지통의 노트를 읽는 중…"))
         History.dir(ctx, tree, root, History.TRASH, false)?.let { t ->
             for (e in History.list(ctx, tree, t).filter { it.isDir }.take(500)) runCatching {
                 History.list(ctx, tree, e.id).firstOrNull { it.name == "item" && !it.isDir && it.size in 1..2_000_000 }
                     ?.let { used.addAll(mediaRefs(NoteRepo.read(ctx, History.docUri(tree, it.id)).lowercase())) }
             }
         }
-        progress("미디어 폴더를 읽는 중…")
+        progress(tr("미디어 폴더를 읽는 중…"))
         val out = ArrayList<Media>()
         for (dirName in listOf(".resources", "_resources")) {
             val d = History.dir(ctx, tree, root, dirName, false) ?: continue

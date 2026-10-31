@@ -104,7 +104,7 @@ private fun ThemeRow(name: String, selected: Boolean, palette: AppThemes.Palette
             }
             drawCircle(line, r - 0.5.dp.toPx() / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
         }
-        Text(name, fontSize = 16.sp)
+        Text(tr(name), fontSize = 16.sp)
     }
 }
 
@@ -133,7 +133,7 @@ private fun readPolicy(ctx: android.content.Context, tree: android.net.Uri): Lis
     val dir = History.list(ctx, tree, root).firstOrNull { it.isDir && it.name == ".sync" } ?: return null
     val file = History.list(ctx, tree, dir.id).firstOrNull { !it.isDir && it.name == "policy.json" } ?: return null
     val mods = JSONObject(NoteRepo.read(ctx, History.docUri(tree, file.id))).optJSONObject("modules") ?: return null
-    val names = mapOf("both" to "양방향", "pc2mobile" to "PC → 모바일", "mobile2pc" to "모바일 → PC", "off" to "동기화 안 함")
+    val names = mapOf("both" to tr("양방향"), "pc2mobile" to tr("PC → 모바일"), "mobile2pc" to tr("모바일 → PC"), "off" to tr("동기화 안 함"))
     return mods.keys().asSequence().map { k -> mods.getJSONObject(k).let { it.optString("label", k) to (names[it.optString("direction")] ?: "?") } }.toList()
 }
 
@@ -141,13 +141,13 @@ private fun readPolicy(ctx: android.content.Context, tree: android.net.Uri): Lis
 fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, onBack: () -> Unit, onTool: (String) -> Unit, onPick: () -> Unit) {
     BackHandler { if (page.isEmpty()) onBack() else onPage("") }
     val ctx = LocalContext.current
-    val titles = mapOf("sync" to "동기화", "theme" to "테마", "general" to "일반", "editor" to "에디터", "tools" to "도구", "help" to "도움말", "info" to "정보")
+    val titles = mapOf("sync" to tr("동기화"), "theme" to tr("테마"), "general" to tr("일반"), "editor" to tr("에디터"), "tools" to tr("도구"), "help" to tr("도움말"), "info" to tr("정보"))
     Scaffold(topBar = {
         Column {
             Box(Modifier.fillMaxWidth().height(56.dp).background(MaterialTheme.colorScheme.surface)) {
                 if (page.isNotEmpty()) Box(Modifier.align(Alignment.CenterStart)) { BarButton({ onPage("") }) { BackIcon(MaterialTheme.colorScheme.onSurface) } }
-                Text(if (page.isEmpty()) "설정" else titles[page] ?: "", fontSize = 19.sp, fontWeight = FontWeight.Medium, modifier = Modifier.align(Alignment.Center))
-                if (page.isEmpty()) TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) { Text("완료", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
+                Text(if (page.isEmpty()) tr("설정") else titles[page] ?: "", fontSize = 19.sp, fontWeight = FontWeight.Medium, modifier = Modifier.align(Alignment.Center))
+                if (page.isEmpty()) TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) { Text(tr("완료"), fontSize = 16.sp, fontWeight = FontWeight.Medium) }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
@@ -155,16 +155,25 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
         Column(Modifier.padding(pad).fillMaxSize().background(MaterialTheme.colorScheme.surface).verticalScroll(rememberScrollState())) {
             when (page) {
                 "" -> {
-                    SettingsRow(Sky, "동기화", { onPage("sync") }) { GlyphIcon("sync") }
+                    SettingsRow(Sky, tr("동기화"), { onPage("sync") }) { GlyphIcon("sync") }
                     Gap()
-                    SettingsRow(Purple, "테마", { onPage("theme") }) { GlyphIcon("theme") }
-                    SettingsRow(Green, "일반", { onPage("general") }) { GlyphIcon("general") }
-                    SettingsRow(Pink, "에디터", { onPage("editor") }) { Text("Aa", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                    var langDialog by remember { mutableStateOf(false) }
+                    SettingsRow(Teal, "Language · " + Lang.names.getValue(Lang.code), { langDialog = true }) { Text(Lang.flags.getValue(Lang.code), fontSize = 18.sp) }
+                    if (langDialog) androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { langDialog = false },
+                        title = { Text("Language") },
+                        text = { Column { for ((c, n) in Lang.names) ChoiceRow(Lang.flags.getValue(c) + "  " + n, Lang.code == c) { Lang.set(ctx, c); langDialog = false } } },
+                        confirmButton = {},
+                    )
                     Gap()
-                    SettingsRow(Orange, "도구" + if (model.conflicts.isEmpty()) "" else " (충돌 ${model.conflicts.size})", { onPage("tools") }) { GlyphIcon("tools") }
+                    SettingsRow(Purple, tr("테마"), { onPage("theme") }) { GlyphIcon("theme") }
+                    SettingsRow(Green, tr("일반"), { onPage("general") }) { GlyphIcon("general") }
+                    SettingsRow(Pink, tr("에디터"), { onPage("editor") }) { Text("Aa", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
                     Gap()
-                    SettingsRow(Teal, "도움말", { onPage("help") }) { Text("?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-                    SettingsRow(Teal, "정보", { onPage("info") }) { Text("i", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                    SettingsRow(Orange, tr("도구") + if (model.conflicts.isEmpty()) "" else trf(" (충돌 %s)", model.conflicts.size), { onPage("tools") }) { GlyphIcon("tools") }
+                    Gap()
+                    SettingsRow(Teal, tr("도움말"), { onPage("help") }) { Text("?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                    SettingsRow(Teal, tr("정보"), { onPage("info") }) { Text("i", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
                 }
                 "theme" -> {
                     for (name in AppThemes.names()) {
@@ -172,9 +181,9 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                         ThemeRow(name, model.themeName == name, pal) { if (name == AppThemes.CUSTOM) model.changeCustom() else model.changeTheme(name) }
                     }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    Text("내 테마 만들기", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 4.dp))
+                    Text(tr("내 테마 만들기"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 4.dp))
                     var picking by remember { mutableStateOf<String?>(null) }
-                    for ((key, label, color) in listOf(Triple("bg", "배경색", model.customBg), Triple("accent", "강조색", model.customAccent))) {
+                    for ((key, label, color) in listOf(Triple("bg", tr("배경색"), model.customBg), Triple("accent", tr("강조색"), model.customAccent))) {
                         Row(Modifier.fillMaxWidth().clickable { picking = key }.heightIn(min = 52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(color))
                                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, androidx.compose.foundation.shape.CircleShape))
@@ -182,10 +191,10 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                             Text("#%06X".format(color and 0xFFFFFF), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
                         }
                     }
-                    Text("색 줄을 누르면 색 고르는 창이 뜹니다. 배경색이 어두우면 글자는 밝게, 밝으면 어둡게 저절로 맞춥니다.", fontSize = 12.sp,
+                    Text(tr("색 줄을 누르면 색 고르는 창이 뜹니다. 배경색이 어두우면 글자는 밝게, 밝으면 어둡게 저절로 맞춥니다."), fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                     picking?.let { k ->
-                        ColorPickerDialog(if (k == "bg") "배경색 고르기" else "강조색 고르기", if (k == "bg") model.customBg else model.customAccent,
+                        ColorPickerDialog(if (k == "bg") tr("배경색 고르기") else tr("강조색 고르기"), if (k == "bg") model.customBg else model.customAccent,
                             onDismiss = { picking = null }) { c ->
                             if (k == "bg") model.changeCustom(bg = c) else model.changeCustom(accent = c)
                             picking = null
@@ -193,23 +202,23 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     }
                 }
                 "general" -> {
-                    SwitchRow("앱으로 돌아올 때 자동 새로고침", "동기화로 바뀐 노트를 마지막으로 읽은 지 1분이 지났으면 다시 읽습니다", model.autoRefresh) { model.changeAutoRefresh(it) }
+                    SwitchRow(tr("앱으로 돌아올 때 자동 새로고침"), tr("동기화로 바뀐 노트를 마지막으로 읽은 지 1분이 지났으면 다시 읽습니다"), model.autoRefresh) { model.changeAutoRefresh(it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SwitchRow("위키 낱말 자동 연결", "괄호 없이도 다른 노트 제목과 같은 낱말(2글자 이상)을 그 노트로 연결합니다. 같은 제목이 여럿이면 가장 최근 노트", model.wikiAuto) { model.changeWikiAuto(it) }
+                    SwitchRow(tr("위키 낱말 자동 연결"), tr("괄호 없이도 다른 노트 제목과 같은 낱말(2글자 이상)을 그 노트로 연결합니다. 같은 제목이 여럿이면 가장 최근 노트"), model.wikiAuto) { model.changeWikiAuto(it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    TextRow("지금 새로고침", onClick = { model.refresh(); onBack() })
-                    TextRow("노트 폴더 다시 고르기", onClick = onPick)
+                    TextRow(tr("지금 새로고침"), onClick = { model.refresh(); onBack() })
+                    TextRow(tr("노트 폴더 다시 고르기"), onClick = onPick)
                 }
                 "editor" -> {
-                    SwitchRow("노트를 열 때 바로 편집", "끄면 노트를 보기 모드로 열고 ‘편집’을 눌러 고칩니다", model.openEditing) { model.changeOpenEditing(it) }
+                    SwitchRow(tr("노트를 열 때 바로 편집"), tr("끄면 노트를 보기 모드로 열고 ‘편집’을 눌러 고칩니다"), model.openEditing) { model.changeOpenEditing(it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Text("편집 글자 크기", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
-                    for ((sz, label) in listOf(13 to "작게", 15 to "보통", 17 to "크게", 19 to "아주 크게")) ChoiceRow(label, model.editorFont == sz) { model.changeEditorFont(sz) }
+                    Text(tr("편집 글자 크기"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+                    for ((sz, label) in listOf(13 to tr("작게"), 15 to tr("보통"), 17 to tr("크게"), 19 to tr("아주 크게"))) ChoiceRow(label, model.editorFont == sz) { model.changeEditorFont(sz) }
                 }
                 "tools" -> {
-                    for ((label, target) in listOf("휴지통" to "trash", "전체 변경 이력" to "journal",
-                        "동기화 충돌" + (if (model.conflicts.isEmpty()) "" else " (${model.conflicts.size})") to "conflicts",
-                        "중복 노트 찾기" to "dups", "안 쓰는 미디어" to "media")) {
+                    for ((label, target) in listOf(tr("휴지통") to "trash", tr("전체 변경 이력") to "journal",
+                        tr("동기화 충돌") + (if (model.conflicts.isEmpty()) "" else " (${model.conflicts.size})") to "conflicts",
+                        tr("중복 노트 찾기") to "dups", tr("안 쓰는 미디어") to "media")) {
                         TextRow(label, onClick = { onTool(target) })
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
@@ -224,54 +233,54 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                         policy = withContext(Dispatchers.IO) { runCatching { model.tree?.let { readPolicy(ctx, it) } }.getOrNull() }
                         loaded = true
                     }
-                    Text("컴퓨터의 iamtalkernote(옵션 → 동기화)에서 정한 방향입니다. 파일은 폰의 Syncthing-Fork 가 맞추고, 이 앱은 그 폴더를 읽고 씁니다.",
+                    Text(tr("컴퓨터의 iamtalkernote(옵션 → 동기화)에서 정한 방향입니다. 파일은 폰의 Syncthing-Fork 가 맞추고, 이 앱은 그 폴더를 읽고 씁니다."),
                         fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     val list = policy
-                    if (!loaded) Text("읽는 중…", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.outline)
-                    else if (list == null) Text("아직 정책 파일(.sync/policy.json)이 없습니다. 컴퓨터 앱(0.5.1 이상)의 옵션 → 동기화에서 켜고 ‘적용’을 누르면 생깁니다.",
+                    if (!loaded) Text(tr("읽는 중…"), modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.outline)
+                    else if (list == null) Text(tr("아직 정책 파일(.sync/policy.json)이 없습니다. 컴퓨터 앱(0.5.1 이상)의 옵션 → 동기화에서 켜고 ‘적용’을 누르면 생깁니다."),
                         modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.outline)
                     else for ((name, dir) in list) { TextRow(name, dir); HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
-                    Text("폴더 경로(폰의 Syncthing-Fork): 노트 폴더, 그 안의 .resources(미디어), .history, .trash, .imported 는 앱이 자동으로 만들어 둡니다.",
+                    Text(tr("폴더 경로(폰의 Syncthing-Fork): 노트 폴더, 그 안의 .resources(미디어), .history, .trash, .imported 는 앱이 자동으로 만들어 둡니다."),
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
                 }
                 "help" -> {
                     var helpShown by remember { mutableStateOf<Pair<String, String>?>(null) }
-                    TextRow("사용 설명서", "열기", onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.MANUAL_URL))) } })
+                    TextRow(tr("사용 설명서"), tr("열기"), onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.MANUAL_URL))) } })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    TextRow("컴퓨터 앱 내려받기", "열기", onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.PC_URL))) } })
+                    TextRow(tr("컴퓨터 앱 내려받기"), tr("열기"), onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.PC_URL))) } })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    TextRow("검색 문법", onClick = { helpShown = "검색 문법" to HelpText.SEARCH })
+                    TextRow(tr("검색 문법"), onClick = { helpShown = tr("검색 문법") to HelpText.search() })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    TextRow("마크다운 문법", onClick = { helpShown = "마크다운 문법" to HelpText.MARKDOWN })
+                    TextRow(tr("마크다운 문법"), onClick = { helpShown = tr("마크다운 문법") to HelpText.markdown() })
                     helpShown?.let { (t, body) -> ErrorDialog(body, t) { helpShown = null } }
                 }
                 "info" -> {
                     val ver = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?" }
-                    TextRow("버전", ver)
+                    TextRow(tr("버전"), ver)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     val upScope = rememberCoroutineScope()
                     var autoUp by remember { mutableStateOf(Updater.autoCheck(ctx)) }
                     LaunchedEffect(Unit) { Updater.check(ctx) }
                     Updater.available?.let { u ->
-                        TextRow("새 버전 ${u.version} 받아서 설치", if (Updater.busy) "진행 중" else "업데이트", onClick = { upScope.launch { Updater.updateNow(ctx) } })
+                        TextRow("새 버전 ${u.version} 받아서 설치", if (Updater.busy) tr("진행 중") else tr("업데이트"), onClick = { upScope.launch { Updater.updateNow(ctx) } })
                         Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp)) { UpdateProgress(MaterialTheme.colorScheme.outline) }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
-                    TextRow("업데이트 확인", Updater.checkedMsg.ifEmpty { "누르세요" }, onClick = { upScope.launch { Updater.check(ctx, force = true) } })
+                    TextRow(tr("업데이트 확인"), Updater.checkedMsg.ifEmpty { tr("누르세요") }, onClick = { upScope.launch { Updater.check(ctx, force = true) } })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SwitchRow("새 버전 자동 확인", "앱을 열 때 6시간마다 새 버전이 있는지 보고, 있으면 노트 목록 위에 알립니다", autoUp) { autoUp = it; Updater.setAutoCheck(ctx, it) }
+                    SwitchRow(tr("새 버전 자동 확인"), tr("앱을 열 때 6시간마다 새 버전이 있는지 보고, 있으면 노트 목록 위에 알립니다"), autoUp) { autoUp = it; Updater.setAutoCheck(ctx, it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    TextRow("컴퓨터 앱", "github.com/iamtalker/iamtalkernote")
+                    TextRow(tr("컴퓨터 앱"), "github.com/iamtalker/iamtalkernote")
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     var licShown by remember { mutableStateOf(false) }
-                    TextRow("오픈소스 라이선스", "보기", onClick = { licShown = true })
+                    TextRow(tr("오픈소스 라이선스"), tr("보기"), onClick = { licShown = true })
                     if (licShown) {
-                        val text = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.md").bufferedReader().use { it.readText() } }.getOrDefault("라이선스 파일을 찾을 수 없습니다.") }
-                        ErrorDialog(text, "오픈소스 라이선스") { licShown = false }
+                        val text = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.md").bufferedReader().use { it.readText() } }.getOrDefault(tr("라이선스 파일을 찾을 수 없습니다.")) }
+                        ErrorDialog(text, tr("오픈소스 라이선스")) { licShown = false }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    TextRow("노트 폴더", model.tree?.lastPathSegment?.substringAfter(':') ?: "-")
+                    TextRow(tr("노트 폴더"), model.tree?.lastPathSegment?.substringAfter(':') ?: "-")
                 }
             }
         }
@@ -304,14 +313,14 @@ private fun SyncControls(model: NotesModel) {
             again++
         }
     }
-    Text("동기화 방향", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
-    for ((d, label) in listOf("both" to "양방향", "pc2mobile" to "컴퓨터 → 폰 (받기만)", "mobile2pc" to "폰 → 컴퓨터 (보내기만)", "off" to "동기화 안 함"))
+    Text(tr("동기화 방향"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+    for ((d, label) in listOf("both" to tr("양방향"), "pc2mobile" to tr("컴퓨터 → 폰 (받기만)"), "mobile2pc" to tr("폰 → 컴퓨터 (보내기만)"), "off" to tr("동기화 안 함")))
         ChoiceRow(label, e.direction == d) { change(direction = d) }
-    Text("함께 맞출 것", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
-    for ((k, label, hint) in listOf(Triple("media", "미디어(그림·첨부)", "끄면 그림은 폰으로 오지 않습니다"), Triple("imported", "가져온 문서 요약", "폰 앱이 읽는 가져온 문서 파일"),
-        Triple("history", "변경 이력 (고급)", "파일이 아주 많습니다"), Triple("trash", "휴지통 (고급)", "지운 노트 보관본")))
+    Text(tr("함께 맞출 것"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+    for ((k, label, hint) in listOf(Triple("media", tr("미디어(그림·첨부)"), tr("끄면 그림은 폰으로 오지 않습니다")), Triple("imported", tr("가져온 문서 요약"), tr("폰 앱이 읽는 가져온 문서 파일")),
+        Triple("history", tr("변경 이력 (고급)"), tr("파일이 아주 많습니다")), Triple("trash", tr("휴지통 (고급)"), tr("지운 노트 보관본"))))
         SwitchRow(label, hint, e.include[k] == true) { change(key = k, on = it) }
-    Text("여기서 바꾸면 몇 초 안에 적용되고, 컴퓨터(0.6.3 이상)에도 반영됩니다. 양쪽에서 바꾸면 가장 최근에 바꾼 쪽이 이깁니다.",
+    Text(tr("여기서 바꾸면 몇 초 안에 적용되고, 컴퓨터(0.6.3 이상)에도 반영됩니다. 양쪽에서 바꾸면 가장 최근에 바꾼 쪽이 이깁니다."),
         fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }

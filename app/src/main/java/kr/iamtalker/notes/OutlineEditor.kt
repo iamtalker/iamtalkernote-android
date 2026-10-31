@@ -80,7 +80,7 @@ fun OutlineEditor(text: String, fontSize: Int, onChange: (String) -> Unit, modif
         if (zoom >= 0) {
             // 경로: 노트 › 조상 › …
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("노트", color = accent, fontSize = 14.sp, modifier = Modifier.clickable { zoom = -1 }.padding(end = 2.dp))
+                Text(tr("노트"), color = accent, fontSize = 14.sp, modifier = Modifier.clickable { zoom = -1 }.padding(end = 2.dp))
                 for (a in OutlineZoom.crumbs(lines, zoom)) {
                     Text("  ›  ", color = muted, fontSize = 14.sp)
                     val t = OutlineEdit.parse(lines[a])?.text.orEmpty()
@@ -145,7 +145,7 @@ fun OutlineEditor(text: String, fontSize: Int, onChange: (String) -> Unit, modif
                         }
                     }
                 }.padding(vertical = 14.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PlusIcon(accent); Text("  항목 추가", fontSize = 14.sp, color = accent)
+                    PlusIcon(accent); Text(tr("  항목 추가"), fontSize = 14.sp, color = accent)
                 }
                 Spacer(Modifier.height(60.dp))
             }
@@ -156,9 +156,9 @@ fun OutlineEditor(text: String, fontSize: Int, onChange: (String) -> Unit, modif
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Surface(tonalElevation = 3.dp) {
                 Row(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { safe { if (canOut) OutlineEdit.outdent(cur(), i)?.let { put(it) } } }) { Text("내어쓰기") }
-                    TextButton(onClick = { safe { OutlineEdit.indent(cur(), i)?.let { put(it) } } }) { Text("들여쓰기") }
-                    if (i != zoom) TextButton(onClick = { safe { val (n, f) = OutlineEdit.delete(cur(), i); put(n); focusIdx = -1; if (f >= 0) pending = f } }) { Text("삭제") }
+                    TextButton(onClick = { safe { if (canOut) OutlineEdit.outdent(cur(), i)?.let { put(it) } } }) { Text(tr("내어쓰기")) }
+                    TextButton(onClick = { safe { OutlineEdit.indent(cur(), i)?.let { put(it) } } }) { Text(tr("들여쓰기")) }
+                    if (i != zoom) TextButton(onClick = { safe { val (n, f) = OutlineEdit.delete(cur(), i); put(n); focusIdx = -1; if (f >= 0) pending = f } }) { Text(tr("삭제")) }
                 }
             }
         }

@@ -49,8 +49,8 @@ class SyncService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val nm = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "동기화", NotificationManager.IMPORTANCE_LOW))
-        val n = notice("컴퓨터와 노트를 맞추는 중입니다", 0, 0)
+        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, tr("동기화"), NotificationManager.IMPORTANCE_LOW))
+        val n = notice(tr("컴퓨터와 노트를 맞추는 중입니다"), 0, 0)
         ServiceCompat.startForeground(this, 1, n, if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
         if (job?.isActive != true) job = scope.launch { loop() }
         return START_STICKY
@@ -58,7 +58,7 @@ class SyncService : Service() {
 
     /** 작업표시줄 알림(누르면 설정 → 동기화). all>0 이면 진행 막대도 보인다 */
     private fun notice(text: String, have: Int, all: Int): Notification {
-        val b = Notification.Builder(this, CHANNEL).setSmallIcon(R.mipmap.ic_launcher).setContentTitle("iamtalkernote 동기화")
+        val b = Notification.Builder(this, CHANNEL).setSmallIcon(R.mipmap.ic_launcher).setContentTitle(tr("iamtalkernote 동기화"))
             .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text)).setOngoing(true).setOnlyAlertOnce(true)
             .setContentIntent(android.app.PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).putExtra(OPEN_SYNC, true)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
@@ -82,7 +82,7 @@ class SyncService : Service() {
                 if (!EmbeddedSync.alive()) EmbeddedSync.start(ctx)
                 val tree = prefs.getString("tree", null)?.let(Uri::parse)
                 val pc = prefs.getString("pcId", "").orEmpty()
-                EmbeddedSync.report = if (tree == null) ForkSync.Report(error = "노트 폴더를 먼저 고르세요")
+                EmbeddedSync.report = if (tree == null) ForkSync.Report(error = tr("노트 폴더를 먼저 고르세요"))
                 else ForkSync.tick(ctx, api, pc, tree)   // 단계별 가림은 이제 컴퓨터가 맡는다(폰의 긴 무시 목록이 느렸다)
                 fails = 0
                 // 2분에 한 번: 폰에 실제로 있는 글·그림 수를 세어 컴퓨터에 알린다(컴퓨터 화면의 진행 표시용)
@@ -131,7 +131,7 @@ class SyncService : Service() {
                     EmbeddedSync.note(ctx, "엔진이 1분 넘게 응답하지 않아 다시 시작합니다 (마지막 오류: $why)")
                     EmbeddedSync.stop(); fails = 0
                 }
-                EmbeddedSync.report = ForkSync.Report(error = if (EmbeddedSync.alive()) "동기화 엔진을 시작하는 중… ($why)" else why)
+                EmbeddedSync.report = ForkSync.Report(error = if (EmbeddedSync.alive()) trf("동기화 엔진을 시작하는 중… (%s)", why) else why)
             }
             delay(5000)
         }
@@ -166,10 +166,10 @@ object SyncNotice {
     fun text(connected: Boolean, error: String?, have: Int, all: Int, etaSec: Long): String {
         if (error != null) return "⚠ $error"
         val head = when {
-            all <= 0 -> if (connected) "컴퓨터와 노트를 맞추는 중입니다" else "컴퓨터와 연결 대기 중"
-            have >= all -> "동기화 완료 · 전체 %,d개".format(all)
-            else -> "동기화 %,d/%,d (%d%%)".format(have, all, (have.toLong() * 100 / all).toInt()) +
-                (if (etaSec > 0) " · ${Eta.text(etaSec)} 남음" else "") + (if (!connected) " · 연결 대기 중" else "")
+            all <= 0 -> if (connected) tr("컴퓨터와 노트를 맞추는 중입니다") else tr("컴퓨터와 연결 대기 중")
+            have >= all -> tr("동기화 완료 · 전체 %,d개").format(all)
+            else -> tr("동기화 %,d/%,d (%d%%)").format(have, all, (have.toLong() * 100 / all).toInt()) +
+                (if (etaSec > 0) " · ${Eta.text(etaSec)} 남음" else "") + (if (!connected) tr(" · 연결 대기 중") else "")
         }
         return head
     }

@@ -21,12 +21,12 @@ fun ErrorDialog(text: String, title: String? = null, onClose: () -> Unit) {
         onDismissRequest = onClose,
         title = title?.let { { Text(it) } },
         text = { SelectionContainer { Text(text, modifier = Modifier.verticalScroll(rememberScrollState())) } },
-        confirmButton = { TextButton(onClick = onClose) { Text("닫기") } },
+        confirmButton = { TextButton(onClick = onClose) { Text(tr("닫기")) } },
         dismissButton = {
             TextButton(onClick = {
-                (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("오류", text))
-                android.widget.Toast.makeText(ctx, "복사했습니다", android.widget.Toast.LENGTH_SHORT).show()
-            }) { Text("복사") }
+                (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(tr("오류"), text))
+                android.widget.Toast.makeText(ctx, tr("복사했습니다"), android.widget.Toast.LENGTH_SHORT).show()
+            }) { Text(tr("복사")) }
         }
     )
 }

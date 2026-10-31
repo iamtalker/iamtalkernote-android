@@ -105,8 +105,8 @@ object ForkSync {
         val m = e.message.orEmpty()
         return when {
             e is java.net.ConnectException || m.contains("failed to connect", true) || m.contains("ECONNREFUSED") || m.contains("Connection refused", true) ->
-                "Syncthing-Fork 가 실행 중이 아닙니다. Fork 를 열고 ‘FORCE START’(실행 조건 무시하고 시작)를 누른 뒤 다시 시도하세요."
-            e is java.net.SocketTimeoutException -> "Syncthing-Fork 가 응답하지 않습니다. Fork 가 켜져 있는지 확인하세요."
+                tr("Syncthing-Fork 가 실행 중이 아닙니다. Fork 를 열고 ‘FORCE START’(실행 조건 무시하고 시작)를 누른 뒤 다시 시도하세요.")
+            e is java.net.SocketTimeoutException -> tr("Syncthing-Fork 가 응답하지 않습니다. Fork 가 켜져 있는지 확인하세요.")
             m.isNotEmpty() -> m
             else -> e.javaClass.simpleName
         }
@@ -142,9 +142,9 @@ object ForkSync {
             val code = c.responseCode
             val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (code !in 200..299) throw IllegalStateException(
-                if (code == 403 && plain) "내장 동기화 엔진이 이 앱의 키를 받아 주지 않습니다. 동기화를 껐다 다시 켜 보세요."
-                else if (code == 403) "Fork 가 이 API 키를 받아 주지 않습니다. Fork 를 지웠다 다시 설치했다면 키가 새로 바뀌니, 새 Fork 에서 키를 다시 복사하세요."
-                else "Fork 응답 $code ${text.take(120)}")
+                if (code == 403 && plain) tr("내장 동기화 엔진이 이 앱의 키를 받아 주지 않습니다. 동기화를 껐다 다시 켜 보세요.")
+                else if (code == 403) tr("Fork 가 이 API 키를 받아 주지 않습니다. Fork 를 지웠다 다시 설치했다면 키가 새로 바뀌니, 새 Fork 에서 키를 다시 복사하세요.")
+                else trf("Fork 응답 %s %s", code, text.take(120)))
             return text
         }
 
@@ -299,7 +299,7 @@ object ForkSync {
         staleFolders(have.map { it.getString("id") }, vault).forEach { api.removeFolder(it) }
         val at = mar.optString("path").trimEnd('/', '\\')
         // 경로만 바꾸면 Syncthing 이 파일이 사라진 것으로 보고 삭제를 전할 수 있어 자동으로 바꾸지 않는다
-        return if (at != vaultPath.trimEnd('/')) "Fork 에 등록된 노트 폴더 경로($at)가 앱의 노트 폴더($vaultPath)와 다릅니다. Fork 에서 이 앱이 만든 폴더(ID 가 inn- 로 시작)를 지우고 다시 받으세요(폰의 파일은 그대로입니다)." else ""
+        return if (at != vaultPath.trimEnd('/')) trf("Fork 에 등록된 노트 폴더 경로(%s)가 앱의 노트 폴더(%s)와 다릅니다. Fork 에서 이 앱이 만든 폴더(ID 가 inn- 로 시작)를 지우고 다시 받으세요(폰의 파일은 그대로입니다).", at, vaultPath) else ""
     }
 
     private val etas = HashMap<String, Eta>()
@@ -323,7 +323,7 @@ object ForkSync {
 
     /** 5초마다 한 번: 컴퓨터가 보낸 공유 요청을 받고, 정책 파일이 생겼으면 방향(폴더 종류)을 맞추고, 상태를 모은다 */
     fun tick(ctx: Context, api: Api, pcId: String, tree: Uri, staged: Boolean = false): Report {
-        val vaultPath = treePath(tree) ?: return Report(error = "이 저장소의 실제 경로를 알 수 없습니다(노트 폴더를 내장 메모리나 SD 카드에서 고르세요)")
+        val vaultPath = treePath(tree) ?: return Report(error = tr("이 저장소의 실제 경로를 알 수 없습니다(노트 폴더를 내장 메모리나 SD 카드에서 고르세요)"))
         val me = api.myId()
         var accepted = 0
         var note = ""
@@ -336,7 +336,7 @@ object ForkSync {
         val simpleVault = if (policy?.optJSONObject("simple") != null) policy.optString("vault") else ""
         // Fork 에 이미 등록된 기기(컴퓨터 추가로 넣었거나 전에 연결한 기기)가 보낸 우리 폴더(inn-…)만 받는다. 컴퓨터 ID 를 정확히 안 넣었어도 된다
         val known = api.deviceIds().filter { it != me }.toSet()
-        if (known.isEmpty()) note = "Fork 에 컴퓨터가 아직 등록되지 않았습니다. 3단계에서 ‘컴퓨터 추가’를 누르세요."
+        if (known.isEmpty()) note = tr("Fork 에 컴퓨터가 아직 등록되지 않았습니다. 3단계에서 ‘컴퓨터 추가’를 누르세요.")
         else try {
             for ((fid, v) in api.pendingFolders()) {
                 if (!fid.startsWith(ID_PREFIX)) continue
@@ -349,7 +349,7 @@ object ForkSync {
                 accepted++
             }
         } catch (e: Exception) {
-            note = "컴퓨터가 보낸 폴더 목록을 읽지 못했습니다(Fork 버전이 오래됐을 수 있습니다): ${friendly(e)}"
+            note = trf("컴퓨터가 보낸 폴더 목록을 읽지 못했습니다(Fork 버전이 오래됐을 수 있습니다): %s", friendly(e))
         }
         // 정책 파일이 도착하면 폴더마다 방향을 맞춘다(처음엔 모두 양방향으로 받는다)
         policy?.let { pol ->
@@ -387,7 +387,7 @@ object ForkSync {
             val d = runCatching { api.folderDetail(id) }.getOrDefault(FolderLine("", "?", 0L, 0L))
             val rate = etas.getOrPut(id) { Eta() }.update(System.currentTimeMillis(), d.needBytes)
             val conn = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { c -> runCatching { api.connected(c) }.getOrDefault(false) }
-            if (kickIfStuck(api, id, d, conn, System.currentTimeMillis())) note = note.ifEmpty { "받기에 실패한 파일이 있어 다시 시도했습니다" }
+            if (kickIfStuck(api, id, d, conn, System.currentTimeMillis())) note = note.ifEmpty { tr("받기에 실패한 파일이 있어 다시 시도했습니다") }
             val errs = if (d.needFiles > 0) api.folderErrors(id) else emptyList()
             d.copy(label = it.optString("label"), rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
         }

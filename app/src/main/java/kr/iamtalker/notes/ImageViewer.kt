@@ -84,7 +84,7 @@ fun ImageViewer(uri: Uri, name: String, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             val b = bmp
-            if (b == null) Text("불러오는 중…", color = Color.White, modifier = Modifier.align(Alignment.Center))
+            if (b == null) Text(tr("불러오는 중…"), color = Color.White, modifier = Modifier.align(Alignment.Center))
             else Image(bitmap = b, contentDescription = name, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
                     .pointerInput(uri) {
@@ -96,14 +96,14 @@ fun ImageViewer(uri: Uri, name: String, onClose: () -> Unit) {
                     .pointerInput(uri) { detectTapGestures(onDoubleTap = { if (scale > 1f) { scale = 1f; off = Offset.Zero } else scale = 2.5f }) }
                     .graphicsLayer(scaleX = scale, scaleY = scale, translationX = off.x, translationY = off.y))
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp).align(Alignment.TopCenter)) {
-                TextButton(onClick = onClose) { Text("닫기", color = Color.White, fontSize = 16.sp) }
+                TextButton(onClick = onClose) { Text(tr("닫기"), color = Color.White, fontSize = 16.sp) }
                 Box(Modifier.weight(1f))
                 TextButton(onClick = {
                     scope.launch {
                         val ok = withContext(Dispatchers.IO) { ImageSave.save(ctx, uri, name) }
-                        Toast.makeText(ctx, if (ok) "사진 앱의 iamtalkernote 폴더에 저장했습니다" else "저장하지 못했습니다", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, if (ok) tr("사진 앱의 iamtalkernote 폴더에 저장했습니다") else tr("저장하지 못했습니다"), Toast.LENGTH_SHORT).show()
                     }
-                }) { Text("저장", color = Color.White, fontSize = 16.sp) }
+                }) { Text(tr("저장"), color = Color.White, fontSize = 16.sp) }
             }
         }
     }

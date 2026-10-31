@@ -52,11 +52,11 @@ fun FolderLines(r: ForkSync.Report) {
         val idleDone = f.state == "idle" && f.needBytes == 0L
         val done = idleDone && (!whole || ov!!.have >= ov.all)
         val s = when {
-            done -> "최신"
-            idleDone && whole -> "다음 범위 기다리는 중"
-            f.state == "idle" -> "대기 중"
-            f.state.startsWith("sync") -> "받는 중"
-            f.state.startsWith("scan") -> "확인 중"
+            done -> tr("최신")
+            idleDone && whole -> tr("다음 범위 기다리는 중")
+            f.state == "idle" -> tr("대기 중")
+            f.state.startsWith("sync") -> tr("받는 중")
+            f.state.startsWith("scan") -> tr("확인 중")
             else -> f.state
         }
         val got = (f.totalFiles - f.needFiles).coerceAtLeast(0)
@@ -67,11 +67,11 @@ fun FolderLines(r: ForkSync.Report) {
             }
             androidx.compose.material3.LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             val small = MaterialTheme.colorScheme.outline
-            if (whole) Text("전체 %,d개 중 받음 %,d개 · 남음 %,d개".format(ov!!.all, ov.have, (ov.all - ov.have).coerceAtLeast(0)), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
-            else Text("파일 전체 ${f.totalFiles}개 · 받음 ${got}개 · 남음 ${f.needFiles}개", fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
-            if (f.failed > 0) Text("받지 못한 파일 ${f.failed}개 (자동으로 다시 시도합니다): ${f.firstError.take(120)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
-            if (!idleDone) Text((if (whole) "지금 받는 범위 " else "") + "용량 ${Eta.size((f.totalBytes - f.needBytes).coerceAtLeast(0))} / ${Eta.size(f.totalBytes)}" +
-                (if (f.rate > 0) " · 속도 ${Eta.size(f.rate.toLong())}/초 · 남은 시간 ${Eta.text(Eta.seconds(f.needBytes, f.rate))}" else ""), fontSize = 12.5.sp, color = small)
+            if (whole) Text(tr("전체 %,d개 중 받음 %,d개 · 남음 %,d개").format(ov!!.all, ov.have, (ov.all - ov.have).coerceAtLeast(0)), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
+            else Text(trf("파일 전체 %s개 · 받음 %s개 · 남음 %s개", f.totalFiles, got, f.needFiles), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
+            if (f.failed > 0) Text(trf("받지 못한 파일 %s개 (자동으로 다시 시도합니다): %s", f.failed, f.firstError.take(120)), fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
+            if (!idleDone) Text((if (whole) tr("지금 받는 범위 ") else "") + "용량 ${Eta.size((f.totalBytes - f.needBytes).coerceAtLeast(0))} / ${Eta.size(f.totalBytes)}" +
+                (if (f.rate > 0) trf(" · 속도 %s/초 · 남은 시간 %s", Eta.size(f.rate.toLong()), Eta.text(Eta.seconds(f.needBytes, f.rate))) else ""), fontSize = 12.5.sp, color = small)
         }
     }
 }
@@ -109,14 +109,14 @@ fun EmbeddedWizard(model: NotesModel) {
             val r = withContext(Dispatchers.IO) { runCatching { EmbeddedSync.api(ctx).putDevice(id, "컴퓨터") } }
             if (r.isSuccess) {
                 pcId = id; prefs.edit().putString("pcId", id).apply()
-                note = "컴퓨터를 등록했습니다. 컴퓨터 앱의 ‘폰 연결하기’ 창이 열려 있으면 바로 연결됩니다."
-            } else note = "등록하지 못했습니다: ${r.exceptionOrNull()?.message}"
+                note = tr("컴퓨터를 등록했습니다. 컴퓨터 앱의 ‘폰 연결하기’ 창이 열려 있으면 바로 연결됩니다.")
+            } else note = trf("등록하지 못했습니다: %s", r.exceptionOrNull()?.message)
         }
     }
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
-        Text("연결 마법사", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
-        Text("이 앱에 동기화 엔진이 들어 있어 다른 앱을 깔거나 키를 복사할 필요가 없습니다.", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline,
+        Text(tr("연결 마법사"), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+        Text(tr("이 앱에 동기화 엔진이 들어 있어 다른 앱을 깔거나 키를 복사할 필요가 없습니다."), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
 
         // 맨 위 상태 카드: 켜짐/연결/진행 상황을 한눈에
@@ -124,47 +124,47 @@ fun EmbeddedWizard(model: NotesModel) {
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
             Column(Modifier.padding(12.dp)) {
                 val head = when {
-                    !on -> "○ 동기화 꺼짐"
-                    report == null -> "◌ 동기화 엔진 시작 중…"
+                    !on -> tr("○ 동기화 꺼짐")
+                    report == null -> tr("◌ 동기화 엔진 시작 중…")
                     report.error != null -> "⚠ " + report.error
-                    report.connected -> "● 컴퓨터와 연결됨"
-                    else -> "○ 연결 대기 중 (같은 와이파이인지, 컴퓨터 앱이 켜져 있는지 확인)"
+                    report.connected -> tr("● 컴퓨터와 연결됨")
+                    else -> tr("○ 연결 대기 중 (같은 와이파이인지, 컴퓨터 앱이 켜져 있는지 확인)")
                 }
-                Text("동기화 상태", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                Text(tr("동기화 상태"), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 Text(head, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
                 OverallProgress()
                 if (report != null && report.folders.isNotEmpty()) FolderLines(report)
-                else if (on && report != null && report.error == null) Text("아직 받을 폴더가 없습니다. 연결되면 컴퓨터가 보낸 노트 폴더가 여기에 나타납니다.", fontSize = 12.sp,
+                else if (on && report != null && report.error == null) Text(tr("아직 받을 폴더가 없습니다. 연결되면 컴퓨터가 보낸 노트 폴더가 여기에 나타납니다."), fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
             }
         }
 
-        Text("1. 권한과 동기화 켜기", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 10.dp))
-        Text("파일 접근과 배터리 제외가 ‘허용됨’이어야 화면이 꺼져도 계속 동기화됩니다. 알림은 선택입니다(꺼도 동기화는 됩니다).", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
-        PermRow("모든 파일 접근 (노트 폴더 읽고 쓰기)", allFiles, "허용") {
+        Text(tr("1. 권한과 동기화 켜기"), fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 10.dp))
+        Text(tr("파일 접근과 배터리 제외가 ‘허용됨’이어야 화면이 꺼져도 계속 동기화됩니다. 알림은 선택입니다(꺼도 동기화는 됩니다)."), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
+        PermRow(tr("모든 파일 접근 (노트 폴더 읽고 쓰기)"), allFiles, tr("허용")) {
             runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}"))) }
         }
-        PermRow("알림 표시 (선택)", notifOn, "허용", optional = true) {
+        PermRow(tr("알림 표시 (선택)"), notifOn, tr("허용"), optional = true) {
             // 안드로이드 13 이상은 처음 한 번만 묻는 창이 뜨고, 한 번 거절하면 창이 안 뜨므로 앱 알림 설정 화면으로 보낸다
             if (Build.VERSION.SDK_INT >= 33 && !askedNotif) { askedNotif = true; prefs.edit().putBoolean("askedNotif", true).apply(); notif.launch(Manifest.permission.POST_NOTIFICATIONS) }
             else runCatching { ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)) }
         }
-        PermRow("배터리 최적화 제외 (백그라운드에서 멈추지 않게)", battery, "제외하기") {
+        PermRow(tr("배터리 최적화 제외 (백그라운드에서 멈추지 않게)"), battery, tr("제외하기")) {
             runCatching { ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))) }
                 .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
         }
-        if (!battery) Text("삼성 폰은 설정 → 배터리 → 백그라운드 사용 제한에서 이 앱을 ‘절전 예외 앱’에 넣고, ‘사용하지 않는 앱 절전’도 끄세요.", fontSize = 12.sp,
+        if (!battery) Text(tr("삼성 폰은 설정 → 배터리 → 백그라운드 사용 제한에서 이 앱을 ‘절전 예외 앱’에 넣고, ‘사용하지 않는 앱 절전’도 끄세요."), fontSize = 12.sp,
             color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             Button(enabled = allFiles, onClick = {
                 if (on) { SyncService.stop(ctx); on = false } else { SyncService.start(ctx); on = true }
-            }) { Text(if (on) "동기화 끄기" else "동기화 켜기") }
-            Text(if (on) "  켜져 있음" else "  꺼져 있음", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+            }) { Text(if (on) tr("동기화 끄기") else tr("동기화 켜기")) }
+            Text(if (on) tr("  켜져 있음") else tr("  꺼져 있음"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
         }
         report?.error?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp)) }
 
-        Text("2. 컴퓨터와 연결", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 22.dp))
-        Text("컴퓨터 앱 → 옵션 → 동기화 → [폰 연결하기…]를 누르면 큐알이 뜹니다. 아래 버튼으로 찍으세요.", fontSize = 12.5.sp,
+        Text(tr("2. 컴퓨터와 연결"), fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 22.dp))
+        Text(tr("컴퓨터 앱 → 옵션 → 동기화 → [폰 연결하기…]를 누르면 큐알이 뜹니다. 아래 버튼으로 찍으세요."), fontSize = 12.5.sp,
             color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 4.dp))
         val ready = on && report != null && report.myId.isNotEmpty()
         Button(enabled = ready, onClick = {
@@ -172,37 +172,37 @@ fun EmbeddedWizard(model: NotesModel) {
             GmsBarcodeScanning.getClient(ctx, opts).startScan()
                 .addOnSuccessListener { b ->
                     val id = EmbeddedSync.parseDeviceId(b.rawValue.orEmpty())
-                    if (id != null) pair(id) else note = "동기화 큐알이 아닙니다. 컴퓨터의 [폰 연결하기…] 큐알을 찍어 주세요."
+                    if (id != null) pair(id) else note = tr("동기화 큐알이 아닙니다. 컴퓨터의 [폰 연결하기…] 큐알을 찍어 주세요.")
                 }
-                .addOnFailureListener { note = "큐알 읽기를 열지 못했습니다(${it.message}). 아래에 컴퓨터 기기 ID 를 직접 넣어도 됩니다." }
-        }) { Text("큐알 찍기") }
-        if (!ready) Text("먼저 1번에서 동기화를 켜세요(시작에 몇 초 걸립니다).", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
-        if (pcId.isNotEmpty()) Text("등록된 컴퓨터  ${pcId.take(7)}…  ·  " + if (report?.connected == true) "연결됨" else "연결 대기 중",
+                .addOnFailureListener { note = trf("큐알 읽기를 열지 못했습니다(%s). 아래에 컴퓨터 기기 ID 를 직접 넣어도 됩니다.", it.message) }
+        }) { Text(tr("큐알 찍기")) }
+        if (!ready) Text(tr("먼저 1번에서 동기화를 켜세요(시작에 몇 초 걸립니다)."), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
+        if (pcId.isNotEmpty()) Text("등록된 컴퓨터  ${pcId.take(7)}…  ·  " + if (report?.connected == true) tr("연결됨") else tr("연결 대기 중"),
             fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 6.dp))
-        OutlinedTextField(value = manual, onValueChange = { manual = it }, singleLine = true, label = { Text("큐알이 안 될 때: 컴퓨터 기기 ID") },
+        OutlinedTextField(value = manual, onValueChange = { manual = it }, singleLine = true, label = { Text(tr("큐알이 안 될 때: 컴퓨터 기기 ID")) },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
         OutlinedButton(enabled = ready && EmbeddedSync.parseDeviceId(manual) != null, onClick = { EmbeddedSync.parseDeviceId(manual)?.let { pair(it) } },
-            modifier = Modifier.padding(top = 4.dp)) { Text("직접 등록") }
+            modifier = Modifier.padding(top = 4.dp)) { Text(tr("직접 등록")) }
         if (note.isNotEmpty()) Text(note, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 6.dp))
 
-        Text("3. 폴더 받기", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 22.dp))
+        Text(tr("3. 폴더 받기"), fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 22.dp))
         report?.note?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 4.dp)) }
-        if (report == null || report.folders.isEmpty()) Text("연결되면 컴퓨터가 보낸 노트 폴더를 이 앱이 알아서 받습니다.", fontSize = 12.5.sp,
+        if (report == null || report.folders.isEmpty()) Text(tr("연결되면 컴퓨터가 보낸 노트 폴더를 이 앱이 알아서 받습니다."), fontSize = 12.5.sp,
             color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
         else FolderLines(report)
 
         var showLog by remember { mutableStateOf(false) }
         var logText by remember { mutableStateOf("") }
         LaunchedEffect(showLog) { while (showLog) { logText = withContext(Dispatchers.IO) { EmbeddedSync.logTail(ctx) }; delay(3000) } }
-        OutlinedButton(onClick = { showLog = !showLog }, modifier = Modifier.padding(top = 16.dp)) { Text(if (showLog) "엔진 로그 닫기" else "엔진 로그 보기 (문제 확인용)") }
+        OutlinedButton(onClick = { showLog = !showLog }, modifier = Modifier.padding(top = 16.dp)) { Text(if (showLog) tr("엔진 로그 닫기") else tr("엔진 로그 보기 (문제 확인용)")) }
         if (showLog) {
             val clip = androidx.compose.ui.platform.LocalClipboardManager.current
             OutlinedButton(onClick = {
                 clip.setText(androidx.compose.ui.text.AnnotatedString(EmbeddedSync.logTail(ctx, 200)))
-                android.widget.Toast.makeText(ctx, "로그를 복사했습니다", android.widget.Toast.LENGTH_SHORT).show()
-            }, modifier = Modifier.padding(top = 6.dp)) { Text("로그 복사 (최근 200줄)") }
+                android.widget.Toast.makeText(ctx, tr("로그를 복사했습니다"), android.widget.Toast.LENGTH_SHORT).show()
+            }, modifier = Modifier.padding(top = 6.dp)) { Text(tr("로그 복사 (최근 200줄)")) }
             androidx.compose.foundation.text.selection.SelectionContainer {
-                Text(logText.ifEmpty { "(로그가 아직 없습니다)" }, fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.outline,
+                Text(logText.ifEmpty { tr("(로그가 아직 없습니다)") }, fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 6.dp))
             }
         }
@@ -215,7 +215,7 @@ private fun PermRow(title: String, ok: Boolean, action: String, optional: Boolea
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Text((if (ok) "✓ " else if (optional) "– " else "✗ ") + title, fontSize = 14.sp, modifier = Modifier.weight(1f),
             color = if (ok || optional) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
-        if (!ok) OutlinedButton(onClick = onClick) { Text(action) } else Text("허용됨", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+        if (!ok) OutlinedButton(onClick = onClick) { Text(action) } else Text(tr("허용됨"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
     }
 }
 
@@ -238,6 +238,6 @@ private fun OverallProgress() {
             delay(30000)
         }
     }
-    if (o == null) Text(if (tried) "전체 진행을 셀 수 없습니다: 컴퓨터의 단계 목록(.sync/stages.json)이 아직 폰에 없습니다" else "전체 진행을 세는 중…", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 6.dp))
+    if (o == null) Text(if (tried) tr("전체 진행을 셀 수 없습니다: 컴퓨터의 단계 목록(.sync/stages.json)이 아직 폰에 없습니다") else tr("전체 진행을 세는 중…"), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 6.dp))
     o?.let { Text(it.text(), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp)) }
 }

@@ -19,10 +19,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class Sort(val label: String) {
-    RELEVANCE("관련도순"), DATE_DESC("수정 최근 순"), DATE_ASC("수정 오래된 순"), CREATED_DESC("생성 최근 순"), TITLE("제목 순")
+    RELEVANCE(tr("관련도순")), DATE_DESC(tr("수정 최근 순")), DATE_ASC(tr("수정 오래된 순")), CREATED_DESC(tr("생성 최근 순")), TITLE(tr("제목 순"))
 }
 
-enum class Period(val label: String, val days: Int) { ALL("전체 기간", 0), TODAY("오늘", 1), WEEK("7일", 7), MONTH("30일", 30), YEAR("1년", 365) }
+enum class Period(val label: String, val days: Int) { ALL(tr("전체 기간"), 0), TODAY(tr("오늘"), 1), WEEK(tr("7일"), 7), MONTH(tr("30일"), 30), YEAR(tr("1년"), 365) }
 
 /** 저장된 검색(스마트 폴더): 이름과 검색식. 이 폰에만 저장한다 */
 data class Saved(val name: String, val query: String)
@@ -238,7 +238,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     say("$label ${i + 1}/${targets.size}")
                 }
             }
-            message = "$label: ${ok}개 완료" + if (fail > 0) ", ${fail}개 실패 ($lastErr)" else ""
+            message = trf("%s: %s개 완료", label, ok) + if (fail > 0) trf(", %s개 실패 (%s)", fail, lastErr) else ""
             refresh()
         }
     }
@@ -337,10 +337,10 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         job?.cancel()
         job = viewModelScope.launch {
             loading = true
-            status = "노트를 찾는 중…"
+            status = tr("노트를 찾는 중…")
             try {
                 withContext(Dispatchers.IO) { runCatching { History.ensureLayout(getApplication(), t) } }   // 실패해도(읽기 전용 폴더 등) 노트 읽기는 계속한다
-                val scanned = withContext(Dispatchers.IO) { NoteRepo.scan(getApplication(), t) { n -> say("노트를 찾는 중… $n") } }
+                val scanned = withContext(Dispatchers.IO) { NoteRepo.scan(getApplication(), t) { n -> say(trf("노트를 찾는 중… %s", n)) } }
                 val have = withContext(Dispatchers.IO) { index().load() }
                 indexed = have.keys
                 publish(merge(scanned, have))
@@ -350,7 +350,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                status = "폴더를 읽지 못했습니다: ${e.javaClass.simpleName} ${e.message ?: ""}"
+                status = trf("폴더를 읽지 못했습니다: %s %s", e.javaClass.simpleName, e.message ?: "")
                 CrashLog.save(getApplication(), e)
                 loading = false
             }
@@ -372,7 +372,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) { Conflicts.resolve(getApplication(), tree!!, this@NotesModel, p, choice) }
             } catch (e: Exception) {
                 val raw = e.message ?: e.javaClass.simpleName
-                message = if (raw.contains("Missing file") || raw.contains("FileNotFound")) "이 충돌 복사본은 이미 없어졌습니다(동기화가 정리했을 수 있습니다). 목록을 새로 고칩니다.\n\n$raw" else raw
+                message = if (raw.contains("Missing file") || raw.contains("FileNotFound")) trf("이 충돌 복사본은 이미 없어졌습니다(동기화가 정리했을 수 있습니다). 목록을 새로 고칩니다.\n\n%s", raw) else raw
             }
             refresh()
         }
@@ -413,7 +413,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             counts[k] = (counts[k]?.first ?: t) to ((counts[k]?.second ?: 0) + 1)
         }
         tagCounts = counts.values.sortedByDescending { it.second }
-        status = "노트 ${list.size}개"
+        status = trf("노트 %s개", list.size)
         reapply()
     }
 
@@ -457,13 +457,13 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     db.endTransaction()
                 }
                 done += chunk.size
-                say("색인 중… $done/${todo.size}")
+                say(trf("색인 중… %s/%s", done, todo.size))
             }
             ix.removeMissing(scanned.map { it.uri.toString() }.toSet())
         }
         indexed = rows.keys
         if (todo.isNotEmpty()) publish(merge(scanned, rows))
-        else status = "노트 ${scanned.size}개"
+        else status = trf("노트 %s개", scanned.size)
     }
 
     private fun reapply() {
@@ -522,7 +522,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 if (pinned.isEmpty()) ordered else ordered.filter { it.uri.toString() in pinned } + ordered.filter { it.uri.toString() !in pinned }
             }
             shown = result
-            if (dq.bad.isNotEmpty()) status = "날짜를 읽을 수 없습니다: " + dq.bad.joinToString(", ") + "  (예: date:20200202-20221231)"
+            if (dq.bad.isNotEmpty()) status = tr("날짜를 읽을 수 없습니다: ") + dq.bad.joinToString(", ") + tr("  (예: date:20200202-20221231)")
         }
         reapplyDocs()
     }
@@ -594,7 +594,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
 
     fun moveNote(n: Note, dstFolder: String): Note {
         val id = folderIds[dstFolder] ?: if (dstFolder.isEmpty()) android.provider.DocumentsContract.getTreeDocumentId(tree!!)
-            else throw IllegalStateException("이 노트북으로는 옮길 수 없습니다")
+            else throw IllegalStateException(tr("이 노트북으로는 옮길 수 없습니다"))
         val r = NoteRepo.move(getApplication(), tree!!, n, dstFolder, id)
         runCatching {
             History.moveHistory(getApplication(), tree!!, History.relOf(n), History.relOf(r))
@@ -619,23 +619,61 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         if (intent == null || intent.action != Intent.ACTION_SEND || intent.type?.startsWith("text/") != true) return
         val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
         shared = (intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: "") to text
+        startClip(text)
     }
+
+    /** 공유받은 주소의 본문 가져오기 상태: 가져오는 중 / 끝(제목·마크다운) / 실패(안내 글). 주소 없는 글(선택한 글 공유)은 null */
+    class ClipState(val loading: Boolean, val title: String = "", val markdown: String = "", val error: String = "")
+    var clip by mutableStateOf<ClipState?>(null)
+    private var clipJob: kotlinx.coroutines.Job? = null
+
+    /** 글이 사실상 주소 하나(앞뒤 설명 200자 이하)일 때만 페이지를 가져온다 */
+    fun clipUrl(text: String): String? {
+        val m = Regex("https?://\\S+").find(text) ?: return null
+        return if (text.replace(m.value, "").trim().length <= 200) m.value else null
+    }
+
+    fun startClip(text: String) {
+        clipJob?.cancel()
+        val url = clipUrl(text)
+        if (url == null) { clip = null; return }
+        clip = ClipState(true)
+        clipJob = viewModelScope.launch {
+            clip = try {
+                val r = WebClip.fetch(getApplication(), url)
+                ClipState(false, r.title, r.markdown)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ClipState(false, error = if (e is kotlinx.coroutines.TimeoutCancellationException) tr("시간이 너무 오래 걸립니다") else (e.message ?: e.javaClass.simpleName))
+            }
+        }
+    }
+
+    /** 같은 주소를 전에 저장했으면 그 노트 제목(이 폰에서 저장한 것만 기억) */
+    fun clippedTitle(url: String): String? = getApplication<Application>().getSharedPreferences("settings", 0).getString("clip:$url", null)
+
+    fun cancelShared() { clipJob?.cancel(); clip = null; shared = null }
 
     /** 공유받은 글을 새 노트로 저장한다. 주소가 있으면 데스크톱 클리퍼처럼 머리말 source 에 적는다 */
     fun saveShared(title: String, text: String, folder: String) {
         val t = tree ?: return
+        val body = clip?.takeIf { !it.loading && it.markdown.isNotEmpty() }?.markdown
+        clipJob?.cancel(); clip = null
         shared = null
         viewModelScope.launch {
             try {
                 val note = withContext(Dispatchers.IO) {
                     val parent = if (folder.isEmpty()) null else folderIds[folder]
-                    val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else folder, title) ?: throw IllegalStateException("노트를 만들 수 없습니다")
+                    val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else folder, title) ?: throw IllegalStateException(tr("노트를 만들 수 없습니다"))
                     val url = Regex("https?://\\S+").find(text)?.value
-                    NoteRepo.write(getApplication(), n.uri, (if (url != null) "---\nsource: $url\n---\n\n" else "") + text.trim() + "\n")
+                    val content = if (body != null) ClipImages.localize(getApplication(), t, body, if (parent == null) "" else folder) else text.trim()
+                    NoteRepo.write(getApplication(), n.uri, (if (url != null) "---\nsource: $url\n---\n\n" else "") + content + "\n")
+                    if (url != null && body != null) getApplication<Application>().getSharedPreferences("settings", 0).edit().putString("clip:$url", n.title).apply()
                     History.journal(getApplication(), t, "create", History.relOf(n), detail = "공유로 받음")
                     n
                 }
-                message = "저장했습니다: ${note.title}"
+                message = trf("저장했습니다: %s", note.title)
                 refresh()
             } catch (e: Exception) {
                 message = e.message ?: e.javaClass.simpleName
@@ -655,13 +693,13 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             else -> "jpg"
         }
         val root = android.provider.DocumentsContract.getTreeDocumentId(t)
-        val res = History.dir(ctx, t, root, ".resources", true) ?: throw IllegalStateException(".resources 폴더를 만들 수 없습니다")
+        val res = History.dir(ctx, t, root, ".resources", true) ?: throw IllegalStateException(tr(".resources 폴더를 만들 수 없습니다"))
         val name = java.util.UUID.randomUUID().toString().replace("-", "") + "." + ext
         val dst = android.provider.DocumentsContract.createDocument(ctx.contentResolver, History.docUri(t, res), mime, name)
-            ?: throw IllegalStateException("그림 파일을 만들 수 없습니다")
+            ?: throw IllegalStateException(tr("그림 파일을 만들 수 없습니다"))
         ctx.contentResolver.openInputStream(uri)?.use { input ->
             ctx.contentResolver.openOutputStream(dst, "wt")?.use { out -> input.copyTo(out) }
-        } ?: throw IllegalStateException("그림을 읽을 수 없습니다")
+        } ?: throw IllegalStateException(tr("그림을 읽을 수 없습니다"))
         NoteRepo.clearCache()
         val depth = note.folder.split('/').count { it.isNotEmpty() }
         return "../".repeat(depth) + ".resources/" + name
@@ -670,7 +708,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     // ---- 태그 관리: 그 태그가 든 모든 노트에서 이름 바꾸기(이미 있는 이름이면 합치기)·삭제
     fun retagAll(old: String, new: String?) {
         selected = notes.filter { n -> n.tags.any { it.equals(old, ignoreCase = true) } }.map { it.uri.toString() }.toSet()
-        batch(if (new == null) "태그 삭제" else "태그 이름 변경") { n ->
+        batch(if (new == null) tr("태그 삭제") else tr("태그 이름 변경")) { n ->
             val ctx = getApplication<Application>()
             val text = NoteRepo.read(ctx, n.uri)
             val out = NoteText.retag(text, old, new)
@@ -699,7 +737,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     /** 노트들을 휴지통으로 보낸다(batch 와 같은 방식으로 결과를 알리고 목록을 새로 읽는다) */
     fun trashMany(list: List<Note>) {
         selected = list.map { it.uri.toString() }.toSet()
-        batch("휴지통") { n -> trashNote(n) }
+        batch(tr("휴지통")) { n -> trashNote(n) }
     }
 
     // ---- 노트북(폴더) 만들기·휴지통으로
@@ -711,7 +749,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val path = withContext(Dispatchers.IO) {
-                    val pid = if (parent.isEmpty()) rootDocId() else folderIds[parent] ?: throw IllegalStateException("상위 노트북을 찾을 수 없습니다")
+                    val pid = if (parent.isEmpty()) rootDocId() else folderIds[parent] ?: throw IllegalStateException(tr("상위 노트북을 찾을 수 없습니다"))
                     NoteRepo.createFolder(getApplication(), t, pid, name)
                     val clean = name.trim().replace(Regex("[\\\\/:*?\"<>|]"), "_")
                     val p = if (parent.isEmpty()) clean else "$parent/$clean"
@@ -732,14 +770,14 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val id = folderIds[path] ?: throw IllegalStateException("노트북을 찾을 수 없습니다")
+                    val id = folderIds[path] ?: throw IllegalStateException(tr("노트북을 찾을 수 없습니다"))
                     val parent = path.substringBeforeLast('/', "")
-                    val pid = if (parent.isEmpty()) rootDocId() else folderIds[parent] ?: throw IllegalStateException("상위 노트북을 찾을 수 없습니다")
+                    val pid = if (parent.isEmpty()) rootDocId() else folderIds[parent] ?: throw IllegalStateException(tr("상위 노트북을 찾을 수 없습니다"))
                     NoteRepo.trashFolder(getApplication(), t, path, id, pid)
                     History.journal(getApplication(), t, "delete", path, detail = "노트북 휴지통")
                 }
                 if (folder == path || folder?.startsWith("$path/") == true) folder = null
-                message = "‘${path.substringAfterLast('/')}’ 노트북을 휴지통으로 보냈습니다"
+                message = trf("‘%s’ 노트북을 휴지통으로 보냈습니다", path.substringAfterLast('/'))
                 refresh()
             } catch (e: Exception) {
                 message = e.message ?: e.javaClass.simpleName

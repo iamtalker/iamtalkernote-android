@@ -104,7 +104,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
         // 목록에는 있는데 파일은 이미 없어진 노트(동기화·삭제 직후)를 열어도 앱이 꺼지지 않게: 안내하고 목록으로 돌아간다
         val t = withContext(Dispatchers.IO) { runCatching { NoteRepo.read(ctx, start.uri) } }.getOrElse { e ->
             android.util.Log.w("iat", "노트를 읽지 못함", e)
-            android.widget.Toast.makeText(ctx, "이 노트는 이미 없어졌습니다. 목록을 새로 고칩니다", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(ctx, tr("이 노트는 이미 없어졌습니다. 목록을 새로 고칩니다"), android.widget.Toast.LENGTH_LONG).show()
             model.forget(start); model.refresh(); onClose()
             return@LaunchedEffect
         }
@@ -187,7 +187,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     BackHandler { leave() }
     fun share() {
         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, note.title).putExtra(Intent.EXTRA_TEXT, tfv?.text ?: "")
-        ctx.startActivity(Intent.createChooser(send, "공유"))
+        ctx.startActivity(Intent.createChooser(send, tr("공유")))
     }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusMgr = androidx.compose.ui.platform.LocalFocusManager.current
@@ -200,7 +200,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                     Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
                         val fg = MaterialTheme.colorScheme.onSurface
                         if (editing) TextButton(onClick = { save(); editing = false; keyboard?.hide(); focusMgr.clearFocus() }) {
-                            Text("완료", fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+                            Text(tr("완료"), fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
                         } else BarButton({ leave() }) { BackIcon(fg) }
                         val untitled = start.size == 0L && titleText.isBlank() && note.title.startsWith("제목 없음")
                         Text(if (untitled) "" else note.title, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = fg,
@@ -247,7 +247,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = findQ, onValueChange = { findQ = it; findIdx = -1 }, singleLine = true,
-                        placeholder = { Text("찾기") }, modifier = Modifier.weight(1f)
+                        placeholder = { Text(tr("찾기")) }, modifier = Modifier.weight(1f)
                     )
                     Text(if (findQ.isEmpty()) "" else if (hits.isEmpty()) " 0" else " ${findIdx.coerceAtLeast(0) + 1}/${hits.size}", fontSize = 12.sp)
                     BarButton({ goFind(-1) }) { ChevronIcon(false, MaterialTheme.colorScheme.onSurface) }
@@ -301,41 +301,41 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                     Text(label, fontSize = 16.sp, color = if (red) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.fillMaxWidth().clickable { sheet = false; onClick() }.padding(horizontal = 24.dp, vertical = 14.dp))
                 }
-                item("태그") { dialog = "tags" }
-                item("문서에서 찾기") { findOpen = true }
-                item("이전 버전") { dialog = "versions" }
-                if (isOutl) item(if (rawEdit) "✓ 원문으로 편집" else "원문으로 편집") { rawEdit = !rawEdit; editing = true }
-                item(if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가") { model.toggleFavorite(note) }
-                item(if (pinned) "고정 해제" else "맨 위에 고정") { model.togglePin(note) }
-                item("이름 바꾸기") { dialog = "rename" }
-                item("노트북으로 이동") { dialog = "move" }
+                item(tr("태그")) { dialog = "tags" }
+                item(tr("문서에서 찾기")) { findOpen = true }
+                item(tr("이전 버전")) { dialog = "versions" }
+                if (isOutl) item(if (rawEdit) tr("✓ 원문으로 편집") else tr("원문으로 편집")) { rawEdit = !rawEdit; editing = true }
+                item(if (isFav) tr("즐겨찾기 해제") else tr("즐겨찾기 추가")) { model.toggleFavorite(note) }
+                item(if (pinned) tr("고정 해제") else tr("맨 위에 고정")) { model.togglePin(note) }
+                item(tr("이름 바꾸기")) { dialog = "rename" }
+                item(tr("노트북으로 이동")) { dialog = "move" }
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                item("삭제", red = true) { dialog = "delete" }
+                item(tr("삭제"), red = true) { dialog = "delete" }
             }
         }
     }
     error?.let { msg ->
-        ErrorDialog(msg, "할 수 없습니다") { error = null }
+        ErrorDialog(msg, tr("할 수 없습니다")) { error = null }
     }
     when (dialog) {
         "rename" -> {
             var name by remember { mutableStateOf(note.title) }
             AlertDialog(
-                onDismissRequest = { dialog = "" }, title = { Text("이름 바꾸기") },
+                onDismissRequest = { dialog = "" }, title = { Text(tr("이름 바꾸기")) },
                 text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true) },
-                confirmButton = { TextButton(onClick = { dialog = ""; act { model.renameNote(note, name) } }) { Text("바꾸기") } },
-                dismissButton = { TextButton(onClick = { dialog = "" }) { Text("취소") } }
+                confirmButton = { TextButton(onClick = { dialog = ""; act { model.renameNote(note, name) } }) { Text(tr("바꾸기")) } },
+                dismissButton = { TextButton(onClick = { dialog = "" }) { Text(tr("취소")) } }
             )
         }
         "tags" -> {
             val cur = tfv?.text ?: ""
             var input by remember { mutableStateOf(NoteText.tagLineTags(cur).joinToString(" ")) }
             AlertDialog(
-                onDismissRequest = { dialog = "" }, title = { Text("태그 편집") },
+                onDismissRequest = { dialog = "" }, title = { Text(tr("태그 편집")) },
                 text = {
                     Column {
-                        OutlinedTextField(value = input, onValueChange = { input = it }, placeholder = { Text("공백·쉼표로 나눠 쓰기") })
-                        Text("글 맨 아래 ‘태그: #a #b’ 줄에 적힙니다. 본문에 직접 쓴 #태그나 머리말 tags 는 여기서 지울 수 없습니다.",
+                        OutlinedTextField(value = input, onValueChange = { input = it }, placeholder = { Text(tr("공백·쉼표로 나눠 쓰기")) })
+                        Text(tr("글 맨 아래 ‘태그: #a #b’ 줄에 적힙니다. 본문에 직접 쓴 #태그나 머리말 tags 는 여기서 지울 수 없습니다."),
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 8.dp))
                     }
                 },
@@ -344,9 +344,9 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         dialog = ""
                         val list = input.split(Regex("[\\s,]+")).filter { it.isNotBlank() }
                         tfv = TextFieldValue(NoteText.setTagLine(cur, list))
-                    }) { Text("저장") }
+                    }) { Text(tr("저장")) }
                 },
-                dismissButton = { TextButton(onClick = { dialog = "" }) { Text("취소") } }
+                dismissButton = { TextButton(onClick = { dialog = "" }) { Text(tr("취소")) } }
             )
         }
         "props" -> {
@@ -359,19 +359,19 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                 ?: Regex("(?m)^원본:\\s*<?(https?://[^\\s>]+)").find(t.take(2000))?.groupValues?.get(1) ?: ""
             fun d(ms: Long) = if (ms > 0) fmt.format(Date(ms)) else "-"
             AlertDialog(
-                onDismissRequest = { dialog = "" }, title = { Text("속성") },
+                onDismissRequest = { dialog = "" }, title = { Text(tr("속성")) },
                 text = {
                     Column {
-                        Text("위치: " + (note.folder.ifEmpty { "(맨 위)" }))
-                        Text("파일: ${note.name}")
-                        Text("갱신: " + d(if (info.updated > 0) info.updated else note.modified))
-                        Text("생성: " + d(created))
-                        if (url.isNotEmpty()) Text("주소: $url")
-                        Text("태그: " + (if (info.tags.isEmpty()) "-" else info.tags.joinToString(" ") { "#$it" }))
-                        Text("크기: %,d자".format(t.length))
+                        Text(tr("위치: ") + (note.folder.ifEmpty { tr("(맨 위)") }))
+                        Text(trf("파일: %s", note.name))
+                        Text(tr("갱신: ") + d(if (info.updated > 0) info.updated else note.modified))
+                        Text(tr("생성: ") + d(created))
+                        if (url.isNotEmpty()) Text(trf("주소: %s", url))
+                        Text(tr("태그: ") + (if (info.tags.isEmpty()) "-" else info.tags.joinToString(" ") { "#$it" }))
+                        Text(tr("크기: %,d자").format(t.length))
                     }
                 },
-                confirmButton = { TextButton(onClick = { dialog = "" }) { Text("닫기") } }
+                confirmButton = { TextButton(onClick = { dialog = "" }) { Text(tr("닫기")) } }
             )
         }
         "versions" -> {
@@ -385,14 +385,14 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
             }
             LaunchedEffect(pick) {
                 val p = pick ?: return@LaunchedEffect
-                preview = withContext(Dispatchers.IO) { runCatching { History.readVersion(ctx, tree, p) }.getOrDefault("(읽지 못했습니다)") }
+                preview = withContext(Dispatchers.IO) { runCatching { History.readVersion(ctx, tree, p) }.getOrDefault(tr("(읽지 못했습니다)")) }
             }
             AlertDialog(
-                onDismissRequest = { dialog = "" }, title = { Text("이전 버전") },
+                onDismissRequest = { dialog = "" }, title = { Text(tr("이전 버전")) },
                 text = {
                     val list = vs
                     if (list == null) CircularProgressIndicator()
-                    else if (list.isEmpty()) Text("저장된 이전 버전이 없습니다.")
+                    else if (list.isEmpty()) Text(tr("저장된 이전 버전이 없습니다."))
                     else Column {
                         LazyColumn(Modifier.weight(1f, fill = false)) {
                             items(list) { v ->
@@ -411,7 +411,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         dialog = ""
                         scope.launch {
                             val old = withContext(Dispatchers.IO) { runCatching { History.readVersion(ctx, tree, p) }.getOrNull() }
-                            if (old == null) { error = "버전을 읽지 못했습니다"; return@launch }
+                            if (old == null) { error = tr("버전을 읽지 못했습니다"); return@launch }
                             save()
                             // 지금 내용은 새 버전으로 남기고(다시 돌아올 수 있게), 고른 버전으로 바꾼다
                             val cur = tfv?.text ?: ""
@@ -419,29 +419,29 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                             tfv = TextFieldValue(old)
                             firstSave = false
                         }
-                    }) { Text("이 버전으로 되돌리기") }
+                    }) { Text(tr("이 버전으로 되돌리기")) }
                 },
-                dismissButton = { TextButton(onClick = { dialog = "" }) { Text("닫기") } }
+                dismissButton = { TextButton(onClick = { dialog = "" }) { Text(tr("닫기")) } }
             )
         }
         "move" -> AlertDialog(
-            onDismissRequest = { dialog = "" }, title = { Text("노트북으로 이동") },
+            onDismissRequest = { dialog = "" }, title = { Text(tr("노트북으로 이동")) },
             text = {
                 LazyColumn {
                     items(listOf("") + model.folders) { f ->
-                        Text(if (f.isEmpty()) "(맨 위)" else "  ".repeat(f.count { it == '/' }) + f.substringAfterLast('/'),
+                        Text(if (f.isEmpty()) tr("(맨 위)") else "  ".repeat(f.count { it == '/' }) + f.substringAfterLast('/'),
                             modifier = Modifier.fillMaxWidth().clickable { dialog = ""; act { model.moveNote(note, f) } }.padding(vertical = 10.dp),
                             color = if (f == note.folder) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                     }
                 }
             },
-            confirmButton = {}, dismissButton = { TextButton(onClick = { dialog = "" }) { Text("취소") } }
+            confirmButton = {}, dismissButton = { TextButton(onClick = { dialog = "" }) { Text(tr("취소")) } }
         )
         "delete" -> AlertDialog(
-            onDismissRequest = { dialog = "" }, title = { Text("휴지통으로 보낼까요?") },
-            text = { Text("‘${note.title}’ 을 휴지통(.trash)으로 옮깁니다. 컴퓨터의 iamtalkernote 에서 복원할 수 있습니다.") },
-            confirmButton = { TextButton(onClick = { dialog = ""; act { model.trashNote(note); null } }) { Text("휴지통으로") } },
-            dismissButton = { TextButton(onClick = { dialog = "" }) { Text("취소") } }
+            onDismissRequest = { dialog = "" }, title = { Text(tr("휴지통으로 보낼까요?")) },
+            text = { Text(trf("‘%s’ 을 휴지통(.trash)으로 옮깁니다. 컴퓨터의 iamtalkernote 에서 복원할 수 있습니다.", note.title)) },
+            confirmButton = { TextButton(onClick = { dialog = ""; act { model.trashNote(note); null } }) { Text(tr("휴지통으로")) } },
+            dismissButton = { TextButton(onClick = { dialog = "" }) { Text(tr("취소")) } }
         )
     }
 }

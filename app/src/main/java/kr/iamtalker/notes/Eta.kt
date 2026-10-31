@@ -20,11 +20,11 @@ class Eta(private val windowMs: Long = 90_000, private val minSpanMs: Long = 15_
         fun seconds(needBytes: Long, rate: Double): Long = if (needBytes <= 0L) 0L else if (rate <= 0.0) -1L else (needBytes / rate).toLong()
 
         fun text(sec: Long): String = when {
-            sec < 0 -> "계산 중"
-            sec < 60 -> "1분 미만"
-            sec < 3600 -> "약 ${sec / 60}분"
-            sec < 86400 -> "약 ${sec / 3600}시간 ${sec % 3600 / 60}분"
-            else -> "약 ${sec / 86400}일 ${sec % 86400 / 3600}시간"
+            sec < 0 -> tr("계산 중")
+            sec < 60 -> tr("1분 미만")
+            sec < 3600 -> trf("약 %s분", sec / 60)
+            sec < 86400 -> trf("약 %s시간 %s분", sec / 3600, sec % 3600 / 60)
+            else -> trf("약 %s일 %s시간", sec / 86400, sec % 86400 / 3600)
         }
 
         fun size(b: Long): String = when {
