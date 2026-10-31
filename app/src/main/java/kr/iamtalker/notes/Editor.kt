@@ -78,7 +78,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     var editing by remember { mutableStateOf(start.size == 0L || model.openEditing) }   // 새 노트는 바로 편집, 기존 노트는 보기부터
     var dialog by remember { mutableStateOf("") }                   // rename / move / delete / props / tags
     var error by remember { mutableStateOf<String?>(null) }
-    val isOutl = model.outliner || note.folder == "아웃라이너" || note.folder.startsWith("아웃라이너/")
+    val isOutl = note.folder == "아웃라이너" || note.folder.startsWith("아웃라이너/")   // PC 와 같게: 아웃라이너 폴더의 노트만
     var rawEdit by remember { mutableStateOf(false) }                // 아웃라이너 노트를 항목 편집기 대신 원문으로 고치기
     var sheet by remember { mutableStateOf(false) }                 // ⋮ 메뉴(아래에서 올라오는 시트)
     var findOpen by remember { mutableStateOf(false) }
@@ -282,7 +282,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         },
                         onNoteLink = { title -> save(); onOpenTitle(title) },
                         cacheKey = note.uri.toString(),
-                        outliner = model.outliner || note.folder == "아웃라이너" || note.folder.startsWith("아웃라이너/"),
+                        outliner = isOutl,
                         onImage = { src -> if (!(src.startsWith("http") || src.startsWith(":/"))) viewing = src }
                     )
                     viewing?.let { src ->
@@ -304,7 +304,6 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                 item("태그") { dialog = "tags" }
                 item("문서에서 찾기") { findOpen = true }
                 item("이전 버전") { dialog = "versions" }
-                item(if (model.outliner) "✓ 아웃라이너 보기" else "아웃라이너 보기") { model.changeOutliner(!model.outliner) }
                 if (isOutl) item(if (rawEdit) "✓ 원문으로 편집" else "원문으로 편집") { rawEdit = !rawEdit; editing = true }
                 item(if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가") { model.toggleFavorite(note) }
                 item(if (pinned) "고정 해제" else "맨 위에 고정") { model.togglePin(note) }

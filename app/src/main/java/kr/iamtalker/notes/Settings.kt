@@ -141,7 +141,7 @@ private fun readPolicy(ctx: android.content.Context, tree: android.net.Uri): Lis
 fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, onBack: () -> Unit, onTool: (String) -> Unit, onPick: () -> Unit) {
     BackHandler { if (page.isEmpty()) onBack() else onPage("") }
     val ctx = LocalContext.current
-    val titles = mapOf("sync" to "동기화", "theme" to "테마", "general" to "일반", "editor" to "에디터", "tools" to "도구", "info" to "정보")
+    val titles = mapOf("sync" to "동기화", "theme" to "테마", "general" to "일반", "editor" to "에디터", "tools" to "도구", "help" to "도움말", "info" to "정보")
     Scaffold(topBar = {
         Column {
             Box(Modifier.fillMaxWidth().height(56.dp).background(MaterialTheme.colorScheme.surface)) {
@@ -163,6 +163,7 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     Gap()
                     SettingsRow(Orange, "도구" + if (model.conflicts.isEmpty()) "" else " (충돌 ${model.conflicts.size})", { onPage("tools") }) { GlyphIcon("tools") }
                     Gap()
+                    SettingsRow(Teal, "도움말", { onPage("help") }) { Text("?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
                     SettingsRow(Teal, "정보", { onPage("info") }) { Text("i", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
                 }
                 "theme" -> {
@@ -224,6 +225,15 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     Text("폴더 경로(폰의 Syncthing-Fork): 노트 폴더, 그 안의 .resources(미디어), .history, .trash, .imported 는 앱이 자동으로 만들어 둡니다.",
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
                 }
+                "help" -> {
+                    var helpShown by remember { mutableStateOf<Pair<String, String>?>(null) }
+                    TextRow("사용 설명서", "열기", onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.MANUAL_URL))) } })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    TextRow("검색 문법", onClick = { helpShown = "검색 문법" to HelpText.SEARCH })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    TextRow("마크다운 문법", onClick = { helpShown = "마크다운 문법" to HelpText.MARKDOWN })
+                    helpShown?.let { (t, body) -> ErrorDialog(body, t) { helpShown = null } }
+                }
                 "info" -> {
                     val ver = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?" }
                     TextRow("버전", ver)
@@ -241,8 +251,6 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     SwitchRow("새 버전 자동 확인", "앱을 열 때 6시간마다 새 버전이 있는지 보고, 있으면 노트 목록 위에 알립니다", autoUp) { autoUp = it; Updater.setAutoCheck(ctx, it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("컴퓨터 앱", "github.com/iamtalker/iamtalkernote")
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    TextRow("사용 설명서", "열기", onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.MANUAL_URL))) } })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("노트 폴더", model.tree?.lastPathSegment?.substringAfter(':') ?: "-")
                 }
