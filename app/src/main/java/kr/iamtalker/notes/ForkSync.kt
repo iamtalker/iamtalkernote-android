@@ -180,9 +180,9 @@ object ForkSync {
             return (0 until a.length()).map { a.getJSONObject(it) }
         }
 
-        fun acceptFolder(id: String, label: String, path: String, type: String, deviceIds: List<String>) {
+        fun acceptFolder(id: String, label: String, path: String, type: String, deviceIds: List<String>, paused: Boolean = false) {
             val f = JSONObject(call("/rest/config/defaults/folder"))
-            f.put("id", id).put("label", label).put("path", path).put("type", type).put("paused", false)
+            f.put("id", id).put("label", label).put("path", path).put("type", type).put("paused", paused)
             f.put("devices", JSONArray().also { arr -> deviceIds.forEach { arr.put(JSONObject().put("deviceID", it)) } })
             call("/rest/config/folders/$id", "PUT", f)
         }
@@ -199,6 +199,13 @@ object ForkSync {
         /** Fork 의 폴더 설정만 지운다(폰의 파일은 그대로) */
         fun removeFolder(id: String) {
             call("/rest/config/folders/$id", "DELETE")
+        }
+
+        /** 멈춰 둔 폴더를 다시 시작한다 */
+        fun resume(id: String) {
+            val f = folders().firstOrNull { it.getString("id") == id } ?: return
+            f.put("paused", false)
+            call("/rest/config/folders/$id", "PUT", f)
         }
 
         fun setFolderType(folder: JSONObject, type: String) {
@@ -225,11 +232,23 @@ object ForkSync {
     }
 
     /** 새 방식 정책일 때의 뒷정리. 돌려주는 값: 화면에 알릴 말(없으면 빈 글) */
-    private fun simpleNote(api: Api, vault: String, sm: JSONObject, vaultPath: String): String {
+    private fun simpleNote(ctx: Context, api: Api, vault: String, sm: JSONObject, vaultPath: String, staged: Boolean): String {
         val have = api.folders()
         val mar = have.firstOrNull { it.getString("id") == folderId(vault, "markdown", "markdown") } ?: return ""   // 아직 못 받았으면 다음 확인 때
         val id = mar.getString("id")
-        val want = ignoreLines(sm)
+        var want = ignoreLines(sm)
+        if (staged) {   // 최근부터 단계별로: 컴퓨터가 만든 단계 목록으로 아직 받을 차례가 아닌 파일을 가린다. 목록이 오기 전에는 전부 가린다
+            val tiers = runCatching { Stages.parse(java.io.File(vaultPath, Stages.FILE).readText()) }.getOrNull()
+            if (tiers == null) want = Stages.GATE
+            else {
+                val prefs = ctx.getSharedPreferences("settings", 0)
+                var rel = prefs.getInt("stagesReleased", 1)
+                val st = runCatching { api.folderStatus(id) }.getOrNull()
+                if (st != null) rel = Stages.nextReleased(rel, tiers.size, st.first, st.second)
+                prefs.edit().putInt("stagesReleased", rel).apply()
+                want = want + Stages.hidden(tiers, rel)
+            }
+        }
         if (api.ignores(id) != want) api.setIgnores(id, want)
         staleFolders(have.map { it.getString("id") }, vault).forEach { api.removeFolder(it) }
         val at = mar.optString("path").trimEnd('/', '\\')
@@ -242,7 +261,7 @@ object ForkSync {
                       val note: String = "", val error: String? = null)
 
     /** 5초마다 한 번: 컴퓨터가 보낸 공유 요청을 받고, 정책 파일이 생겼으면 방향(폴더 종류)을 맞추고, 상태를 모은다 */
-    fun tick(ctx: Context, api: Api, pcId: String, tree: Uri): Report {
+    fun tick(ctx: Context, api: Api, pcId: String, tree: Uri, staged: Boolean = false): Report {
         val vaultPath = treePath(tree) ?: return Report(error = "이 저장소의 실제 경로를 알 수 없습니다(노트 폴더를 내장 메모리나 SD 카드에서 고르세요)")
         val me = api.myId()
         var accepted = 0
@@ -259,7 +278,9 @@ object ForkSync {
                 if (simpleVault.isNotEmpty() && fid in staleFolders(listOf(fid), simpleVault)) continue
                 val from = v.second.filter { it in known }
                 if (from.isEmpty()) continue
-                api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first), "sendreceive", listOf(me) + from)
+                val gate = staged && kindOf(fid) == "mar"   // 노트 폴더는 멈춘 채로 받아 무시 목록(전부 가림)부터 걸고 시작한다
+                api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first), "sendreceive", listOf(me) + from, paused = gate)
+                if (gate) { api.setIgnores(fid, Stages.GATE); api.resume(fid) }
                 accepted++
             }
         } catch (e: Exception) {
@@ -278,7 +299,12 @@ object ForkSync {
                     if (f.optString("type") != want) api.setFolderType(f, want)
                 }
                 // 새 방식(노트 폴더 하나·방향 하나): 제외 목록을 컴퓨터와 같게 하고, 쓸 일 없어진 옛 폴더를 정리한다
-                pol.optJSONObject("simple")?.let { sm -> simpleNote(api, vault, sm, vaultPath).takeIf { it.isNotEmpty() }?.let { note = it } }
+                pol.optJSONObject("simple")?.let { sm -> simpleNote(ctx, api, vault, sm, vaultPath, staged).takeIf { it.isNotEmpty() }?.let { note = it } }
+                // 옛 방식 정책이면 단계별로 받을 일이 없으니, 받기 전에 걸어 둔 '전부 가림'을 푼다
+                if (staged && pol.optJSONObject("simple") == null) {
+                    val mid = folderId(vault, "markdown", "markdown")
+                    if (have.containsKey(mid) && api.ignores(mid) == Stages.GATE) api.setIgnores(mid, emptyList())
+                }
             }
         }
         val lines = api.folders().filter { it.getString("id").startsWith(ID_PREFIX) }.map {
