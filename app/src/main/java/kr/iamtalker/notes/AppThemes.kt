@@ -17,8 +17,6 @@ object AppThemes {
     val all: Map<String, Palette> = linkedMapOf(
         "라이트 보라" to lightBase,
         "라이트 파랑" to Palette(false, 0xFF2563EB, lightBase.bg, lightBase.panel, lightBase.line, lightBase.text, lightBase.muted, lightBase.sub),
-        "라이트 초록" to Palette(false, 0xFF059669, lightBase.bg, lightBase.panel, lightBase.line, lightBase.text, lightBase.muted, lightBase.sub),
-        "라이트 분홍" to Palette(false, 0xFFDB2777, lightBase.bg, lightBase.panel, lightBase.line, lightBase.text, lightBase.muted, lightBase.sub),
         "세피아" to Palette(false, 0xFFB45309, 0xFFFBF5E9, 0xFFF3EAD8, 0xFFE4D7BD, 0xFF3B2F20, 0xFF8C7B62, 0xFF5D4E3A),
         "다크 보라" to darkBase,
         "다크 파랑" to Palette(true, 0xFF60A5FA, darkBase.bg, darkBase.panel, darkBase.line, darkBase.text, darkBase.muted, darkBase.sub),
@@ -26,8 +24,16 @@ object AppThemes {
 
     fun names(): List<String> = listOf(SYSTEM) + all.keys
 
+    /** 강조색 직접 고르기용 팔레트(바탕은 고른 테마 그대로, 강조색만 바꾼다) */
+    val accents: List<Long> = listOf(0xFF2563EB, 0xFF0EA5E9, 0xFF059669, 0xFF65A30D, 0xFFD97706, 0xFFDC2626, 0xFFDB2777, 0xFF7C3AED, 0xFF475569)
+
     /** 이름 → (색 구성, 어두운 테마인가). 시스템이면 예전처럼 파랑 밝게/어둡게 */
-    fun scheme(name: String, systemDark: Boolean): Pair<ColorScheme, Boolean> {
+    fun scheme(name: String, systemDark: Boolean, accent: Long? = null): Pair<ColorScheme, Boolean> {
+        val (cs, dark) = base(name, systemDark)
+        return (if (accent != null) cs.copy(primary = Color(accent)) else cs) to dark
+    }
+
+    private fun base(name: String, systemDark: Boolean): Pair<ColorScheme, Boolean> {
         if (name == SYSTEM || name !in all) return if (systemDark) {
             darkColorScheme(primary = Color(0xFF5AAEF0), background = Color(0xFF15181C), surface = Color(0xFF15181C), surfaceVariant = Color(0xFF22262B),
                 outline = Color(0xFF8C939B), outlineVariant = Color(0xFF30353B), onSurface = Color(0xFFE6E8EB)) to true

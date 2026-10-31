@@ -1,6 +1,8 @@
 package kr.iamtalker.notes
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -164,6 +166,19 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                 }
                 "theme" -> {
                     for (name in AppThemes.names()) ThemeRow(name, model.themeName == name) { model.changeTheme(name) }
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    Text("직접 고르기 (강조색)", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 10.dp))
+                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        for (rowColors in AppThemes.accents.chunked(5)) Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            for (c in rowColors) {
+                                val on = model.themeAccent == c
+                                Box(Modifier.size(34.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(c))
+                                    .then(if (on) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape) else Modifier)
+                                    .clickable { model.changeAccent(c) })
+                            }
+                        }
+                    }
+                    if (model.themeAccent != null) TextRow("테마 기본색으로", onClick = { model.changeAccent(null) })
                 }
                 "general" -> {
                     SwitchRow("앱으로 돌아올 때 자동 새로고침", "동기화로 바뀐 노트를 마지막으로 읽은 지 1분이 지났으면 다시 읽습니다", model.autoRefresh) { model.changeAutoRefresh(it) }

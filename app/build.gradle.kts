@@ -11,8 +11,8 @@ android {
         applicationId = "kr.iamtalker.notes"
         minSdk = 26
         targetSdk = 34
-        versionCode = 37
-        versionName = "1.4.15"
+        versionCode = 38
+        versionName = "1.4.16"
     }
     buildTypes {
         release {

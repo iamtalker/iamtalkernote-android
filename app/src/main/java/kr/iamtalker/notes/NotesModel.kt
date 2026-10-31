@@ -273,6 +273,9 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         private set
     var autoRefresh by mutableStateOf(prefs.getBoolean("autoRefresh", true))
         private set
+    /** 직접 고른 강조색(없으면 테마 기본색) */
+    var themeAccent by mutableStateOf(if (prefs.contains("themeAccent")) prefs.getLong("themeAccent", 0) else null)
+    fun changeAccent(c: Long?) { themeAccent = c; prefs.edit().apply { if (c == null) remove("themeAccent") else putLong("themeAccent", c) }.apply() }
     fun changeTheme(name: String) { themeName = name; prefs.edit().putString("themeName", name).apply() }
     fun changeOpenEditing(b: Boolean) { openEditing = b; prefs.edit().putBoolean("openEditing", b).apply() }
     fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
