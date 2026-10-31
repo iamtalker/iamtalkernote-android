@@ -486,7 +486,7 @@ fun App(model: NotesModel) {
                     HorizontalDivider(color = line)
                     Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                         BarButton({ searching = true }) { SearchIcon(MaterialTheme.colorScheme.outline) }
-                        BarButton({ screen = "planner" }) { CalendarIcon() }
+                        BarButton({ listDialog = "sort" }) { SortIcon(MaterialTheme.colorScheme.outline) }
                         BarButton({ moreOpen = true }) { HDotsIcon() }
                     }
                 }
@@ -570,8 +570,8 @@ fun App(model: NotesModel) {
             }
         }
         if (moreOpen) MoreMenu(
-            onDismiss = { moreOpen = false }, dividerBefore = 4,
-            items = listOf("새 노트북" to { notebookDialog = true }, "노트 필터" to { listDialog = "filter" }, "노트 정렬" to { listDialog = "sort" },
+            onDismiss = { moreOpen = false }, dividerBefore = 3,
+            items = listOf("새 노트북" to { notebookDialog = true }, "노트 필터" to { listDialog = "filter" },
                 "노트 선택" to { selectMode = true }, "설정" to { screen = "settings" })
         )
         }

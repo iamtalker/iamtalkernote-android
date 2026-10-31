@@ -106,18 +106,6 @@ fun BookIcon(c: Color = Gray) {
     }
 }
 
-/** 아래 막대의 달력·할일 */
-@Composable
-fun CalendarIcon(c: Color = Gray) {
-    Canvas(Modifier.size(26.dp)) {
-        val w = 2.0.dp.toPx(); val s = size.width
-        drawRoundRect(c, Offset(s * .14f, s * .22f), Size(s * .72f, s * .64f), CornerRadius(s * .08f), style = Stroke(w))
-        drawLine(c, Offset(s * .14f, s * .42f), Offset(s * .86f, s * .42f), strokeWidth = w)
-        drawLine(c, Offset(s * .34f, s * .12f), Offset(s * .34f, s * .30f), strokeWidth = w, cap = StrokeCap.Round)
-        drawLine(c, Offset(s * .66f, s * .12f), Offset(s * .66f, s * .30f), strokeWidth = w, cap = StrokeCap.Round)
-    }
-}
-
 /** 가로 점 세 개 */
 @Composable
 fun HDotsIcon(c: Color = Gray) {
