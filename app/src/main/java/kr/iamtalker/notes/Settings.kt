@@ -188,6 +188,18 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     val ver = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?" }
                     TextRow("버전", ver)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    val upScope = rememberCoroutineScope()
+                    var autoUp by remember { mutableStateOf(Updater.autoCheck(ctx)) }
+                    LaunchedEffect(Unit) { Updater.check(ctx) }
+                    Updater.available?.let { u ->
+                        TextRow("새 버전 ${u.version} 받아서 설치", if (Updater.busy) "진행 중" else "업데이트", onClick = { upScope.launch { Updater.updateNow(ctx) } })
+                        if (Updater.status.isNotEmpty()) Text(Updater.status, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                    TextRow("업데이트 확인", Updater.checkedMsg.ifEmpty { "누르세요" }, onClick = { upScope.launch { Updater.check(ctx, force = true) } })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SwitchRow("새 버전 자동 확인", "앱을 열 때 6시간마다 새 버전이 있는지 보고, 있으면 노트 목록 위에 알립니다", autoUp) { autoUp = it; Updater.setAutoCheck(ctx, it) }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("컴퓨터 앱", "github.com/iamtalker/iamtalkernote")
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("사용 설명서", "열기", onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.MANUAL_URL))) } })

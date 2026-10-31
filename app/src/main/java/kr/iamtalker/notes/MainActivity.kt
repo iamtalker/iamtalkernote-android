@@ -293,6 +293,7 @@ fun App(model: NotesModel) {
     var settingsPage by remember { mutableStateOf("") }
     fun closeTool() { screen = if (fromSettings) "settings" else ""; fromSettings = false }
     var openDoc by remember { mutableStateOf<Doc?>(null) }
+    LaunchedEffect(Unit) { Updater.check(ctx) }   // 새 버전 자동 확인(6시간에 한 번)
     LaunchedEffect(model.openSync) { if (model.openSync) { model.openSync = false; openDoc = null; open = null; fromSettings = false; settingsPage = "sync"; screen = "settings" } }
     openDoc?.let { dd -> DocScreen(dd, model, onBack = { openDoc = null }); return }
     if (screen == "trash") { TrashScreen(model, onBack = { closeTool(); model.refresh() }); return }
@@ -520,6 +521,7 @@ fun App(model: NotesModel) {
                     Text(model.status, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 }
                 if (model.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                UpdateBanner()
                 if (model.conflicts.isNotEmpty()) {
                     Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth().clickable { screen = "conflicts" }) {
                         Text("동기화 충돌 ${model.conflicts.size}개 — 눌러서 해결", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 13.sp)
