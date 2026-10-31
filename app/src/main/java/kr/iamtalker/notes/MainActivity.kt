@@ -297,6 +297,7 @@ fun App(model: NotesModel) {
     LaunchedEffect(Unit) {
         Updater.justUpdated(ctx)?.let { android.widget.Toast.makeText(ctx, "iamtalkernote 가 $it 로 업데이트되었습니다", android.widget.Toast.LENGTH_LONG).show() }
         Updater.check(ctx)   // 새 버전 자동 확인(6시간에 한 번)
+        PlannerAlert.schedule(ctx); kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { PlannerAlert.check(ctx) } }   // 달력·할일 알림
     }
     UpdateDialog()
     LaunchedEffect(model.openSync) { if (model.openSync) { model.openSync = false; openDoc = null; open = null; fromSettings = false; settingsPage = "sync"; screen = "settings" } }
