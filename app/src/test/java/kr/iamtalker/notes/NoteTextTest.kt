@@ -48,6 +48,11 @@ class NoteTextTest {
         assertEquals("회의록", NoteText.findByTitle(listOf("a", "회의록"), " 회의록 ") { it })
     }
 
+    @Test fun linkByTitleLatest() {
+        val items = listOf("회의록" to 1L, "회의록" to 9L, "다른" to 99L)
+        assertEquals(9L, NoteText.findLatestByTitle(items, "회의록", { it.first }, { it.second })?.second)
+    }
+
     @Test fun retagRenamesEverywhere() {
         val t = "---\ntitle: x\ntags: [Work, 경제]\n---\n본문 #work 와 #workout 은 다르고\n```\n#work\n```\n\n태그: #경제 #work\n"
         val r = NoteText.retag(t, "work", "일")

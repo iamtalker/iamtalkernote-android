@@ -313,7 +313,7 @@ fun App(model: NotesModel) {
     if (cur != null) {
         androidx.compose.runtime.key(cur.uri) {
             Editor(cur, model, onClose = { open = null; model.refresh() }, onOpenTitle = { title ->
-                val n = NoteText.findByTitle(model.notes, title) { it.title }
+                val n = NoteText.findLatestByTitle(model.notes, title, { it.title }, { it.modified })
                 if (n != null) open = n else android.widget.Toast.makeText(ctx, "‘$title’ 노트를 찾지 못했습니다", android.widget.Toast.LENGTH_SHORT).show()
             })
         }
@@ -428,7 +428,7 @@ fun App(model: NotesModel) {
                             onLong = { notebookMenu = f }) { go { model.changeFolder(f); model.changeTag(null) } }
                     }
                     if (model.tagCounts.isNotEmpty()) {
-                        item { NavHeading("태그", trailing = { ChevronIcon(!tagsOpen, MaterialTheme.colorScheme.outline) }) { tagsOpen = !tagsOpen } }
+                        item { NavHeading("태그", trailing = { ChevronIcon(!tagsOpen, MaterialTheme.colorScheme.outline) }) { if (model.tag != null) go { model.changeTag(null) } else tagsOpen = !tagsOpen } }
                         if (tagsOpen) items(model.tagCounts, key = { "t:" + it.first }) { (t, n) ->
                             DrawerRow("#$t", selected = model.tag.equals(t, ignoreCase = true), badge = "$n", indent = 8, onLongClick = { tagDialog = t }) {
                                 go { model.changeFolder(null); model.changeTag(t) }

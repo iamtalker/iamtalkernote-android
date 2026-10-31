@@ -97,6 +97,10 @@ object NoteText {
     fun <T> findByTitle(items: List<T>, title: String, titleOf: (T) -> String): T? =
         items.firstOrNull { titleOf(it).equals(title.trim(), ignoreCase = true) }
 
+    /** 같은 제목이 여럿이면 가장 최근(시각이 큰) 것으로 연결한다(PC 위키 규칙) */
+    fun <T> findLatestByTitle(items: List<T>, title: String, titleOf: (T) -> String, timeOf: (T) -> Long): T? =
+        items.filter { titleOf(it).equals(title.trim(), ignoreCase = true) }.maxByOrNull(timeOf)
+
     // ---- 태그 이름 바꾸기·삭제: 머리말 tags / 글 아래 '태그:' 줄 / 본문 #태그 세 군데를 모두 고친다(코드 블록은 건드리지 않음)
     private fun sameTag(a: String, b: String) = a.trim().trimStart('#').equals(b.trim().trimStart('#'), ignoreCase = true)
 
