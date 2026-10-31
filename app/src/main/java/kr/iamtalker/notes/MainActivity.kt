@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
         model.handleSend(intent)
         model.watchFork()   // Fork 연결을 해 둔 경우 컴퓨터가 보낸 공유 폴더를 어느 화면에서든 자동으로 받는다
         setContent {
-            val (scheme, dark) = AppThemes.scheme(model.themeName, isSystemInDarkTheme(), model.themeAccent)
+            val (scheme, dark) = AppThemes.scheme(model.themeName, isSystemInDarkTheme(), model.customBg, model.customAccent)
             val view = androidx.compose.ui.platform.LocalView.current
             androidx.compose.runtime.SideEffect {
                 window.statusBarColor = scheme.surface.toArgb()

@@ -88,10 +88,10 @@ fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
 
 /** 테마 한 줄: 라디오 + 색 견본(바탕색 원 안에 강조색 점) + 이름. 시스템은 밝음/어두움 반반 */
 @Composable
-private fun ThemeRow(name: String, selected: Boolean, onClick: () -> Unit) {
+private fun ThemeRow(name: String, selected: Boolean, palette: AppThemes.Palette?, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         RadioButton(selected = selected, onClick = onClick)
-        val p = AppThemes.all[name]
+        val p = palette
         val line = MaterialTheme.colorScheme.outlineVariant
         androidx.compose.foundation.Canvas(Modifier.padding(start = 4.dp, end = 12.dp).size(26.dp)) {
             val r = size.minDimension / 2
@@ -167,20 +167,30 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     SettingsRow(Teal, "정보", { onPage("info") }) { Text("i", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
                 }
                 "theme" -> {
-                    for (name in AppThemes.names()) ThemeRow(name, model.themeName == name) { model.changeTheme(name) }
+                    for (name in AppThemes.names()) {
+                        val pal = if (name == AppThemes.CUSTOM) AppThemes.custom(model.customBg, model.customAccent) else AppThemes.all[name]
+                        ThemeRow(name, model.themeName == name, pal) { if (name == AppThemes.CUSTOM) model.changeCustom() else model.changeTheme(name) }
+                    }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    Text("직접 고르기 (강조색)", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 10.dp))
-                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        for (rowColors in AppThemes.accents.chunked(5)) Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            for (c in rowColors) {
-                                val on = model.themeAccent == c
-                                Box(Modifier.size(34.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(c))
-                                    .then(if (on) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape) else Modifier)
-                                    .clickable { model.changeAccent(c) })
-                            }
+                    Text("내 테마 만들기", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 4.dp))
+                    var picking by remember { mutableStateOf<String?>(null) }
+                    for ((key, label, color) in listOf(Triple("bg", "배경색", model.customBg), Triple("accent", "강조색", model.customAccent))) {
+                        Row(Modifier.fillMaxWidth().clickable { picking = key }.heightIn(min = 52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(color))
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, androidx.compose.foundation.shape.CircleShape))
+                            Text(label, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+                            Text("#%06X".format(color and 0xFFFFFF), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
                         }
                     }
-                    if (model.themeAccent != null) TextRow("테마 기본색으로", onClick = { model.changeAccent(null) })
+                    Text("색 줄을 누르면 색 고르는 창이 뜹니다. 배경색이 어두우면 글자는 밝게, 밝으면 어둡게 저절로 맞춥니다.", fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                    picking?.let { k ->
+                        ColorPickerDialog(if (k == "bg") "배경색 고르기" else "강조색 고르기", if (k == "bg") model.customBg else model.customAccent,
+                            onDismiss = { picking = null }) { c ->
+                            if (k == "bg") model.changeCustom(bg = c) else model.changeCustom(accent = c)
+                            picking = null
+                        }
+                    }
                 }
                 "general" -> {
                     SwitchRow("앱으로 돌아올 때 자동 새로고침", "동기화로 바뀐 노트를 마지막으로 읽은 지 1분이 지났으면 다시 읽습니다", model.autoRefresh) { model.changeAutoRefresh(it) }
@@ -228,6 +238,8 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                 "help" -> {
                     var helpShown by remember { mutableStateOf<Pair<String, String>?>(null) }
                     TextRow("사용 설명서", "열기", onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.MANUAL_URL))) } })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    TextRow("컴퓨터 앱 내려받기", "열기", onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ForkSync.PC_URL))) } })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("검색 문법", onClick = { helpShown = "검색 문법" to HelpText.SEARCH })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

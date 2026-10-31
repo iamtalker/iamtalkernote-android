@@ -269,10 +269,29 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         private set
     var autoRefresh by mutableStateOf(prefs.getBoolean("autoRefresh", true))
         private set
-    /** 직접 고른 강조색(없으면 테마 기본색) */
-    var themeAccent by mutableStateOf(if (prefs.contains("themeAccent")) prefs.getLong("themeAccent", 0) else null)
-    fun changeAccent(c: Long?) { themeAccent = c; prefs.edit().apply { if (c == null) remove("themeAccent") else putLong("themeAccent", c) }.apply() }
+    /** 내 테마의 배경색·강조색. 예전의 강조색 직접 고르기(themeAccent)는 그 테마의 바탕색 + 같은 강조색인 내 테마로 옮긴다 */
+    var customBg by mutableStateOf(prefs.getLong("customBg", AppThemes.CUSTOM_BG))
+        private set
+    var customAccent by mutableStateOf(prefs.getLong("customAccent", AppThemes.CUSTOM_ACCENT))
+        private set
+    init {
+        AppThemes.legacy[themeName]?.let { (bg, acc) ->
+            customBg = bg; customAccent = acc; themeName = AppThemes.CUSTOM
+            prefs.edit().putString("themeName", themeName).putLong("customBg", bg).putLong("customAccent", acc).apply()
+        }
+        if (prefs.contains("themeAccent")) {
+            customBg = AppThemes.all[themeName]?.bg ?: AppThemes.CUSTOM_BG
+            customAccent = prefs.getLong("themeAccent", AppThemes.CUSTOM_ACCENT)
+            themeName = AppThemes.CUSTOM
+            prefs.edit().remove("themeAccent").putString("themeName", themeName).putLong("customBg", customBg).putLong("customAccent", customAccent).apply()
+        }
+    }
     fun changeTheme(name: String) { themeName = name; prefs.edit().putString("themeName", name).apply() }
+    /** 내 테마의 색을 바꾸고 바로 그 테마를 쓴다 */
+    fun changeCustom(bg: Long = customBg, accent: Long = customAccent) {
+        customBg = bg; customAccent = accent; themeName = AppThemes.CUSTOM
+        prefs.edit().putLong("customBg", bg).putLong("customAccent", accent).putString("themeName", themeName).apply()
+    }
     fun changeOpenEditing(b: Boolean) { openEditing = b; prefs.edit().putBoolean("openEditing", b).apply() }
     fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
     var wikiAuto by mutableStateOf(prefs.getBoolean("wikiAuto", false).also { WikiAuto.enabled = it })

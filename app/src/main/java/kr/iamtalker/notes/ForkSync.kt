@@ -25,6 +25,8 @@ object ForkSync {
     const val ID_PREFIX = "inn-"
     /** 사용 설명서(GitHub) */
     const val MANUAL_URL = "https://github.com/iamtalker/iamtalkernote/blob/main/docs/manual.md"
+    /** 컴퓨터 앱(exe) 최신 릴리스 */
+    const val PC_URL = "https://github.com/iamtalker/iamtalkernote/releases/latest"
 
     fun installedPkg(ctx: Context): String? = PKGS.firstOrNull { p -> runCatching { ctx.packageManager.getPackageInfo(p, 0); true }.getOrDefault(false) }
     fun installed(ctx: Context): Boolean = installedPkg(ctx) != null
