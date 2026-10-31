@@ -486,6 +486,7 @@ fun App(model: NotesModel) {
                     HorizontalDivider(color = line)
                     Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                         BarButton({ searching = true }) { SearchIcon(MaterialTheme.colorScheme.outline) }
+                        BarButton({ screen = "planner" }) { CalendarIcon() }
                         BarButton({ moreOpen = true }) { HDotsIcon() }
                     }
                 }
