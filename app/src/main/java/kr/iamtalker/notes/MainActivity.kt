@@ -375,12 +375,27 @@ fun App(model: NotesModel) {
                             BarButton({ allOpen = !allOpen }) { ChevronIcon(!allOpen, MaterialTheme.colorScheme.outline) }
                         }
                     }
+                    item { Text("바로가기", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = accent, modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 2.dp)) }
                     item {
                         Row(Modifier.fillMaxWidth().background(if (model.favOnly) soft else Color.Transparent).clickable { go { model.changeFav(true) } }
                             .heightIn(min = 48.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("★", fontSize = 20.sp, color = Color(0xFFE0A020), modifier = Modifier.width(24.dp))
                             Text("즐겨찾기", fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
                             Text("${model.favs.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                    if ("아웃라이너" in model.folders) item {
+                        Row(Modifier.fillMaxWidth().background(if (!model.showDocs && model.folder == "아웃라이너" && model.tag == null) soft else Color.Transparent)
+                            .clickable { go { model.changeFolder("아웃라이너"); model.changeTag(null) } }.heightIn(min = 48.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("●", fontSize = 16.sp, color = accent, modifier = Modifier.width(24.dp))
+                            Text("아웃라이너", fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+                            Text("${model.folderCounts["아웃라이너"] ?: 0}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                    item {
+                        Row(Modifier.fillMaxWidth().clickable { go { screen = "planner" } }.heightIn(min = 48.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("▦", fontSize = 18.sp, color = accent, modifier = Modifier.width(24.dp))
+                            Text("달력·할일", fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
                         }
                     }
                     if (allOpen) {
@@ -431,7 +446,6 @@ fun App(model: NotesModel) {
                         }
                     }
                     if (model.conflicts.isNotEmpty()) item { NavHeading("동기화 충돌 (${model.conflicts.size})") { go { screen = "conflicts" } } }
-                    item { NavHeading("달력·할일") { go { screen = "planner" } } }
                     item { NavHeading("휴지통") { go { screen = "trash" } } }
                     item { NavHeading("설정") { go { screen = "settings" } } }
                     item { Spacer(Modifier.height(24.dp)) }
