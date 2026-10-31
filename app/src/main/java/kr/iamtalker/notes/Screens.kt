@@ -91,8 +91,9 @@ fun TrashScreen(model: NotesModel, onBack: () -> Unit) {
             else LazyColumn(Modifier.fillMaxSize()) {
                 items(list, key = { it.id }) { it ->
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(it.rel, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("지운 날 " + fmt.format(Date((it.deleted * 1000).toLong())) + if (it.isNote) "" else "  · 컴퓨터에서 복원하세요",
+                        val left = Math.max(0L, Math.ceil(30 - (System.currentTimeMillis() / 1000.0 - it.deleted) / 86400).toLong())
+                        Text(it.rel.substringAfterLast('/').removeSuffix(".md").removeSuffix(".MD"), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text((if ('/' in it.rel) it.rel.substringBeforeLast('/') + " · " else "") + "삭제까지 ${left}일 · 지운 날 " + fmt.format(Date((it.deleted * 1000).toLong())) + if (it.isNote) "" else "  · 컴퓨터에서 복원하세요",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                         Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                             if (it.isNote) TextButton(onClick = { run { "복원했습니다: " + History.restore(ctx, tree, it).also { rel -> History.journal(ctx, tree, "restore", rel, detail = "휴지통에서") } } }) { Text("복원") }
