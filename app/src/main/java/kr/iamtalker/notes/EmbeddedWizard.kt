@@ -44,17 +44,27 @@ import kotlinx.coroutines.withContext
 @Composable
 fun FolderLines(r: ForkSync.Report) {
     for (f in r.folders) {
-        val pct = if (f.totalBytes > 0) ((f.totalBytes - f.needBytes) * 100 / f.totalBytes).toInt() else 100
+        val frac = if (f.totalBytes > 0) (f.totalBytes - f.needBytes).toFloat() / f.totalBytes else 1f
+        val pct = (frac * 100).toInt()
+        val done = f.state == "idle" && f.needBytes == 0L
         val s = when {
-            f.state == "idle" && f.needBytes == 0L -> "최신"
-            f.state == "idle" -> "대기 중 $pct%"
-            f.state.startsWith("sync") -> "받는 중 $pct%"
+            done -> "최신"
+            f.state == "idle" -> "대기 중"
+            f.state.startsWith("sync") -> "받는 중"
             f.state.startsWith("scan") -> "확인 중"
             else -> f.state
         }
-        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-            Text(f.label, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Text(s, fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
+        val got = (f.totalFiles - f.needFiles).coerceAtLeast(0)
+        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                Text(f.label, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text(if (done) s else "$s $pct%", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
+            }
+            androidx.compose.material3.LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+            val small = MaterialTheme.colorScheme.outline
+            Text("파일 전체 ${f.totalFiles}개 · 받음 ${got}개 · 남음 ${f.needFiles}개", fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
+            if (!done) Text("용량 ${Eta.size((f.totalBytes - f.needBytes).coerceAtLeast(0))} / ${Eta.size(f.totalBytes)}" +
+                (if (f.rate > 0) " · 속도 ${Eta.size(f.rate.toLong())}/초 · 남은 시간 ${Eta.text(Eta.seconds(f.needBytes, f.rate))}" else ""), fontSize = 12.5.sp, color = small)
         }
     }
 }
@@ -103,11 +113,11 @@ fun EmbeddedWizard(model: NotesModel) {
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
 
         Text("1. 권한과 동기화 켜기", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 10.dp))
-        Text("셋 모두 ‘허용됨’이어야 화면이 꺼져도 계속 동기화됩니다.", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
+        Text("파일 접근과 배터리 제외가 ‘허용됨’이어야 화면이 꺼져도 계속 동기화됩니다. 알림은 선택입니다(꺼도 동기화는 됩니다).", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
         PermRow("모든 파일 접근 (노트 폴더 읽고 쓰기)", allFiles, "허용") {
             runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}"))) }
         }
-        PermRow("알림 표시 (동기화 중 알림)", notifOn, "허용") {
+        PermRow("알림 표시 (선택)", notifOn, "허용", optional = true) {
             // 안드로이드 13 이상은 처음 한 번만 묻는 창이 뜨고, 한 번 거절하면 창이 안 뜨므로 앱 알림 설정 화면으로 보낸다
             if (Build.VERSION.SDK_INT >= 33 && !askedNotif) { askedNotif = true; prefs.edit().putBoolean("askedNotif", true).apply(); notif.launch(Manifest.permission.POST_NOTIFICATIONS) }
             else runCatching { ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)) }
@@ -158,17 +168,26 @@ fun EmbeddedWizard(model: NotesModel) {
         var logText by remember { mutableStateOf("") }
         LaunchedEffect(showLog) { while (showLog) { logText = withContext(Dispatchers.IO) { EmbeddedSync.logTail(ctx) }; delay(3000) } }
         OutlinedButton(onClick = { showLog = !showLog }, modifier = Modifier.padding(top = 16.dp)) { Text(if (showLog) "엔진 로그 닫기" else "엔진 로그 보기 (문제 확인용)") }
-        if (showLog) Text(logText.ifEmpty { "(로그가 아직 없습니다)" }, fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.padding(top = 6.dp))
+        if (showLog) {
+            val clip = androidx.compose.ui.platform.LocalClipboardManager.current
+            OutlinedButton(onClick = {
+                clip.setText(androidx.compose.ui.text.AnnotatedString(EmbeddedSync.logTail(ctx, 200)))
+                android.widget.Toast.makeText(ctx, "로그를 복사했습니다", android.widget.Toast.LENGTH_SHORT).show()
+            }, modifier = Modifier.padding(top = 6.dp)) { Text("로그 복사 (최근 200줄)") }
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(logText.ifEmpty { "(로그가 아직 없습니다)" }, fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 6.dp))
+            }
+        }
     }
 }
 
 /** 권한 한 줄: 이름 · 허용됨/필요 · 버튼(필요할 때만) */
 @Composable
-private fun PermRow(title: String, ok: Boolean, action: String, onClick: () -> Unit) {
+private fun PermRow(title: String, ok: Boolean, action: String, optional: Boolean = false, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text((if (ok) "✓ " else "✗ ") + title, fontSize = 14.sp, modifier = Modifier.weight(1f),
-            color = if (ok) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+        Text((if (ok) "✓ " else if (optional) "– " else "✗ ") + title, fontSize = 14.sp, modifier = Modifier.weight(1f),
+            color = if (ok || optional) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
         if (!ok) OutlinedButton(onClick = onClick) { Text(action) } else Text("허용됨", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
     }
 }

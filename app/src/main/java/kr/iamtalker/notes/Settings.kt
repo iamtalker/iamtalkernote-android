@@ -111,15 +111,14 @@ private fun readPolicy(ctx: android.content.Context, tree: android.net.Uri): Lis
 }
 
 @Composable
-fun SettingsScreen(model: NotesModel, onBack: () -> Unit, onTool: (String) -> Unit, onPick: () -> Unit) {
-    var page by remember { mutableStateOf("") }
-    BackHandler { if (page.isEmpty()) onBack() else page = "" }
+fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, onBack: () -> Unit, onTool: (String) -> Unit, onPick: () -> Unit) {
+    BackHandler { if (page.isEmpty()) onBack() else onPage("") }
     val ctx = LocalContext.current
     val titles = mapOf("sync" to "동기화", "theme" to "테마", "general" to "일반", "editor" to "에디터", "tools" to "도구", "info" to "정보")
     Scaffold(topBar = {
         Column {
             Box(Modifier.fillMaxWidth().height(56.dp).background(MaterialTheme.colorScheme.surface)) {
-                if (page.isNotEmpty()) Box(Modifier.align(Alignment.CenterStart)) { BarButton({ page = "" }) { BackIcon(MaterialTheme.colorScheme.onSurface) } }
+                if (page.isNotEmpty()) Box(Modifier.align(Alignment.CenterStart)) { BarButton({ onPage("") }) { BackIcon(MaterialTheme.colorScheme.onSurface) } }
                 Text(if (page.isEmpty()) "설정" else titles[page] ?: "", fontSize = 19.sp, fontWeight = FontWeight.Medium, modifier = Modifier.align(Alignment.Center))
                 if (page.isEmpty()) TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) { Text("완료", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
             }
@@ -129,15 +128,15 @@ fun SettingsScreen(model: NotesModel, onBack: () -> Unit, onTool: (String) -> Un
         Column(Modifier.padding(pad).fillMaxSize().background(MaterialTheme.colorScheme.surface).verticalScroll(rememberScrollState())) {
             when (page) {
                 "" -> {
-                    SettingsRow(Sky, "동기화", { page = "sync" }) { GlyphIcon("sync") }
+                    SettingsRow(Sky, "동기화", { onPage("sync") }) { GlyphIcon("sync") }
                     Gap()
-                    SettingsRow(Purple, "테마", { page = "theme" }) { GlyphIcon("theme") }
-                    SettingsRow(Green, "일반", { page = "general" }) { GlyphIcon("general") }
-                    SettingsRow(Pink, "에디터", { page = "editor" }) { Text("Aa", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                    SettingsRow(Purple, "테마", { onPage("theme") }) { GlyphIcon("theme") }
+                    SettingsRow(Green, "일반", { onPage("general") }) { GlyphIcon("general") }
+                    SettingsRow(Pink, "에디터", { onPage("editor") }) { Text("Aa", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
                     Gap()
-                    SettingsRow(Orange, "도구" + if (model.conflicts.isEmpty()) "" else " (충돌 ${model.conflicts.size})", { page = "tools" }) { GlyphIcon("tools") }
+                    SettingsRow(Orange, "도구" + if (model.conflicts.isEmpty()) "" else " (충돌 ${model.conflicts.size})", { onPage("tools") }) { GlyphIcon("tools") }
                     Gap()
-                    SettingsRow(Teal, "정보", { page = "info" }) { Text("i", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                    SettingsRow(Teal, "정보", { onPage("info") }) { Text("i", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
                 }
                 "theme" -> {
                     for ((i, label) in listOf("시스템 설정을 따라가기", "밝게", "어둡게").withIndex()) ChoiceRow(label, model.themeMode == i) { model.changeTheme(i) }

@@ -221,6 +221,13 @@ object ForkSync {
             val s = JSONObject(call("/rest/db/status?folder=$id"))
             return Triple(s.optString("state", "?"), s.optLong("needBytes"), s.optLong("globalBytes"))
         }
+
+        /** 폴더 진행 상황 전체: 상태, 받을/전체 바이트, 받을/전체 파일 수 */
+        fun folderDetail(id: String): FolderLine {
+            val s = JSONObject(call("/rest/db/status?folder=$id"))
+            return FolderLine("", s.optString("state", "?"), s.optLong("needBytes"), s.optLong("globalBytes"),
+                s.optLong("needFiles"), s.optLong("globalFiles"))
+        }
     }
 
     // ------------------------------------------------------------ 정책 파일(.sync/policy.json) 읽기
@@ -261,7 +268,10 @@ object ForkSync {
         return if (at != vaultPath.trimEnd('/')) "Fork 에 등록된 노트 폴더 경로($at)가 앱의 노트 폴더($vaultPath)와 다릅니다. Fork 에서 이 앱이 만든 폴더(ID 가 inn- 로 시작)를 지우고 다시 받으세요(폰의 파일은 그대로입니다)." else ""
     }
 
-    data class FolderLine(val label: String, val state: String, val needBytes: Long, val totalBytes: Long)
+    private val etas = HashMap<String, Eta>()
+
+    data class FolderLine(val label: String, val state: String, val needBytes: Long, val totalBytes: Long,
+                          val needFiles: Long = 0, val totalFiles: Long = 0, val rate: Double = 0.0)
     data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0,
                       val note: String = "", val error: String? = null)
 
@@ -313,8 +323,10 @@ object ForkSync {
             }
         }
         val lines = api.folders().filter { it.getString("id").startsWith(ID_PREFIX) }.map {
-            val st = runCatching { api.folderStatus(it.getString("id")) }.getOrDefault(Triple("?", 0L, 0L))
-            FolderLine(it.optString("label"), st.first, st.second, st.third)
+            val id = it.getString("id")
+            val d = runCatching { api.folderDetail(id) }.getOrDefault(FolderLine("", "?", 0L, 0L))
+            val rate = etas.getOrPut(id) { Eta() }.update(System.currentTimeMillis(), d.needBytes)
+            d.copy(label = it.optString("label"), rate = rate)
         }
         val connected = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { runCatching { api.connected(it) }.getOrDefault(false) }
         return Report(me, connected, lines, accepted, note)

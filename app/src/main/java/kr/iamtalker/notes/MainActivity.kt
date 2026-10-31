@@ -290,6 +290,7 @@ fun App(model: NotesModel) {
 
     var screen by remember { mutableStateOf("") }
     var fromSettings by remember { mutableStateOf(false) }
+    var settingsPage by remember { mutableStateOf("") }
     fun closeTool() { screen = if (fromSettings) "settings" else ""; fromSettings = false }
     var openDoc by remember { mutableStateOf<Doc?>(null) }
     openDoc?.let { dd -> DocScreen(dd, model, onBack = { openDoc = null }); return }
@@ -298,7 +299,7 @@ fun App(model: NotesModel) {
     if (screen == "dups") { DuplicatesScreen(model, onBack = { closeTool() }, onOpen = { screen = ""; open = it }); return }
     if (screen == "media") { UnusedMediaScreen(model, onBack = { closeTool(); model.refresh() }); return }
     if (screen == "journal") { JournalScreen(model, onBack = { closeTool() }, onOpen = { screen = ""; open = it }); return }
-    if (screen == "settings") { SettingsScreen(model, onBack = { screen = "" }, onTool = { fromSettings = true; screen = it }, onPick = { picker.launch(null) }); return }
+    if (screen == "settings") { SettingsScreen(model, settingsPage, { settingsPage = it }, onBack = { screen = ""; settingsPage = "" }, onTool = { fromSettings = true; screen = it }, onPick = { picker.launch(null) }); return }
     val cur = open
     if (cur != null) {
         androidx.compose.runtime.key(cur.uri) {
@@ -340,7 +341,8 @@ fun App(model: NotesModel) {
     BackHandler(enabled = moreOpen) { moreOpen = false }
     BackHandler(enabled = inSearch && !drawer.isOpen && !selecting) { searching = false; model.changeQuery(""); focusManager.clearFocus() }
     LaunchedEffect(searching) { if (searching) runCatching { searchFocus.requestFocus() } }
-    val fmt = remember { SimpleDateFormat("M월 d일, a h:mm", Locale.KOREA) }
+    val fmt = remember { SimpleDateFormat("yyyy년 M월 d일", Locale.KOREA) }
+    val noteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val fg = MaterialTheme.colorScheme.onSurface
     val accent = MaterialTheme.colorScheme.primary
     val soft = MaterialTheme.colorScheme.surfaceVariant
@@ -525,7 +527,7 @@ fun App(model: NotesModel) {
                 val pinnedList = if (inSearch) emptyList() else model.shown.filter { it.uri.toString() in model.pins }
                 val restList = if (pinnedList.isEmpty()) model.shown else model.shown.filter { it.uri.toString() !in model.pins }
                 PullRefresh(model) {
-                if (model.showDocs) DocList(model) { openDoc = it } else LazyColumn(Modifier.fillMaxSize()) {
+                if (model.showDocs) DocList(model) { openDoc = it } else LazyColumn(Modifier.fillMaxSize().listScrollbar(noteListState, MaterialTheme.colorScheme.outline), state = noteListState) {
                     if (model.shown.isEmpty() && !model.loading) item {
                         Text(if (inSearch) "찾은 노트가 없습니다" else "노트가 없습니다. 오른쪽 아래 연필로 만들어 보세요.", color = MaterialTheme.colorScheme.outline, modifier = Modifier.fillMaxWidth().padding(32.dp))
                     }

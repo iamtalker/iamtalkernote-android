@@ -23,7 +23,7 @@ object Stages {
 
     /** 무시 패턴에서 뜻이 있는 글자(* ? [ ] { } 와 역슬래시)는 '아무 글자 하나'(?)로 바꿔 쓴다. 윈도의 Syncthing 은 역슬래시 이스케이프를 못 쓰므로 두 기기에서 같게 되는 방법이다.
      *  같은 모양의 다른 파일이 같이 가려질 수 있지만, 마지막 단계가 열리면 모두 풀린다 */
-    fun escape(rel: String): String = "/" + rel.replace(Regex("[\\*?\\[\\]{}\\\\]"), "?")
+    fun escape(rel: String): String = "/" + rel.replace(Regex("[\\*?\\[\\]{}\\\\�]"), "?")
 
     /** released 단계까지 열었을 때(1이면 1단계만) 가려야 할 파일들 */
     fun hidden(tiers: List<List<String>>, released: Int): List<String> =
