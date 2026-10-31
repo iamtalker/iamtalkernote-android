@@ -224,6 +224,7 @@ private fun PermRow(title: String, ok: Boolean, action: String, optional: Boolea
 private fun OverallProgress() {
     val ctx = LocalContext.current
     var o by remember { mutableStateOf<Overall?>(null) }
+    var tried by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
             o = withContext(Dispatchers.IO) {
@@ -233,8 +234,10 @@ private fun OverallProgress() {
                 }.getOrNull()
             }
             EmbeddedSync.overall = o
+            tried = true
             delay(30000)
         }
     }
+    if (o == null) Text(if (tried) "전체 진행을 셀 수 없습니다: 컴퓨터의 단계 목록(.sync/stages.json)이 아직 폰에 없습니다" else "전체 진행을 세는 중…", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 6.dp))
     o?.let { Text(it.text(), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp)) }
 }

@@ -68,3 +68,21 @@ object SyncSettings {
         return true
     }
 }
+
+/** 폰이 자기 저장소에서 직접 센 진행(글·그림 개수)을 설정 폴더의 progress.json 으로 컴퓨터에 알린다 */
+object PhoneProgress {
+    const val FILE = "progress.json"
+
+    fun toJson(o: Overall, now: Long): String = JSONObject().put("updated", now).put("notesHave", o.notesHave).put("notesAll", o.notesAll)
+        .put("mediaHave", o.mediaHave).put("mediaAll", o.mediaAll).toString()
+
+    /** 설정 폴더가 있을 때만 적는다(컴퓨터가 설정 폴더를 보내 줬다는 뜻). 적었으면 true */
+    fun write(vaultPath: String, o: Overall, now: Long = System.currentTimeMillis()): Boolean = runCatching {
+        val d = SyncSettings.dir(vaultPath)
+        if (!d.isDirectory) return false
+        val tmp = File(d, "$FILE.tmp")
+        tmp.writeText(toJson(o, now))
+        if (!tmp.renameTo(File(d, FILE))) { File(d, FILE).writeText(toJson(o, now)); tmp.delete() }
+        true
+    }.getOrDefault(false)
+}

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -148,20 +149,24 @@ fun inlineText(s: String, link: Color, codeBg: Color, muted: Color): AnnotatedSt
 }
 
 @Composable
-private fun NoteImage(block: Block.Img, loader: suspend (String) -> ImageBitmap?, onOpen: (String) -> Unit) {
-    var bmp by remember(block.src) { mutableStateOf<ImageBitmap?>(null) }
-    var failed by remember(block.src) { mutableStateOf(false) }
-    LaunchedEffect(block.src) {
-        val b = runCatching { loader(block.src) }.getOrNull()
-        bmp = b
-        failed = b == null
+private fun NoteImage(block: Block.Img, cacheKey: String, loader: suspend (String) -> ImageBitmap?, onOpen: (String) -> Unit) {
+    val key = cacheKey + "|" + block.src
+    var bmp by remember(key) { mutableStateOf(ImageCache.get(key)) }      // 보관함에 있으면 바로 보인다
+    var failed by remember(key) { mutableStateOf(false) }
+    LaunchedEffect(key) {
+        if (bmp == null) {
+            val b = ImageCache.load(key) { loader(block.src) }
+            bmp = b
+            failed = b == null
+        }
     }
     val b = bmp
     if (b != null) {
         Image(bitmap = b, contentDescription = block.alt, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().clickable { onOpen(block.src) }.padding(vertical = 6.dp))
     } else {
+        // 읽는 동안에도 자리를 잡아 두어 아래 글이 덜 출렁이게 한다
         Text(if (failed) "[그림을 찾지 못함: ${block.src.substringAfterLast('/')}]" else "[그림 불러오는 중…]",
-            color = MaterialTheme.colorScheme.outline, fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+            color = MaterialTheme.colorScheme.outline, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().heightIn(min = if (failed) 24.dp else 120.dp).padding(vertical = 4.dp))
     }
 }
 
@@ -171,7 +176,8 @@ fun MarkdownView(
     loadImage: suspend (String) -> ImageBitmap? = { null },
     onToggle: (Int) -> Unit = {},
     onNoteLink: (String) -> Unit = {},
-    onImage: (String) -> Unit = {}
+    onImage: (String) -> Unit = {},
+    cacheKey: String = ""
 ) {
     val parts = remember(text) {
         val (_, body) = Meta.split(text)
@@ -179,6 +185,10 @@ fun MarkdownView(
         offset to parseBlocks(body)
     }
     val (offset, blocks) = parts
+    // 문서를 열자마자 그림을 위에서부터 미리 읽어 둔다(스크롤해서 나타날 때 이미 준비돼 있게)
+    LaunchedEffect(parts, cacheKey) {
+        for (b in blocks) if (b is Block.Img) ImageCache.load(cacheKey + "|" + b.src) { loadImage(b.src) }
+    }
     val link = MaterialTheme.colorScheme.primary
     val codeBg = MaterialTheme.colorScheme.surfaceVariant
     val muted = MaterialTheme.colorScheme.outline
@@ -221,7 +231,7 @@ fun MarkdownView(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(codeBg).horizontalScroll(rememberScrollState()).padding(10.dp))
                 is Block.Table -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = color,
                     modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()))
-                is Block.Img -> NoteImage(b, loadImage, onImage)
+                is Block.Img -> NoteImage(b, cacheKey, loadImage, onImage)
                 Block.Rule -> HorizontalDivider(Modifier.padding(vertical = 10.dp))
             }
         }

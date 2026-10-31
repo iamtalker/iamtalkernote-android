@@ -242,6 +242,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                             runCatching { persist(n) }
                         },
                         onNoteLink = { title -> save(); onOpenTitle(title) },
+                        cacheKey = note.uri.toString(),
                         onImage = { src -> if (!(src.startsWith("http") || src.startsWith(":/"))) viewing = src }
                     )
                     viewing?.let { src ->

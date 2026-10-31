@@ -45,6 +45,7 @@ class SyncService : Service() {
         val prefs = ctx.getSharedPreferences("settings", 0)
         val api = EmbeddedSync.api(ctx)
         var fails = 0
+        var lastProgress = 0L
         while (scope.isActive) {
             try {
                 if (!EmbeddedSync.alive()) EmbeddedSync.start(ctx)
@@ -53,6 +54,11 @@ class SyncService : Service() {
                 EmbeddedSync.report = if (tree == null) ForkSync.Report(error = "노트 폴더를 먼저 고르세요")
                 else ForkSync.tick(ctx, api, pc, tree)   // 단계별 가림은 이제 컴퓨터가 맡는다(폰의 긴 무시 목록이 느렸다)
                 fails = 0
+                // 2분에 한 번: 폰에 실제로 있는 글·그림 수를 세어 컴퓨터에 알린다(컴퓨터 화면의 진행 표시용)
+                if (tree != null && System.currentTimeMillis() - lastProgress > 120_000) {
+                    lastProgress = System.currentTimeMillis()
+                    runCatching { ForkSync.treePath(tree)?.let { vp -> Overall.count(java.io.File(vp))?.let { PhoneProgress.write(vp, it) } } }
+                }
             } catch (e: Exception) {
                 // 시작 직후에는 아직 응답하지 않는 게 정상이다. 1분(12번) 넘게 응답이 없으면 엔진이 멈춘 것이니 새로 시작한다
                 fails++

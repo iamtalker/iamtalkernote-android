@@ -56,3 +56,15 @@ class SyncSettingsTest {
         assertEquals(600L, r.updated)
     }
 }
+
+class PhoneProgressTest {
+    @org.junit.Test fun writesOnlyWhenSettingsFolderExists() {
+        val v = java.io.File.createTempFile("vault", "").also { it.delete(); it.mkdirs() }.absolutePath
+        val o = Overall(1, 2, 3, 4)
+        org.junit.Assert.assertFalse(PhoneProgress.write(v, o, 5))
+        SyncSettings.dir(v).mkdirs()
+        org.junit.Assert.assertTrue(PhoneProgress.write(v, o, 5))
+        val j = org.json.JSONObject(java.io.File(SyncSettings.dir(v), PhoneProgress.FILE).readText())
+        org.junit.Assert.assertEquals(5L, j.getLong("updated")); org.junit.Assert.assertEquals(3, j.getInt("mediaHave")); org.junit.Assert.assertEquals(2, j.getInt("notesAll"))
+    }
+}
