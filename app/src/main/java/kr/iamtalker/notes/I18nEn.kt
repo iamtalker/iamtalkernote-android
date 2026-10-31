@@ -471,5 +471,7 @@ object I18nEn {
         "페이지 본문을 가져오는 중…" to "Fetching the page text…",
         "본문을 가져오지 못해 주소만 저장합니다: %s" to "Could not fetch the text; saving the address only: %s",
         "⚠ 이미 저장한 주소입니다: %s" to "⚠ This address was already saved: %s",
+        "웹 클리퍼: 그림은 와이파이에서만" to "Web clipper: download images on Wi-Fi only",
+        "공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)" to "When saving from Share, images are not downloaded over mobile data and keep their web address (the page text is always fetched)",
     )
 }

@@ -206,6 +206,8 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SwitchRow(tr("위키 낱말 자동 연결"), tr("괄호 없이도 다른 노트 제목과 같은 낱말(2글자 이상)을 그 노트로 연결합니다. 같은 제목이 여럿이면 가장 최근 노트"), model.wikiAuto) { model.changeWikiAuto(it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SwitchRow(tr("웹 클리퍼: 그림은 와이파이에서만"), tr("공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)"), model.clipWifiOnly) { model.changeClipWifiOnly(it) }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow(tr("지금 새로고침"), onClick = { model.refresh(); onBack() })
                     TextRow(tr("노트 폴더 다시 고르기"), onClick = onPick)
                 }

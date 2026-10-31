@@ -264,6 +264,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     var themeName by mutableStateOf(prefs.getString("themeName", null) ?: when (prefs.getInt("theme", 0)) { 1 -> "라이트 파랑"; 2 -> "다크 파랑"; else -> AppThemes.SYSTEM })
         private set
     var openEditing by mutableStateOf(prefs.getBoolean("openEditing", false))   // 노트를 열 때 바로 편집
+    var clipWifiOnly by mutableStateOf(prefs.getBoolean("clipWifiOnly", false)) // 웹 클리퍼: 그림은 와이파이(데이터 요금이 없는 연결)일 때만 내려받는다
         private set
     var editorFont by mutableStateOf(prefs.getInt("editorFont", 15))
         private set
@@ -293,6 +294,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putLong("customBg", bg).putLong("customAccent", accent).putString("themeName", themeName).apply()
     }
     fun changeOpenEditing(b: Boolean) { openEditing = b; prefs.edit().putBoolean("openEditing", b).apply() }
+    fun changeClipWifiOnly(b: Boolean) { clipWifiOnly = b; prefs.edit().putBoolean("clipWifiOnly", b).apply() }
     fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
     var wikiAuto by mutableStateOf(prefs.getBoolean("wikiAuto", false).also { WikiAuto.enabled = it })
         private set
@@ -667,7 +669,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     val parent = if (folder.isEmpty()) null else folderIds[folder]
                     val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else folder, title) ?: throw IllegalStateException(tr("노트를 만들 수 없습니다"))
                     val url = Regex("https?://\\S+").find(text)?.value
-                    val content = if (body != null) ClipImages.localize(getApplication(), t, body, if (parent == null) "" else folder) else text.trim()
+                    val content = if (body != null) ClipImages.localize(getApplication(), t, body, if (parent == null) "" else folder, wifiOnly = clipWifiOnly) else text.trim()
                     NoteRepo.write(getApplication(), n.uri, (if (url != null) "---\nsource: $url\n---\n\n" else "") + content + "\n")
                     if (url != null && body != null) getApplication<Application>().getSharedPreferences("settings", 0).edit().putString("clip:$url", n.title).apply()
                     History.journal(getApplication(), t, "create", History.relOf(n), detail = "공유로 받음")

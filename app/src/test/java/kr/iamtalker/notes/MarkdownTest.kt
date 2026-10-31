@@ -25,4 +25,31 @@ class MarkdownTest {
         assertEquals("---\nx: 1\n---\n- [ ] a\n- [ ] b\n", toggleCheckbox(t, 4))
         assertTrue(toggleCheckbox(t, 99) == t)
     }
+
+    @Test fun tableParsesAlignmentAndSplitsCells() {
+        val t = parseTable("| 이름 | 나이 | 설명 |\n|:--|--:|:-:|\n| 홍길동 | 30 | a \\| b |\n| 김 | 4 | |")!!
+        assertEquals(listOf("left", "right", "center"), t.aligns)
+        assertEquals(3, t.cols)
+        assertEquals(listOf("이름", "나이", "설명"), t.rows[0])
+        assertEquals(listOf("홍길동", "30", "a | b"), t.rows[1])
+        assertEquals(listOf("김", "4", ""), t.rows[2])
+    }
+
+    @Test fun tableNeedsSeparatorLine() {
+        assertEquals(null, parseTable("| a | b |\n| 1 | 2 |"))
+        assertEquals(null, parseTable("| a |"))
+        assertEquals(null, parseTable("a | b\n-\n1 | 2"))
+    }
+
+    @Test fun tableSeparatorMayUseOneDash() {
+        assertEquals(listOf("", "right"), parseTable("a | b\n-|-:\n1 | 2")!!.aligns)
+        assertEquals(listOf("center"), parseTable("| a |\n|:-:|\n| 1 |")!!.aligns)
+    }
+
+    @Test fun parseBlocksKeepsTableRowsTogether() {
+        val blocks = parseBlocks("앞\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n뒤")
+        val tb = blocks.filterIsInstance<Block.Table>().single()
+        assertEquals(2, parseTable(tb.text)!!.rows.size)
+        assertEquals(3, blocks.size)
+    }
 }

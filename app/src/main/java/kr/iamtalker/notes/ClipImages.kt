@@ -14,6 +14,11 @@ object ClipImages {
     private const val MAX_TOTAL = 40L * 1024 * 1024
     private val IMG = Regex("""!\[([^\]]*)\]\((https?://[^)\s]+)((?:\s+"[^"]*")?)\)""")
 
+    /** 지금 연결이 요금이 드는(모바일 데이터 등) 연결인가. 연결 정보를 못 읽으면 안전하게 그렇다고 본다 */
+    fun isMetered(ctx: Context): Boolean = runCatching {
+        (ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered
+    }.getOrDefault(true)
+
     private fun extOf(mime: String): String? = when {
         mime.contains("png") -> "png"
         mime.contains("jpeg") || mime.contains("jpg") -> "jpg"
@@ -23,7 +28,8 @@ object ClipImages {
     }
 
     /** folder = 노트가 들어갈 노트북 경로(맨 위면 빈 글). 상대 경로의 `../` 깊이를 정하는 데 쓴다 */
-    fun localize(ctx: Context, tree: Uri, md: String, folder: String): String {
+    fun localize(ctx: Context, tree: Uri, md: String, folder: String, wifiOnly: Boolean = false): String {
+        if (wifiOnly && isMetered(ctx)) return md     // 데이터 요금이 드는 연결이면 그림은 받지 않고 주소 그대로 둔다
         val urls = IMG.findAll(md).map { it.groupValues[2] }.distinct().take(MAX_IMAGES).toList()
         if (urls.isEmpty()) return md
         val depth = folder.split('/').count { it.isNotEmpty() }

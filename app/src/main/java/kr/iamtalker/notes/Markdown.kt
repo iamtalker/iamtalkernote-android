@@ -4,6 +4,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -56,6 +60,36 @@ sealed class Block {
     data class Table(val text: String) : Block()
     data class Img(val alt: String, val src: String) : Block()
     object Rule : Block()
+}
+
+/** 마크다운 표. header: 둘째 줄이 구분줄(| --- | :-: |)일 때만 표로 본다. aligns: 열마다 "left"·"right"·"center"·"" */
+class MdTable(val rows: List<List<String>>, val aligns: List<String>) {
+    val cols: Int get() = rows.maxOfOrNull { it.size } ?: 0
+}
+
+private val tableSep = Regex("^\\s*\\|?\\s*:?-+:?\\s*(\\|\\s*:?-+:?\\s*)*\\|?\\s*$")
+
+/** 표 한 줄을 칸으로 나눈다(앞뒤 | 는 버리고, 글자 속 \\| 는 그냥 |) */
+fun splitCells(line: String): List<String> {
+    var s = line.trim()
+    if (s.startsWith("|")) s = s.substring(1)
+    if (s.endsWith("|") && !s.endsWith("\\|")) s = s.dropLast(1)
+    return s.split(Regex("(?<!\\\\)\\|")).map { it.replace("\\|", "|").trim() }
+}
+
+/** 표 블록 글을 표로 읽는다. 구분줄이 없으면 null(그럴 땐 예전처럼 글자 그대로 보인다). 구분줄의 대시는 1개 이상(:-- --: :-:) */
+fun parseTable(text: String): MdTable? {
+    val lines = text.split("\n").filter { it.isNotBlank() }
+    if (lines.size < 2 || !tableSep.matches(lines[1]) || !(lines[1].contains("|") || lines[1].contains("---"))) return null
+    val aligns = splitCells(lines[1]).map { c ->
+        when {
+            c.startsWith(":") && c.endsWith(":") -> "center"
+            c.endsWith(":") -> "right"
+            c.startsWith(":") -> "left"
+            else -> ""
+        }
+    }
+    return MdTable(listOf(splitCells(lines[0])) + lines.drop(2).map { splitCells(it) }, aligns)
 }
 
 private val heading = Regex("^(#{1,6})\\s+(.*)$")
@@ -208,11 +242,11 @@ fun MarkdownView(
     val uri = LocalUriHandler.current
 
     @Composable
-    fun Rich(s: String, size: Int, weight: FontWeight? = null, modifier: Modifier = Modifier, deco: TextDecoration? = null) {
+    fun Rich(s: String, size: Int, weight: FontWeight? = null, modifier: Modifier = Modifier, deco: TextDecoration? = null, align: TextAlign = TextAlign.Unspecified) {
         val a = remember(s, WikiAuto.version, WikiAuto.enabled) { inlineText(s, link, codeBg, muted) }
         ClickableText(
             text = a, modifier = modifier,
-            style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.5f).sp, fontWeight = weight, color = color, textDecoration = deco),
+            style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.5f).sp, fontWeight = weight, color = color, textDecoration = deco, textAlign = align),
             onClick = { off ->
                 a.getStringAnnotations("URL", off, off).firstOrNull()?.let { runCatching { uri.openUri(it.item) } }
                 a.getStringAnnotations("NOTE", off, off).firstOrNull()?.let { onNoteLink(it.item) }
@@ -242,8 +276,27 @@ fun MarkdownView(
             }
             is Block.Code -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = color,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(codeBg).horizontalScroll(rememberScrollState()).padding(10.dp))
-            is Block.Table -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = color,
-                modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()))
+            is Block.Table -> {
+                val t = remember(b.text) { parseTable(b.text) }
+                if (t == null) {
+                    Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = color,
+                        modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()))
+                } else {
+                    // 열마다 가장 넓은 칸에 맞추고(IntrinsicSize.Max), 칸마다 가는 테두리. 머리행은 굵게+배경. 넓으면 가로로 밀어서 본다
+                    val line = muted.copy(alpha = 0.55f)
+                    Row(Modifier.padding(vertical = 6.dp).horizontalScroll(rememberScrollState())) {
+                        for (c in 0 until t.cols) Column(Modifier.width(IntrinsicSize.Max)) {
+                            val al = when (t.aligns.getOrNull(c)) { "right" -> TextAlign.End; "center" -> TextAlign.Center; else -> TextAlign.Start }
+                            for ((ri, row) in t.rows.withIndex()) {
+                                val head = ri == 0
+                                Box(Modifier.fillMaxWidth().height(34.dp).border(0.5.dp, line).background(if (head) codeBg else Color.Transparent).padding(horizontal = 8.dp), contentAlignment = androidx.compose.ui.Alignment.CenterStart) {   // 열마다 따로 쌓으므로 칸 높이를 같게 고정해야 가로선이 맞는다
+                                    Rich(row.getOrElse(c) { "" }, 13, if (head) FontWeight.Bold else null, Modifier.fillMaxWidth(), align = al)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             is Block.Img -> NoteImage(b, cacheKey, loadImage, onImage)
             Block.Rule -> HorizontalDivider(Modifier.padding(vertical = 10.dp))
         }
