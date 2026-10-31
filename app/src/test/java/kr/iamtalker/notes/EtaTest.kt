@@ -36,3 +36,14 @@ class StuckKickTest {
         assertEquals(false, ForkSync.kickIfStuck(api, "t2", line, false, 0))            // 연결 안 됨
     }
 }
+
+class SyncNoticeTest {
+    @Test fun noticeText() {
+        assertEquals("동기화 14,834/66,980 (22%) · 약 3시간 12분 남음", SyncNotice.text(true, null, 14834, 66980, 11520))
+        assertEquals("동기화 14,834/66,980 (22%)", SyncNotice.text(true, null, 14834, 66980, -1))
+        assertEquals("동기화 완료 · 전체 66,980개", SyncNotice.text(true, null, 66980, 66980, 0))
+        assertEquals("컴퓨터와 연결 대기 중", SyncNotice.text(false, null, 0, 0, 0))
+        assertEquals("⚠ 오류", SyncNotice.text(true, "오류", 1, 2, 0))
+        assertEquals("동기화 1/10 (10%) · 연결 대기 중", SyncNotice.text(false, null, 1, 10, 0))
+    }
+}
