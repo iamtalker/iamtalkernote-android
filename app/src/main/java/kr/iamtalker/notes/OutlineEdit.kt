@@ -17,6 +17,7 @@ object OutlineEdit {
 
     /** i 번 항목의 하위까지의 끝(제외). 같거나 얕은 항목이나 목록이 아닌 줄이 나오면 거기까지 */
     fun subtreeEnd(lines: List<String>, i: Int): Int {
+        if (i !in lines.indices) return maxOf(0, i) + 1
         val d = parse(lines[i])?.depth ?: return i + 1
         var j = i + 1
         while (j < lines.size) {
@@ -27,7 +28,7 @@ object OutlineEdit {
         return j
     }
 
-    fun hasChildren(lines: List<String>, i: Int) = subtreeEnd(lines, i) > i + 1
+    fun hasChildren(lines: List<String>, i: Int) = isItem(lines, i) && subtreeEnd(lines, i) > i + 1
 
     fun setText(lines: List<String>, i: Int, text: String): List<String> {
         val p = parse(lines.getOrNull(i) ?: return lines) ?: return lines
@@ -84,5 +85,26 @@ object OutlineEdit {
         var f = i - 1
         while (f >= 0 && !isItem(out, f)) f--
         return out to f
+    }
+}
+
+/** 편집 화면에서 점을 눌러 그 항목으로 줌인(WorkFlowy 식)할 때의 계산: 줌인한 항목 줄 번호 → 보일 줄 범위·경로 */
+object OutlineZoom {
+    /** 줌인한 항목 아래(하위 전체)의 줄 번호 범위. 항목이 아니면 빈 범위 */
+    fun range(lines: List<String>, zoom: Int): IntRange {
+        if (!OutlineEdit.isItem(lines, zoom)) return IntRange.EMPTY
+        return (zoom + 1) until OutlineEdit.subtreeEnd(lines, zoom)
+    }
+
+    /** 경로: 줌인한 항목의 위쪽 조상 항목들의 줄 번호(맨 바깥부터) */
+    fun crumbs(lines: List<String>, zoom: Int): List<Int> {
+        val me = lines.getOrNull(zoom)?.let { OutlineEdit.parse(it) } ?: return emptyList()
+        val out = ArrayList<Int>()
+        var d = me.depth
+        for (j in zoom - 1 downTo 0) {
+            val p = OutlineEdit.parse(lines[j]) ?: continue
+            if (p.depth < d) { out.add(j); d = p.depth }
+        }
+        return out.reversed()
     }
 }

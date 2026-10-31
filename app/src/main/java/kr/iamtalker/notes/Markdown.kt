@@ -270,8 +270,7 @@ fun MarkdownView(
                         }
                         Row(Modifier.padding(top = 5.dp, bottom = 5.dp)) {
                             if (r.node.marker.first().isDigit()) Text(r.node.marker + " ", color = muted, fontSize = 15.sp)
-                            if (r.node.checked != null) Text(if (r.node.checked) "☑ " else "☐ ", fontSize = 18.sp, color = color, modifier = Modifier.clickable { onToggle(offset + r.node.line) })
-                            Rich(r.node.text, 15, deco = if (r.node.checked == true) TextDecoration.LineThrough else null)
+                            Rich(r.node.text, 15)
                         }
                     }
                     is Outline.Row.Crumbs -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -281,7 +280,7 @@ fun MarkdownView(
                             Text(a.text.take(24) + (if (a.text.length > 24) "…" else ""), color = link, fontSize = 14.sp, maxLines = 1, modifier = Modifier.clickable { zoom = a.id })
                         }
                     }
-                    is Outline.Row.Title -> Rich(r.node.text, 22, FontWeight.Bold, Modifier.padding(top = 6.dp, bottom = 8.dp))
+                    is Outline.Row.Title -> Rich(r.node.text, 17, null, Modifier.padding(top = 6.dp, bottom = 8.dp))
                     Outline.Row.Empty -> Text("(하위 항목이 없습니다)", color = muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
                 }
             }

@@ -222,7 +222,7 @@ object NoteRepo {
     fun create(ctx: Context, tree: Uri, parentId: String?, folder: String, title: String): Note? {
         val pid = parentId ?: DocumentsContract.getTreeDocumentId(tree)
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, pid)
-        val name = title.trim().ifEmpty { "제목 없음" }.replace(Regex("[\\\\/:*?\"<>|]"), "_") + ".md"
+        val name = title.trim().ifEmpty { "제목 없음 " + java.text.SimpleDateFormat("yyMMdd-HHmmss", java.util.Locale.KOREA).format(java.util.Date()) }.replace(Regex("[\\\\/:*?\"<>|]"), "_") + ".md"
         val uri = DocumentsContract.createDocument(ctx.contentResolver, parent, "text/markdown", name) ?: return null
         return Note(uri, name, folder, pid, System.currentTimeMillis(), 0)
     }
