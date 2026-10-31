@@ -113,6 +113,25 @@ fun EmbeddedWizard(model: NotesModel) {
         Text("이 앱에 동기화 엔진이 들어 있어 다른 앱을 깔거나 키를 복사할 필요가 없습니다.", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
 
+        // 맨 위 상태 카드: 켜짐/연결/진행 상황을 한눈에
+        androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Column(Modifier.padding(12.dp)) {
+                val head = when {
+                    !on -> "○ 동기화 꺼짐"
+                    report == null -> "◌ 동기화 엔진 시작 중…"
+                    report.error != null -> "⚠ " + report.error
+                    report.connected -> "● 컴퓨터와 연결됨"
+                    else -> "○ 연결 대기 중 (같은 와이파이인지, 컴퓨터 앱이 켜져 있는지 확인)"
+                }
+                Text("동기화 상태", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                Text(head, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
+                if (report != null && report.folders.isNotEmpty()) FolderLines(report)
+                else if (on && report != null && report.error == null) Text("아직 받을 폴더가 없습니다. 연결되면 컴퓨터가 보낸 노트 폴더가 여기에 나타납니다.", fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+
         Text("1. 권한과 동기화 켜기", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 10.dp))
         Text("파일 접근과 배터리 제외가 ‘허용됨’이어야 화면이 꺼져도 계속 동기화됩니다. 알림은 선택입니다(꺼도 동기화는 됩니다).", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
         PermRow("모든 파일 접근 (노트 폴더 읽고 쓰기)", allFiles, "허용") {
