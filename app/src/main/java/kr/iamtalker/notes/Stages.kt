@@ -42,3 +42,26 @@ object Stages {
         else -> released to since
     }
 }
+
+/** 전체 진행: 컴퓨터의 단계 목록(.sync/stages.json)에 있는 모든 글(.md)과 그림 중 폰에 실제로 있는 수 */
+data class Overall(val notesHave: Int, val notesAll: Int, val mediaHave: Int, val mediaAll: Int) {
+    val have get() = notesHave + mediaHave
+    val all get() = notesAll + mediaAll
+    private fun pct(a: Int, b: Int) = if (b > 0) a * 100 / b else 100
+    fun text(): String = "전체 %,d / %,d개 (%d%%)\n글 %,d / %,d개 (%d%%) · 그림 %,d / %,d개 (%d%%)".format(
+        have, all, pct(have, all), notesHave, notesAll, pct(notesHave, notesAll), mediaHave, mediaAll, pct(mediaHave, mediaAll))
+
+    companion object {
+        /** vault: 노트 폴더. 목록이 없으면 null */
+        fun count(vault: java.io.File): Overall? {
+            val tiers = runCatching { Stages.parse(java.io.File(vault, Stages.FILE).readText()) }.getOrNull() ?: return null
+            var nh = 0; var na = 0; var mh = 0; var ma = 0
+            for (t in tiers) for (rel in t) {
+                val isNote = rel.endsWith(".md")
+                val has = java.io.File(vault, rel).exists()
+                if (isNote) { na++; if (has) nh++ } else { ma++; if (has) mh++ }
+            }
+            return Overall(nh, na, mh, ma)
+        }
+    }
+}

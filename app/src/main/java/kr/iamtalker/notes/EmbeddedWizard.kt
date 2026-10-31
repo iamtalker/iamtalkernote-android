@@ -126,6 +126,7 @@ fun EmbeddedWizard(model: NotesModel) {
                 }
                 Text("동기화 상태", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 Text(head, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
+                OverallProgress()
                 if (report != null && report.folders.isNotEmpty()) FolderLines(report)
                 else if (on && report != null && report.error == null) Text("아직 받을 폴더가 없습니다. 연결되면 컴퓨터가 보낸 노트 폴더가 여기에 나타납니다.", fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
@@ -210,4 +211,23 @@ private fun PermRow(title: String, ok: Boolean, action: String, optional: Boolea
             color = if (ok || optional) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
         if (!ok) OutlinedButton(onClick = onClick) { Text(action) } else Text("허용됨", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
     }
+}
+
+/** 컴퓨터의 단계 목록 기준 전체 진행(글·그림 따로). 폰에 실제로 있는 파일을 30초마다 센다 */
+@Composable
+private fun OverallProgress() {
+    val ctx = LocalContext.current
+    var o by remember { mutableStateOf<Overall?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            o = withContext(Dispatchers.IO) {
+                runCatching {
+                    val tree = ctx.getSharedPreferences("settings", 0).getString("tree", null)?.let(android.net.Uri::parse)
+                    tree?.let { ForkSync.treePath(it) }?.let { Overall.count(java.io.File(it)) }
+                }.getOrNull()
+            }
+            delay(30000)
+        }
+    }
+    o?.let { Text(it.text(), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp)) }
 }

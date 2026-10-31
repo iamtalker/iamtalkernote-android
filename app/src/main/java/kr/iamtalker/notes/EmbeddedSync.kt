@@ -47,9 +47,15 @@ object EmbeddedSync {
         if (!f.exists()) "" else f.readLines().takeLast(lines).joinToString("\n")
     }.getOrDefault("")
 
+    /** 엔진 로그 파일에 앱이 남기는 한 줄(엔진이 아무것도 안 쓸 때 무슨 일이 있었는지 보려고) */
+    fun note(ctx: Context, text: String) {
+        runCatching { File(ctx.filesDir, "syncthing.log").appendText(java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date()) + " [앱] $text\n") }
+    }
+
     @Synchronized
     fun start(ctx: Context) {
         if (alive()) return
+        note(ctx, "엔진 시작 (${binary(ctx).absolutePath}, 실행 파일 ${if (binary(ctx).isFile) "있음" else "없음"})")
         val home = File(ctx.filesDir, "syncthing").apply { mkdirs() }
         val pb = ProcessBuilder(command(binary(ctx).absolutePath, home.absolutePath, key(ctx)))
         pb.environment().apply {
@@ -57,8 +63,9 @@ object EmbeddedSync {
             put("TMPDIR", ctx.cacheDir.absolutePath)
         }
         pb.redirectErrorStream(true)
-        val p = pb.start()
+        val p = runCatching { pb.start() }.getOrElse { note(ctx, "엔진을 실행하지 못했습니다: ${it.message}"); throw it }
         proc = p
+        Thread { runCatching { val c = p.waitFor(); note(ctx, "엔진이 종료됐습니다 (코드 $c)") } }.start()
         val log = File(ctx.filesDir, "syncthing.log")
         if (log.length() > 512 * 1024) log.delete()
         Thread { runCatching { p.inputStream.bufferedReader().forEachLine { log.appendText(it + "\n") } } }.start()

@@ -38,3 +38,17 @@ class StagesTest {
         assertEquals(5 to 0L, Stages.advance(5, 5, true, 0L, 1000L))                 // 마지막까지 열렸으면 그대로
     }
 }
+
+class OverallTest {
+    @org.junit.Test fun countsNotesAndMediaSeparately() {
+        val v = java.io.File.createTempFile("vault", "").also { it.delete(); it.mkdirs() }
+        java.io.File(v, ".sync").mkdirs(); java.io.File(v, ".resources").mkdirs()
+        java.io.File(v, ".sync/stages.json").writeText("""{"tiers":[{"name":"a","files":["a.md",".resources/x.png"]},{"name":"b","files":["b.md",".resources/y.png",".resources/z.png"]}]}""")
+        java.io.File(v, "a.md").writeText("x"); java.io.File(v, ".resources/y.png").writeText("x")
+        val o = Overall.count(v)!!
+        org.junit.Assert.assertEquals(Overall(1, 2, 1, 3), o)
+        org.junit.Assert.assertEquals(2, o.have); org.junit.Assert.assertEquals(5, o.all)
+        org.junit.Assert.assertTrue(o.text().contains("글 1 / 2개 (50%)"))
+        org.junit.Assert.assertNull(Overall.count(java.io.File(v, "none")))
+    }
+}

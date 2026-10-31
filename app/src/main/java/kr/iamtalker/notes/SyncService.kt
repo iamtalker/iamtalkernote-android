@@ -44,6 +44,7 @@ class SyncService : Service() {
         val ctx = applicationContext
         val prefs = ctx.getSharedPreferences("settings", 0)
         val api = EmbeddedSync.api(ctx)
+        var fails = 0
         while (scope.isActive) {
             try {
                 if (!EmbeddedSync.alive()) EmbeddedSync.start(ctx)
@@ -51,9 +52,16 @@ class SyncService : Service() {
                 val pc = prefs.getString("pcId", "").orEmpty()
                 EmbeddedSync.report = if (tree == null) ForkSync.Report(error = "노트 폴더를 먼저 고르세요")
                 else ForkSync.tick(ctx, api, pc, tree)   // 단계별 가림은 이제 컴퓨터가 맡는다(폰의 긴 무시 목록이 느렸다)
+                fails = 0
             } catch (e: Exception) {
-                // 시작 직후에는 아직 응답하지 않는 게 정상이다
-                EmbeddedSync.report = ForkSync.Report(error = if (EmbeddedSync.alive()) "동기화 엔진을 시작하는 중…" else ForkSync.friendly(e))
+                // 시작 직후에는 아직 응답하지 않는 게 정상이다. 1분(12번) 넘게 응답이 없으면 엔진이 멈춘 것이니 새로 시작한다
+                fails++
+                val why = ForkSync.friendly(e)
+                if (EmbeddedSync.alive() && fails >= 12) {
+                    EmbeddedSync.note(ctx, "엔진이 1분 넘게 응답하지 않아 다시 시작합니다 (마지막 오류: $why)")
+                    EmbeddedSync.stop(); fails = 0
+                }
+                EmbeddedSync.report = ForkSync.Report(error = if (EmbeddedSync.alive()) "동기화 엔진을 시작하는 중… ($why)" else why)
             }
             delay(5000)
         }
