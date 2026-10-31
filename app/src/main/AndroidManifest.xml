@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Syncthing-Fork 의 로컬 API(127.0.0.1)와 통신하는 데만 쓴다 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 내장 동기화 엔진: 포그라운드 서비스(알림), 노트 폴더(문서 폴더)에 직접 쓰기 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <queries>
         <package android:name="com.github.catfriend1.syncthingandroid" />
         <package android:name="com.github.catfriend1.syncthingfork" />
@@ -13,7 +18,13 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:extractNativeLibs="true"
+        android:networkSecurityConfig="@xml/network_security"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <service
+            android:name=".SyncService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

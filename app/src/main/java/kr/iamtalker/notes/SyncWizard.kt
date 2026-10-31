@@ -61,6 +61,7 @@ private fun Hint(text: String) = Text(text, fontSize = 12.5.sp, color = Material
 @Composable
 fun SyncWizard(model: NotesModel) {
     val ctx = LocalContext.current
+    if (EmbeddedSync.available(ctx)) return EmbeddedWizard(model)   // 동기화 엔진이 앱에 들어 있으면 Fork 없이 큐알로 연결
     val prefs = remember { ctx.getSharedPreferences("settings", 0) }
     val clip = LocalClipboardManager.current
     val scope = rememberCoroutineScope()

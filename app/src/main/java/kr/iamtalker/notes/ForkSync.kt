@@ -109,7 +109,8 @@ object ForkSync {
     }
 
     // ------------------------------------------------------------ Fork API
-    class Api(private val key: String, private val port: Int = PORT) {
+    /** plain=true 는 앱에 내장한 Syncthing(http://127.0.0.1, 앱이 정한 키)용. 기본은 Fork(https, 자체 서명 인증서) */
+    class Api(private val key: String, private val port: Int = PORT, private val plain: Boolean = false) {
         // 127.0.0.1 의 Fork 가 자체 서명 인증서를 쓰므로, 이 연결에만 인증서 검사를 끈다(주소가 루프백일 때만)
         private val ssl: SSLContext = SSLContext.getInstance("TLS").apply {
             init(null, arrayOf<TrustManager>(object : X509TrustManager {
@@ -120,9 +121,11 @@ object ForkSync {
         }
 
         fun call(path: String, method: String = "GET", body: JSONObject? = null): String {
-            val c = URL("https://127.0.0.1:$port$path").openConnection() as HttpsURLConnection
-            c.sslSocketFactory = ssl.socketFactory
-            c.hostnameVerifier = javax.net.ssl.HostnameVerifier { host, _ -> host == "127.0.0.1" }
+            val c = URL((if (plain) "http" else "https") + "://127.0.0.1:$port$path").openConnection() as java.net.HttpURLConnection
+            if (c is HttpsURLConnection) {
+                c.sslSocketFactory = ssl.socketFactory
+                c.hostnameVerifier = javax.net.ssl.HostnameVerifier { host, _ -> host == "127.0.0.1" }
+            }
             c.requestMethod = method
             c.connectTimeout = 4000
             c.readTimeout = 15000
@@ -135,7 +138,8 @@ object ForkSync {
             val code = c.responseCode
             val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (code !in 200..299) throw IllegalStateException(
-                if (code == 403) "Fork 가 이 API 키를 받아 주지 않습니다. Fork 를 지웠다 다시 설치했다면 키가 새로 바뀌니, 새 Fork 에서 키를 다시 복사하세요."
+                if (code == 403 && plain) "내장 동기화 엔진이 이 앱의 키를 받아 주지 않습니다. 동기화를 껐다 다시 켜 보세요."
+                else if (code == 403) "Fork 가 이 API 키를 받아 주지 않습니다. Fork 를 지웠다 다시 설치했다면 키가 새로 바뀌니, 새 Fork 에서 키를 다시 복사하세요."
                 else "Fork 응답 $code ${text.take(120)}")
             return text
         }
