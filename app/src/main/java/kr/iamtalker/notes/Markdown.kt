@@ -1,6 +1,8 @@
 package kr.iamtalker.notes
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -177,7 +179,8 @@ fun MarkdownView(
     onToggle: (Int) -> Unit = {},
     onNoteLink: (String) -> Unit = {},
     onImage: (String) -> Unit = {},
-    cacheKey: String = ""
+    cacheKey: String = "",
+    outliner: Boolean = false
 ) {
     val parts = remember(text) {
         val (_, body) = Meta.split(text)
@@ -208,31 +211,70 @@ fun MarkdownView(
         )
     }
 
-    LazyColumn(modifier.padding(horizontal = 16.dp)) {
-        itemsIndexed(blocks) { _, b ->
-            when (b) {
-                is Block.H -> Rich(b.text, when (b.level) { 1 -> 24; 2 -> 21; 3 -> 18; else -> 16 }, FontWeight.Bold, Modifier.padding(top = 14.dp, bottom = 4.dp))
-                is Block.P -> Rich(b.text, 15, modifier = Modifier.padding(vertical = 4.dp))
-                is Block.Li -> Row(Modifier.padding(start = (b.indent * 16).dp, top = 1.dp, bottom = 1.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    if (b.checked != null) {
-                        Checkbox(checked = b.checked, onCheckedChange = { onToggle(offset + b.line) })
-                        Rich(b.text, 15, deco = if (b.checked) TextDecoration.LineThrough else null)
-                    } else {
-                        Text(if (b.marker.first().isDigit()) b.marker else "•", color = color, fontSize = 15.sp, modifier = Modifier.padding(end = 8.dp))
-                        Rich(b.text, 15)
-                    }
-                }
-                is Block.Quote -> Row(Modifier.padding(vertical = 3.dp)) {
-                    Box(Modifier.width(3.dp).height(22.dp).background(muted))
-                    Spacer(Modifier.width(10.dp))
+    // 한 블록을 그리는 부분(평소 보기와 아웃라이너의 '메모 블록'이 함께 쓴다)
+    @Composable
+    fun Blk(b: Block) {
+        when (b) {
+            is Block.H -> Rich(b.text, when (b.level) { 1 -> 24; 2 -> 21; 3 -> 18; else -> 16 }, FontWeight.Bold, Modifier.padding(top = 14.dp, bottom = 4.dp))
+            is Block.P -> Rich(b.text, 15, modifier = Modifier.padding(vertical = 4.dp))
+            is Block.Li -> Row(Modifier.padding(start = (b.indent * 16).dp, top = 1.dp, bottom = 1.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                if (b.checked != null) {
+                    Checkbox(checked = b.checked, onCheckedChange = { onToggle(offset + b.line) })
+                    Rich(b.text, 15, deco = if (b.checked) TextDecoration.LineThrough else null)
+                } else {
+                    Text(if (b.marker.first().isDigit()) b.marker else "•", color = color, fontSize = 15.sp, modifier = Modifier.padding(end = 8.dp))
                     Rich(b.text, 15)
                 }
-                is Block.Code -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = color,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(codeBg).horizontalScroll(rememberScrollState()).padding(10.dp))
-                is Block.Table -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = color,
-                    modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()))
-                is Block.Img -> NoteImage(b, cacheKey, loadImage, onImage)
-                Block.Rule -> HorizontalDivider(Modifier.padding(vertical = 10.dp))
+            }
+            is Block.Quote -> Row(Modifier.padding(vertical = 3.dp)) {
+                Box(Modifier.width(3.dp).height(22.dp).background(muted))
+                Spacer(Modifier.width(10.dp))
+                Rich(b.text, 15)
+            }
+            is Block.Code -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = color,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(codeBg).horizontalScroll(rememberScrollState()).padding(10.dp))
+            is Block.Table -> Text(b.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = color,
+                modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()))
+            is Block.Img -> NoteImage(b, cacheKey, loadImage, onImage)
+            Block.Rule -> HorizontalDivider(Modifier.padding(vertical = 10.dp))
+        }
+    }
+
+    val outlineOn = outliner && Outline.hasList(blocks)
+    var zoom by remember(text) { mutableStateOf<Int?>(null) }              // 줌인한 항목 번호(없으면 노트 전체)
+    val nodes = remember(blocks) { Outline.nodes(blocks) }
+    if (outlineOn && zoom != null) BackHandler { zoom = Outline.parentId(nodes, zoom!!) }   // 뒤로가기는 한 단계 위로
+    val rows = remember(blocks, zoom, outlineOn) { if (outlineOn) Outline.rows(blocks, zoom) else emptyList() }
+
+    LazyColumn(modifier.padding(horizontal = 16.dp)) {
+        if (!outlineOn) {
+            itemsIndexed(blocks) { _, b -> Blk(b) }
+        } else {
+            itemsIndexed(rows) { _, r ->
+                when (r) {
+                    is Outline.Row.Memo -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) { Blk(r.block) }
+                    is Outline.Row.Bullet -> Row(Modifier.padding(start = (minOf(r.depth, 6) * 14).dp), verticalAlignment = androidx.compose.ui.Alignment.Top) {
+                        Box(Modifier.size(32.dp).clickable { zoom = r.node.id }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                            Box(Modifier.size(if (r.node.children.isEmpty()) 7.dp else 9.dp)
+                                .background(if (r.node.children.isEmpty()) muted else link, androidx.compose.foundation.shape.CircleShape))
+                        }
+                        Row(Modifier.padding(top = 5.dp, bottom = 5.dp)) {
+                            if (r.node.marker.first().isDigit()) Text(r.node.marker + " ", color = muted, fontSize = 15.sp)
+                            if (r.node.checked != null) Text(if (r.node.checked) "☑ " else "☐ ", fontSize = 15.sp, color = color)
+                            Rich(r.node.text, 15, deco = if (r.node.checked == true) TextDecoration.LineThrough else null)
+                        }
+                    }
+                    is Outline.Row.Crumbs -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text("노트", color = link, fontSize = 14.sp, modifier = Modifier.clickable { zoom = null }.padding(end = 2.dp))
+                        for (a in r.path) {
+                            Text("  ›  ", color = muted, fontSize = 14.sp)
+                            Text(a.text.take(24) + (if (a.text.length > 24) "…" else ""), color = link, fontSize = 14.sp, maxLines = 1, modifier = Modifier.clickable { zoom = a.id })
+                        }
+                    }
+                    is Outline.Row.Title -> Rich(r.node.text, 22, FontWeight.Bold, Modifier.padding(top = 6.dp, bottom = 8.dp))
+                    Outline.Row.Empty -> Text("(하위 항목이 없습니다)", color = muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+                }
             }
         }
         item { Spacer(Modifier.height(80.dp)) }

@@ -170,6 +170,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         DropdownMenuItem(text = { Text("이전 버전") }, onClick = { close(); dialog = "versions" })
                         DropdownMenuItem(text = { Text("속성") }, onClick = { close(); dialog = "props" })
                         HorizontalDivider()
+                        DropdownMenuItem(text = { Text(if (model.outliner) "✓ 아웃라이너 보기" else "아웃라이너 보기") }, onClick = { model.changeOutliner(!model.outliner); close() })
                         DropdownMenuItem(text = { Text(if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가") }, onClick = { model.toggleFavorite(note); close() })
                         DropdownMenuItem(text = { Text(if (pinned) "고정 해제" else "맨 위에 고정") }, onClick = { model.togglePin(note); close() })
                         DropdownMenuItem(text = { Text("공유") }, onClick = {
@@ -247,6 +248,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         },
                         onNoteLink = { title -> save(); onOpenTitle(title) },
                         cacheKey = note.uri.toString(),
+                        outliner = model.outliner,
                         onImage = { src -> if (!(src.startsWith("http") || src.startsWith(":/"))) viewing = src }
                     )
                     viewing?.let { src ->

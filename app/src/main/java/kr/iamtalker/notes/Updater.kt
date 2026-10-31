@@ -30,6 +30,8 @@ object Updater {
     var available by mutableStateOf<Info?>(null)      // 새 버전이 있으면
     var status by mutableStateOf("")                   // 받는 중 45% / 설치 확인 중 / 실패 이유
     var busy by mutableStateOf(false)
+    var dialog by mutableStateOf(false)               // 업데이트 창(어느 화면에서든 보인다)
+    var step by mutableStateOf(0)                      // 0 대기 · 1 받는 중 · 2 설치 준비 · 3 설치 확인 화면 · 5 완료(앱이 새 버전으로 바뀜)
     var progress by mutableStateOf(-1f)                // 0..1 받은 비율, 음수면 얼마나 걸릴지 모르는 단계(설치 준비)
     var checkedMsg by mutableStateOf("")               // 마지막 확인 결과(설정 화면용)
 
@@ -92,15 +94,19 @@ object Updater {
             return
         }
         busy = true
+        dialog = true
+        step = 1
         progress = 0f
         status = "새 버전 ${info.version} 받는 중 0%"
         try {
             val file = withContext(Dispatchers.IO) { download(ctx, info) }
             progress = -1f
+            step = 2
             status = "내려받기 완료 · 설치를 준비하는 중…"
             notify(ctx, "설치를 준비하는 중…", -1)
             withContext(Dispatchers.IO) { install(ctx, file) }
         } catch (e: Exception) {
+            step = 0
             status = "업데이트하지 못했습니다: ${e.message}"
         } finally {
             busy = false
@@ -149,6 +155,26 @@ object Updater {
         }
     }
 
+    /** 설치가 끝나 앱이 새 버전으로 바뀐 직후의 알림(설치 중에는 이 앱이 교체되느라 아무것도 그릴 수 없어서, 끝났다는 것만이라도 알린다) */
+    fun notifyDone(ctx: Context) {
+        runCatching {
+            val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("update", "앱 업데이트", android.app.NotificationManager.IMPORTANCE_LOW))
+            val open = android.app.PendingIntent.getActivity(ctx, 3, Intent(ctx, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
+            nm.notify(NOTICE_ID, android.app.Notification.Builder(ctx, "update").setSmallIcon(R.mipmap.ic_launcher).setContentTitle("iamtalkernote 업데이트 완료")
+                .setContentText("새 버전 ${current(ctx)} 로 바뀌었습니다").setAutoCancel(true).setContentIntent(open).build())
+        }
+    }
+
+    /** 앱이 새 버전으로 처음 켜졌으면 그 버전(아니면 null). 한 번만 돌려준다 */
+    fun justUpdated(ctx: Context): String? {
+        val p = prefs(ctx)
+        val now = current(ctx)
+        val last = p.getString("lastRunVersion", null)
+        p.edit().putString("lastRunVersion", now).apply()
+        return if (last != null && last != now) now else null
+    }
+
     private fun cancelNotice(ctx: Context) {
         runCatching { ctx.getSystemService(android.app.NotificationManager::class.java).cancel(NOTICE_ID) }
     }
@@ -175,9 +201,10 @@ class UpdateReceiver : BroadcastReceiver() {
                 @Suppress("DEPRECATION") val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 runCatching { ctx.startActivity(confirm) }
+                Updater.step = 3
                 Updater.status = "설치 확인 화면이 떴습니다 — ‘설치’(또는 ‘업데이트’)를 눌러 주세요"
             }
-            PackageInstaller.STATUS_SUCCESS -> Updater.status = "설치했습니다 — 앱이 새 버전으로 다시 시작됩니다"
+            PackageInstaller.STATUS_SUCCESS -> { Updater.step = 5; Updater.status = "설치했습니다 — 앱이 새 버전으로 다시 시작됩니다" }
             else -> Updater.status = "설치하지 못했습니다: " + (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "알 수 없는 오류")
         }
     }
@@ -186,6 +213,8 @@ class UpdateReceiver : BroadcastReceiver() {
 /** 앱이 새 버전으로 바뀐 직후: 동기화를 켜 두었다면 다시 시작한다(업데이트가 엔진을 꺼 버리므로) */
 class ReplacedReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED && EmbeddedSync.wanted(ctx)) runCatching { SyncService.start(ctx) }
+        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        Updater.notifyDone(ctx)
+        if (EmbeddedSync.wanted(ctx)) runCatching { SyncService.start(ctx) }
     }
 }

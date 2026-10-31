@@ -66,6 +66,11 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         private set
     var favOnly by mutableStateOf(false)
         private set
+
+    /** 아웃라이너 보기: 목록을 점 계층으로 보이게 하고 점을 누르면 줌인(노트 보기 화면, Outline.kt) */
+    var outliner by mutableStateOf(prefs.getBoolean("outliner", false))
+        private set
+    fun changeOutliner(on: Boolean) { outliner = on; prefs.edit().putBoolean("outliner", on).apply() }
     var folderCounts by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
 
