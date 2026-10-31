@@ -244,7 +244,12 @@ object ForkSync {
                 val prefs = ctx.getSharedPreferences("settings", 0)
                 var rel = prefs.getInt("stagesReleased", 1)
                 val st = runCatching { api.folderStatus(id) }.getOrNull()
-                if (st != null) rel = Stages.nextReleased(rel, tiers.size, st.first, st.second)
+                if (st != null) {
+                    val up = runCatching { api.deviceIds().any { it != api.myId() && api.connected(it) } }.getOrDefault(false)
+                    val (r2, since) = Stages.advance(rel, tiers.size, Stages.looksDone(st.first, st.second, st.third, up), prefs.getLong("stagesSince", 0L), System.currentTimeMillis())
+                    rel = r2
+                    prefs.edit().putLong("stagesSince", since).apply()
+                }
                 prefs.edit().putInt("stagesReleased", rel).apply()
                 want = want + Stages.hidden(tiers, rel)
             }

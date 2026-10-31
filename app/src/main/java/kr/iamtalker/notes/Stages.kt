@@ -29,7 +29,16 @@ object Stages {
     fun hidden(tiers: List<List<String>>, released: Int): List<String> =
         tiers.drop(released.coerceAtLeast(0)).flatMap { t -> t.map(::escape) }
 
-    /** 지금 단계가 다 받아졌으면 다음 단계를 연다. 아직 받는 중이면 그대로 */
-    fun nextReleased(released: Int, total: Int, state: String, needBytes: Long): Int =
-        if (released < total && state == "idle" && needBytes == 0L) released + 1 else released
+    /** 지금 단계가 다 받아진 것처럼 보이는가: 놀고 있고(idle), 더 받을 게 없고, 컴퓨터 목록을 이미 받았고(전체 용량 > 0), 컴퓨터와 연결 중.
+     *  연결 직후 컴퓨터의 목록이 오기 전에도 '받을 것 없음'으로 보이므로 연결·목록 조건을 함께 본다 */
+    fun looksDone(state: String, needBytes: Long, totalBytes: Long, connected: Boolean): Boolean =
+        state == "idle" && needBytes == 0L && totalBytes > 0 && connected
+
+    /** looksDone 이 holdMs 이상 이어졌을 때만 다음 단계로. since 는 처음 done 으로 보인 시각(0 이면 아직), 돌려주는 값은 (열린 단계 수, 새 since) */
+    fun advance(released: Int, total: Int, done: Boolean, since: Long, now: Long, holdMs: Long = 20_000): Pair<Int, Long> = when {
+        released >= total || !done -> released to 0L
+        since == 0L -> released to now
+        now - since >= holdMs -> (released + 1) to 0L
+        else -> released to since
+    }
 }

@@ -22,10 +22,19 @@ class StagesTest {
         assertEquals(emptyList<String>(), Stages.hidden(t, 3))
     }
 
-    @Test fun nextTierOpensOnlyWhenCurrentIsDone() {
-        assertEquals(1, Stages.nextReleased(1, 5, "syncing", 0))
-        assertEquals(1, Stages.nextReleased(1, 5, "idle", 100))
-        assertEquals(2, Stages.nextReleased(1, 5, "idle", 0))
-        assertEquals(5, Stages.nextReleased(5, 5, "idle", 0))    // 마지막까지 열렸으면 그대로
+    @Test fun looksDoneNeedsTheComputersListAndConnection() {
+        assertEquals(true, Stages.looksDone("idle", 0, 100, true))
+        assertEquals(false, Stages.looksDone("idle", 0, 0, true))        // 컴퓨터 목록이 아직 안 옴
+        assertEquals(false, Stages.looksDone("idle", 0, 100, false))     // 연결 끊김
+        assertEquals(false, Stages.looksDone("syncing", 0, 100, true))
+        assertEquals(false, Stages.looksDone("idle", 5, 100, true))
+    }
+
+    @Test fun nextTierOpensOnlyAfterHoldingForAWhile() {
+        assertEquals(1 to 1000L, Stages.advance(1, 5, true, 0L, 1000L))              // 처음 done 으로 보임: 시각만 적는다
+        assertEquals(1 to 1000L, Stages.advance(1, 5, true, 1000L, 10_000L))         // 아직 20초 안 됨
+        assertEquals(2 to 0L, Stages.advance(1, 5, true, 1000L, 21_000L))            // 20초 이어짐: 다음 단계
+        assertEquals(1 to 0L, Stages.advance(1, 5, false, 1000L, 21_000L))           // 중간에 받을 게 생기면 처음부터
+        assertEquals(5 to 0L, Stages.advance(5, 5, true, 0L, 1000L))                 // 마지막까지 열렸으면 그대로
     }
 }
