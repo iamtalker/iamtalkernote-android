@@ -305,6 +305,7 @@ fun App(model: NotesModel) {
     if (screen == "conflicts") { ConflictsScreen(model, onBack = { closeTool() }); return }
     if (screen == "dups") { DuplicatesScreen(model, onBack = { closeTool() }, onOpen = { screen = ""; open = it }); return }
     if (screen == "media") { UnusedMediaScreen(model, onBack = { closeTool(); model.refresh() }); return }
+    if (screen == "planner") { PlannerScreen(model, onBack = { closeTool() }); return }
     if (screen == "journal") { JournalScreen(model, onBack = { closeTool() }, onOpen = { screen = ""; open = it }); return }
     if (screen == "settings") { SettingsScreen(model, settingsPage, { settingsPage = it }, onBack = { screen = ""; settingsPage = "" }, onTool = { fromSettings = true; screen = it }, onPick = { picker.launch(null) }); return }
     val cur = open
@@ -429,6 +430,7 @@ fun App(model: NotesModel) {
                         }
                     }
                     if (model.conflicts.isNotEmpty()) item { NavHeading("동기화 충돌 (${model.conflicts.size})") { go { screen = "conflicts" } } }
+                    item { NavHeading("달력·할일") { go { screen = "planner" } } }
                     item { NavHeading("휴지통") { go { screen = "trash" } } }
                     item { NavHeading("설정") { go { screen = "settings" } } }
                     item { Spacer(Modifier.height(24.dp)) }
