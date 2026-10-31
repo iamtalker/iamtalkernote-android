@@ -230,7 +230,12 @@ private fun SyncControls(model: NotesModel) {
     if (p == null || e == null) return   // 컴퓨터의 새 방식 정책(.sync/policy.json)이 아직 없다
     val scope = rememberCoroutineScope()
     fun change(direction: String? = null, key: String? = null, on: Boolean? = null) {
-        scope.launch { withContext(Dispatchers.IO) { SyncSettings.change(vault, p, direction, key, on) }; again++ }
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                if (SyncSettings.change(vault, p, direction, key, on)) EmbeddedSync.api(ctx).scanSettingsFolder()   // 컴퓨터에 바로 가게 설정 폴더를 즉시 검사
+            }
+            again++
+        }
     }
     Text("동기화 방향", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
     for ((d, label) in listOf("both" to "양방향", "pc2mobile" to "컴퓨터 → 폰 (받기만)", "mobile2pc" to "폰 → 컴퓨터 (보내기만)", "off" to "동기화 안 함"))

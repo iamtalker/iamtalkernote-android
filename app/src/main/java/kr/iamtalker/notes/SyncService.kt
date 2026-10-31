@@ -74,8 +74,11 @@ class SyncService : Service() {
                             val vf = java.io.File(vp)
                             val counted = Overall.count(vf)
                             if (counted == null) EmbeddedSync.note(ctx, "전체 진행을 셀 수 없음: " + Overall.why(vf))
+                            if (counted != null) {
+                                if (PhoneProgress.write(vp, counted)) api.scanSettingsFolder()      // 컴퓨터에 바로 가게 설정 폴더를 즉시 검사
+                                else EmbeddedSync.note(ctx, "센 진행을 컴퓨터에 알리지 못함: 설정 폴더 없음(${SyncSettings.dir(vp).path})")
+                            }
                             counted?.let { o ->
-                                PhoneProgress.write(vp, o)
                                 overall = o
                                 val rate = fileEta.update(System.currentTimeMillis(), (o.all - o.have).toLong())   // 남은 파일 수가 줄어드는 속도
                                 etaSec = Eta.seconds((o.all - o.have).toLong(), rate)

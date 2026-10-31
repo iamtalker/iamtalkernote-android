@@ -209,6 +209,16 @@ object ForkSync {
             call("/rest/config/folders/$id", "PUT", f)
         }
 
+        /** 폴더를 바로 다시 검사시킨다. 폰이 파일을 폴더에 직접 쓰면 안드로이드 외부 저장소에서는 Syncthing 이 새 파일을 바로 알아채지 못해 최대 한 시간 뒤 재검사까지 전송이 밀린다 */
+        fun scan(id: String) {
+            call("/rest/db/scan?folder=" + java.net.URLEncoder.encode(id, "UTF-8"), "POST")
+        }
+
+        /** 설정 폴더(종류 cfg)를 바로 검사시킨다. 폰이 settings.json·progress.json 을 쓴 직후에 부른다 */
+        fun scanSettingsFolder() = runCatching {
+            folders().map { it.getString("id") }.filter { it.startsWith(ID_PREFIX) && kindOf(it) == "cfg" }.forEach { scan(it) }
+        }
+
         /** 폴더를 잠깐 멈췄다 다시 시작한다. 받기에 실패해 '몇 시간 뒤 재시도'로 밀린 대기가 풀린다 */
         fun kick(id: String) {
             val f = folders().firstOrNull { it.getString("id") == id } ?: return
