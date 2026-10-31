@@ -101,7 +101,13 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     }
 
     LaunchedEffect(start.uri) {
-        val t = withContext(Dispatchers.IO) { NoteRepo.read(ctx, start.uri) }
+        // 목록에는 있는데 파일은 이미 없어진 노트(동기화·삭제 직후)를 열어도 앱이 꺼지지 않게: 안내하고 목록으로 돌아간다
+        val t = withContext(Dispatchers.IO) { runCatching { NoteRepo.read(ctx, start.uri) } }.getOrElse { e ->
+            android.util.Log.w("iat", "노트를 읽지 못함", e)
+            android.widget.Toast.makeText(ctx, "이 노트는 이미 없어졌습니다. 목록을 새로 고칩니다", android.widget.Toast.LENGTH_LONG).show()
+            model.forget(start); model.refresh(); onClose()
+            return@LaunchedEffect
+        }
         tfv = TextFieldValue(t); saved = t
     }
 
@@ -173,6 +179,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
         val empty = start.size == 0L && titleText.isBlank() && (tfv?.text ?: "").isBlank() && (saved).isBlank()
         if (empty) {
             runCatching { android.provider.DocumentsContract.deleteDocument(ctx.contentResolver, note.uri) }.onFailure { android.util.Log.w("iat", "빈 노트 지우기 실패", it) }
+            model.forget(note)                  // 목록에서도 바로 뺀다(남아 있으면 눌렀을 때 없는 파일을 열게 된다)
             model.refresh()
         } else save()
         onClose()

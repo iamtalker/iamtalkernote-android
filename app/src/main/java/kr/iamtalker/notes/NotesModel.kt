@@ -363,6 +363,9 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 파일이 없어진 노트를 목록에서 바로 뺀다(새로 읽기 전에 눌러도 안전하게) */
+    fun forget(n: Note) { publish(notes.filter { it.uri != n.uri } + conflicts.map { it.conflict }) }
+
     private fun publish(all: List<Note>) {
         val (conf, list) = all.partition { Conflicts.isConflict(it.name) }
         conflicts = conf.map { c ->
