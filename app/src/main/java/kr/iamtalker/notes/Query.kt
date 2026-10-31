@@ -133,3 +133,53 @@ object QueryParser {
         is Q.Or -> q.a.flatMap(::terms)
     }
 }
+
+/** 검색식 속의 기간: `date:20101011-20240104 만화&아이유` (날짜:·기간: 도 같음). date:20240101(그 날) · 202401(그 달) · 2024(그 해) ·
+ *  20240101-(그날부터) · -20240104(그날까지). 데스크톱 앱(search.split_date)과 같은 규칙. 읽을 수 없는 날짜는 [bad] 로 알려 준다
+ *  (조용히 무시하면 기간이 안 걸려 엉뚱한 결과가 나온다). 시각은 밀리초. */
+object DateQuery {
+    data class Parsed(val rest: String, val from: Long?, val to: Long?, val bad: List<String>)
+
+    private val token = Regex("""(?<!\S)(?:date|날짜|기간):(\S*)""", RegexOption.IGNORE_CASE)
+    private val dateRe = Regex("""^(\d{4})(?:[.\-/]?(\d{1,2})(?:[.\-/]?(\d{1,2}))?)?$""")
+    private val rangeRe = Regex("""\d{8}(-\d{8})?|\d{8}-|-\d{8}""")
+
+    /** 'YYYYMMDD' · 'YYYY-M-D' · 'YYYYMM' · 'YYYY' → 그 날(달·해)의 시작/끝. 안 읽히면 null */
+    fun parseDate(s: String, end: Boolean = false): Long? {
+        val m = dateRe.matchEntire(s.trim()) ?: return null
+        val y = m.groupValues[1].toInt()
+        val mo = m.groupValues[2].ifEmpty { null }?.toInt() ?: if (end) 12 else 1
+        if (mo !in 1..12) return null
+        val d = m.groupValues[3].ifEmpty { null }?.toInt() ?: if (end) java.time.YearMonth.of(y, mo).lengthOfMonth() else 1
+        return try {
+            val day = java.time.LocalDate.of(y, mo, d)
+            val z = java.time.ZoneId.systemDefault()
+            if (end) day.atTime(23, 59, 59, 999_000_000).atZone(z).toInstant().toEpochMilli() else day.atStartOfDay(z).toInstant().toEpochMilli()
+        } catch (e: java.time.DateTimeException) { null }
+    }
+
+    fun split(query: String): Parsed {
+        var from: Long? = null
+        var to: Long? = null
+        val bad = ArrayList<String>()
+        for (m in token.findAll(query)) {
+            val tok = m.groupValues[1]
+            val lo: Long?
+            val hi: Long?
+            if (rangeRe.matches(tok) && tok.contains('-')) {
+                val a = tok.substringBefore('-')
+                val b = tok.substringAfter('-')
+                lo = if (a.isEmpty()) null else parseDate(a)
+                hi = if (b.isEmpty()) null else parseDate(b, true)
+                if ((a.isNotEmpty() && lo == null) || (b.isNotEmpty() && hi == null)) bad.add("date:$tok")
+            } else {
+                lo = parseDate(tok)
+                hi = parseDate(tok, true)
+                if (lo == null) bad.add("date:$tok")
+            }
+            if (lo != null) from = if (from == null) lo else maxOf(from, lo)
+            if (hi != null) to = if (to == null) hi else minOf(to, hi)
+        }
+        return Parsed(token.replace(query, " ").trim(), from, to, bad)
+    }
+}

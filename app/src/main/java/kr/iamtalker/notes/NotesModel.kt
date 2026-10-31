@@ -444,7 +444,8 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         val base = notes
         searchJob = viewModelScope.launch {
             delay(120)
-            val q = QueryParser.parse(query)
+            val dq = DateQuery.split(query)
+            val q = QueryParser.parse(dq.rest)
             val f = folder
             val t = tag
             val body = inBody
@@ -454,7 +455,14 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             val favSet = if (favOnly) favs else null
             val per = period
             val result = withContext(Dispatchers.IO) {
-                var list = base
+                var list = if (dq.bad.isNotEmpty()) emptyList() else base   // 읽을 수 없는 날짜는 기간 없이 찾지 않고 비워서 알린다
+                if (dq.from != null || dq.to != null) {
+                    val byCreated = sorter == Sort.CREATED_DESC
+                    list = list.filter { n ->
+                        val t = if (byCreated && n.created > 0) n.created else n.date
+                        (dq.from == null || t >= dq.from) && (dq.to == null || t <= dq.to)
+                    }
+                }
                 if (f != null) list = list.filter { it.folder == f || it.folder.startsWith("$f/") }
                 if (t != null) list = list.filter { n -> n.tags.any { it.equals(t, ignoreCase = true) } }
                 if (favSet != null) list = list.filter { Favorites.relOf(it) in favSet }
@@ -487,6 +495,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 if (pinned.isEmpty()) ordered else ordered.filter { it.uri.toString() in pinned } + ordered.filter { it.uri.toString() !in pinned }
             }
             shown = result
+            if (dq.bad.isNotEmpty()) status = "날짜를 읽을 수 없습니다: " + dq.bad.joinToString(", ") + "  (예: date:20200202-20221231)"
         }
         reapplyDocs()
     }
