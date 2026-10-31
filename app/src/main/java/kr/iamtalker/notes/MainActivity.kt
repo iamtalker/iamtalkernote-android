@@ -490,7 +490,6 @@ fun App(model: NotesModel) {
                 if (model.tree != null && !selecting && !inSearch) Column(Modifier.background(MaterialTheme.colorScheme.surface)) {
                     HorizontalDivider(color = line)
                     Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        BarButton({ scope.launch { drawer.open() } }) { BookIcon() }
                         BarButton({ searching = true }) { SearchIcon(MaterialTheme.colorScheme.outline) }
                         BarButton({ moreOpen = true }) { HDotsIcon() }
                     }
