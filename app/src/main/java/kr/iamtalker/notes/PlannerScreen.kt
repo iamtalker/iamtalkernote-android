@@ -48,6 +48,27 @@ import androidx.compose.ui.unit.sp
 import java.time.LocalDate
 import java.time.YearMonth
 
+/** 날짜 입력칸: 직접 쓰기(20261105 · 2026-11-05)는 그대로, 오른쪽 [달력] 으로 달력을 띄워 고르기도 된다 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    OutlinedTextField(value, onChange, singleLine = true, placeholder = { Text(placeholder) }, modifier = modifier,
+        trailingIcon = { TextButton(onClick = { open = true }) { Text("달력") } })
+    if (open) {
+        val init = PlannerCalc.parseLoose(value)?.let { LocalDate.parse(it).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli() }
+        val st = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = init ?: System.currentTimeMillis())
+        androidx.compose.material3.DatePickerDialog(onDismissRequest = { open = false },
+            confirmButton = { TextButton(onClick = {
+                st.selectedDateMillis?.let { ms -> onChange(java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()) }
+                open = false
+            }) { Text("선택") } },
+            dismissButton = { TextButton(onClick = { open = false }) { Text("취소") } }) {
+            androidx.compose.material3.DatePicker(st)
+        }
+    }
+}
+
 private val Red = Color(0xFFD64545)
 private val Blue = Color(0xFF3B7DD8)
 
@@ -222,7 +243,7 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
         AlertDialog(onDismissRequest = { addDialog = null }, title = { Text("할일 만들기") },
             text = { Column {
                 OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text("할일 내용") })
-                OutlinedTextField(date, { date = it }, singleLine = true, placeholder = { Text("날짜(비우면 날짜 없이) 예: 20261105") }, modifier = Modifier.padding(top = 8.dp))
+                DateField(date, { date = it }, "날짜(비우면 날짜 없이) 예: 20261105", Modifier.padding(top = 8.dp))
             } },
             confirmButton = { TextButton(onClick = {
                 val d = if (date.isBlank()) null else PlannerCalc.parseLoose(date)
@@ -241,7 +262,7 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
     dateDialog?.let { (t, field) ->
         var s by remember(t.id, field) { mutableStateOf((if (field == "date") t.date else t.doneOn) ?: today.toString()) }
         AlertDialog(onDismissRequest = { dateDialog = null }, title = { Text(if (field == "date") "추가한 날" else "완료한 날") },
-            text = { OutlinedTextField(s, { s = it }, singleLine = true, placeholder = { Text("예: 2026-09-14, 20260914") }) },
+            text = { DateField(s, { s = it }, "예: 2026-09-14, 20260914") },
             confirmButton = { TextButton(onClick = {
                 val d = PlannerCalc.parseLoose(s)
                 when {
