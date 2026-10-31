@@ -121,8 +121,14 @@ fun toggleCheckbox(text: String, absLine: Int): String {
 
 fun inlineText(s: String, link: Color, codeBg: Color, muted: Color): AnnotatedString = buildAnnotatedString {
     var pos = 0
+    fun plain(t: String) {
+        for ((piece, title) in WikiAuto.split(t)) {
+            if (title == null) append(piece)
+            else { pushStringAnnotation("NOTE", title); withStyle(SpanStyle(color = link)) { append(piece) }; pop() }
+        }
+    }
     for (m in inline.findAll(s)) {
-        append(s.substring(pos, m.range.first))
+        plain(s.substring(pos, m.range.first))
         pos = m.range.last + 1
         val g = m.groups
         when {
@@ -147,7 +153,7 @@ fun inlineText(s: String, link: Color, codeBg: Color, muted: Color): AnnotatedSt
             }
         }
     }
-    append(s.substring(pos))
+    plain(s.substring(pos))
 }
 
 @Composable
@@ -200,7 +206,7 @@ fun MarkdownView(
 
     @Composable
     fun Rich(s: String, size: Int, weight: FontWeight? = null, modifier: Modifier = Modifier, deco: TextDecoration? = null) {
-        val a = inlineText(s, link, codeBg, muted)
+        val a = remember(s, WikiAuto.version, WikiAuto.enabled) { inlineText(s, link, codeBg, muted) }
         ClickableText(
             text = a, modifier = modifier,
             style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.5f).sp, fontWeight = weight, color = color, textDecoration = deco),

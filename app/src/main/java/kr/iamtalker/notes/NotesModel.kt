@@ -275,6 +275,9 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     fun changeTheme(m: Int) { themeMode = m; prefs.edit().putInt("theme", m).apply() }
     fun changeOpenEditing(b: Boolean) { openEditing = b; prefs.edit().putBoolean("openEditing", b).apply() }
     fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
+    var wikiAuto by mutableStateOf(prefs.getBoolean("wikiAuto", false).also { WikiAuto.enabled = it })
+        private set
+    fun changeWikiAuto(b: Boolean) { wikiAuto = b; WikiAuto.enabled = b; WikiAuto.setTitles(notes.map { it.title }); prefs.edit().putBoolean("wikiAuto", b).apply() }
     fun changeAutoRefresh(b: Boolean) { autoRefresh = b; prefs.edit().putBoolean("autoRefresh", b).apply() }
 
     /** Syncthing-Fork 연결 상태(동기화 마법사가 보여 준다) */
@@ -362,6 +365,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             Conflicts.Pair(c, list.firstOrNull { it.parentId == c.parentId && it.name == on })
         }.sortedByDescending { it.conflict.modified }
         notes = list
+        WikiAuto.setTitles(list.map { it.title })
         val fset = sortedSetOf<String>()
         fset.addAll(NoteRepo.folders(list))
         for (k in NoteRepo.dirs.keys) { var f = k; while (f.isNotEmpty()) { fset.add(f); f = f.substringBeforeLast('/', "") } }   // 빈 노트북도

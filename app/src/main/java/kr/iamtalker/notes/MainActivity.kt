@@ -321,7 +321,6 @@ fun App(model: NotesModel) {
     }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    var newDialog by remember { mutableStateOf(false) }
     var batchDialog by remember { mutableStateOf("") }          // move / tag / trash
     var saveDialog by remember { mutableStateOf(false) }
     var tagDialog by remember { mutableStateOf<String?>(null) }
@@ -513,7 +512,7 @@ fun App(model: NotesModel) {
                 }
             },
             floatingActionButton = {
-                if (model.tree != null && !selecting && !inSearch) FloatingActionButton(onClick = { newDialog = true }, shape = CircleShape,
+                if (model.tree != null && !selecting && !inSearch) FloatingActionButton(onClick = { model.create("")?.let { open = it } }, shape = CircleShape,
                     containerColor = accent, contentColor = Color.White) { PencilIcon(Color.White) }
             }
         ) { pad ->
@@ -739,21 +738,6 @@ fun App(model: NotesModel) {
             text = { Text("컴퓨터의 iamtalkernote 에서 복원할 수 있습니다.") },
             confirmButton = { TextButton(onClick = { batchDialog = ""; model.batch("휴지통") { n -> model.trashNote(n) } }) { Text("휴지통으로") } },
             dismissButton = { TextButton(onClick = { batchDialog = "" }) { Text("취소") } }
-        )
-    }
-    if (newDialog) {
-        var title by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { newDialog = false },
-            title = { Text("새 노트" + (model.folder?.let { " — " + it.substringAfterLast('/') } ?: "")) },
-            text = { OutlinedTextField(value = title, onValueChange = { title = it }, singleLine = true, placeholder = { Text("제목") }) },
-            confirmButton = {
-                TextButton(onClick = {
-                    newDialog = false
-                    model.create(title)?.let { open = it }
-                }) { Text("만들기") }
-            },
-            dismissButton = { TextButton(onClick = { newDialog = false }) { Text("취소") } }
         )
     }
 }

@@ -146,6 +146,8 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                 "general" -> {
                     SwitchRow("앱으로 돌아올 때 자동 새로고침", "동기화로 바뀐 노트를 마지막으로 읽은 지 1분이 지났으면 다시 읽습니다", model.autoRefresh) { model.changeAutoRefresh(it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SwitchRow("위키 낱말 자동 연결", "괄호 없이도 다른 노트 제목과 같은 낱말(2글자 이상)을 그 노트로 연결합니다. 같은 제목이 여럿이면 가장 최근 노트", model.wikiAuto) { model.changeWikiAuto(it) }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("지금 새로고침", onClick = { model.refresh(); onBack() })
                     TextRow("노트 폴더 다시 고르기", onClick = onPick)
                 }

@@ -41,6 +41,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -73,6 +76,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     var editing by remember { mutableStateOf(start.size == 0L || model.openEditing) }   // 새 노트는 바로 편집, 기존 노트는 보기부터
     var dialog by remember { mutableStateOf("") }                   // rename / move / delete / props / tags
     var error by remember { mutableStateOf<String?>(null) }
+    var sheet by remember { mutableStateOf(false) }                 // ⋮ 메뉴(아래에서 올라오는 시트)
     var findOpen by remember { mutableStateOf(false) }
     var findQ by remember { mutableStateOf("") }
     var findIdx by remember { mutableIntStateOf(0) }
@@ -113,7 +117,14 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
             History.journal(ctx, tree, "edit", History.relOf(n))
         }
     }
-    fun save() { tfv?.let { persist(it.text) } }
+    // 조플린처럼 제목은 본문 위의 입력칸. 새 노트는 비워 두고(파일 이름은 '제목 없음'), 쓰고 나면 그 이름으로 바꾼다
+    var titleText by remember { mutableStateOf(if (start.size == 0L) "" else start.title) }
+    fun commitTitle() {
+        val t = titleText.trim()
+        if (t.isEmpty() || t == note.title) return
+        runCatching { note = model.renameNote(note, t) }.onFailure { error = it.message ?: it.javaClass.simpleName }
+    }
+    fun save() { tfv?.let { persist(it.text) }; commitTitle() }
 
     // 자동 저장: 입력을 멈추고 0.6초 뒤(데스크톱과 같음)
     LaunchedEffect(tfv?.text) {
@@ -160,29 +171,11 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
             Column { Surface(color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) { Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
                 BarButton({ save(); onClose() }) { BackIcon(MaterialTheme.colorScheme.onSurface) }
                 Text(note.title, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).clickable { dialog = "rename" })
                 run {
                     TextButton(onClick = { model.toggleFavorite(note) }) { Text(if (isFav) "★" else "☆", fontSize = 22.sp, color = if (isFav) Color(0xFFE0A020) else MaterialTheme.colorScheme.outline) }
-                    TextButton(onClick = { save(); editing = !editing }) { Text(if (editing) "보기" else "편집", color = MaterialTheme.colorScheme.primary) }
-                    BarMenu({ DotsIcon(MaterialTheme.colorScheme.onSurface) }) { close ->
-                        DropdownMenuItem(text = { Text("문서에서 찾기") }, onClick = { close(); findOpen = true })
-                        DropdownMenuItem(text = { Text("태그 편집") }, onClick = { close(); dialog = "tags" })
-                        DropdownMenuItem(text = { Text("이전 버전") }, onClick = { close(); dialog = "versions" })
-                        DropdownMenuItem(text = { Text("속성") }, onClick = { close(); dialog = "props" })
-                        HorizontalDivider()
-                        DropdownMenuItem(text = { Text(if (model.outliner) "✓ 아웃라이너 보기" else "아웃라이너 보기") }, onClick = { model.changeOutliner(!model.outliner); close() })
-                        DropdownMenuItem(text = { Text(if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가") }, onClick = { model.toggleFavorite(note); close() })
-                        DropdownMenuItem(text = { Text(if (pinned) "고정 해제" else "맨 위에 고정") }, onClick = { model.togglePin(note); close() })
-                        DropdownMenuItem(text = { Text("공유") }, onClick = {
-                            close()
-                            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, note.title).putExtra(Intent.EXTRA_TEXT, tfv?.text ?: "")
-                            ctx.startActivity(Intent.createChooser(send, "공유"))
-                        })
-                        DropdownMenuItem(text = { Text("이름 바꾸기") }, onClick = { close(); dialog = "rename" })
-                        DropdownMenuItem(text = { Text("노트북으로 이동") }, onClick = { close(); dialog = "move" })
-                        HorizontalDivider()
-                        DropdownMenuItem(text = { Text("휴지통으로") }, onClick = { close(); dialog = "delete" })
-                    }
+                    BarButton({ save(); editing = !editing }) { if (editing) BookIcon(MaterialTheme.colorScheme.onSurface) else PencilIcon(MaterialTheme.colorScheme.onSurface) }   // 조플린처럼 위 아이콘으로 보기·편집 전환
+                    BarButton({ sheet = true }) { DotsIcon(MaterialTheme.colorScheme.onSurface) }
                 }
             } }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
@@ -226,12 +219,23 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                 if (v == null) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 } else if (editing) {
-                    BasicTextField(
-                        value = v, onValueChange = { tfv = it },
-                        textStyle = TextStyle(fontSize = model.editorFont.sp, lineHeight = (model.editorFont * 1.5f).sp, color = MaterialTheme.colorScheme.onSurface),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.fillMaxSize().padding(16.dp).focusRequester(focus)
-                    )
+                    Column(Modifier.fillMaxSize()) {
+                        BasicTextField(
+                            value = titleText, onValueChange = { titleText = it.filter { c -> c.code != 10 } }, singleLine = true,
+                            textStyle = TextStyle(fontSize = (model.editorFont + 5).sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            decorationBox = { inner -> Box { if (titleText.isEmpty()) Text("제목 추가", fontSize = (model.editorFont + 5).sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.outline); inner() } },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
+                                .onFocusChanged { if (!it.isFocused) commitTitle() }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        BasicTextField(
+                            value = v, onValueChange = { tfv = it },
+                            textStyle = TextStyle(fontSize = model.editorFont.sp, lineHeight = (model.editorFont * 1.5f).sp, color = MaterialTheme.colorScheme.onSurface),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp).focusRequester(focus)
+                        )
+                    }
                 } else {
                     MarkdownView(
                         v.text, Modifier.fillMaxSize(),
@@ -256,6 +260,34 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         if (u != null) ImageViewer(u, Uri.decode(src.substringBefore('?').substringAfterLast('/')), onClose = { viewing = null }) else viewing = null
                     }
                 }
+            }
+        }
+    }
+
+    if (sheet) {
+        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { sheet = false }) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+                @Composable fun item(label: String, red: Boolean = false, onClick: () -> Unit) {
+                    Text(label, fontSize = 16.sp, color = if (red) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth().clickable { sheet = false; onClick() }.padding(horizontal = 24.dp, vertical = 14.dp))
+                }
+                item("첨부…") { editing = true; pickImage.launch("image/*") }
+                item("공유") {
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, note.title).putExtra(Intent.EXTRA_TEXT, tfv?.text ?: "")
+                    ctx.startActivity(Intent.createChooser(send, "공유"))
+                }
+                item("태그") { dialog = "tags" }
+                item("문서에서 찾기") { findOpen = true }
+                item("이전 버전") { dialog = "versions" }
+                item(if (model.outliner) "✓ 아웃라이너 보기" else "아웃라이너 보기") { model.changeOutliner(!model.outliner) }
+                item(if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가") { model.toggleFavorite(note) }
+                item(if (pinned) "고정 해제" else "맨 위에 고정") { model.togglePin(note) }
+                item("이름 바꾸기") { dialog = "rename" }
+                item("노트북으로 이동") { dialog = "move" }
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                item("속성") { dialog = "props" }
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                item("삭제", red = true) { dialog = "delete" }
             }
         }
     }
