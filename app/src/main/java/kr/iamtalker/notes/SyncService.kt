@@ -48,7 +48,7 @@ class SyncService : Service() {
                 val tree = prefs.getString("tree", null)?.let(Uri::parse)
                 val pc = prefs.getString("pcId", "").orEmpty()
                 EmbeddedSync.report = if (tree == null) ForkSync.Report(error = "노트 폴더를 먼저 고르세요")
-                else ForkSync.tick(ctx, api, pc, tree, staged = true)
+                else ForkSync.tick(ctx, api, pc, tree)   // 단계별 가림은 이제 컴퓨터가 맡는다(폰의 긴 무시 목록이 느렸다)
             } catch (e: Exception) {
                 // 시작 직후에는 아직 응답하지 않는 게 정상이다
                 EmbeddedSync.report = ForkSync.Report(error = if (EmbeddedSync.alive()) "동기화 엔진을 시작하는 중…" else ForkSync.friendly(e))

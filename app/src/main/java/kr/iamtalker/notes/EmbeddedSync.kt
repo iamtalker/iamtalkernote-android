@@ -41,6 +41,12 @@ object EmbeddedSync {
 
     fun alive(): Boolean = proc?.isAlive == true
 
+    /** 엔진 로그의 마지막 줄들(문제 확인용) */
+    fun logTail(ctx: Context, lines: Int = 40): String = runCatching {
+        val f = File(ctx.filesDir, "syncthing.log")
+        if (!f.exists()) "" else f.readLines().takeLast(lines).joinToString("\n")
+    }.getOrDefault("")
+
     @Synchronized
     fun start(ctx: Context) {
         if (alive()) return

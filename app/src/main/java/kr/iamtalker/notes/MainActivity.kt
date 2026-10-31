@@ -524,6 +524,7 @@ fun App(model: NotesModel) {
                 }
                 val pinnedList = if (inSearch) emptyList() else model.shown.filter { it.uri.toString() in model.pins }
                 val restList = if (pinnedList.isEmpty()) model.shown else model.shown.filter { it.uri.toString() !in model.pins }
+                PullRefresh(model) {
                 if (model.showDocs) DocList(model) { openDoc = it } else LazyColumn(Modifier.fillMaxSize()) {
                     if (model.shown.isEmpty() && !model.loading) item {
                         Text(if (inSearch) "찾은 노트가 없습니다" else "노트가 없습니다. 오른쪽 아래 연필로 만들어 보세요.", color = MaterialTheme.colorScheme.outline, modifier = Modifier.fillMaxWidth().padding(32.dp))
@@ -550,6 +551,7 @@ fun App(model: NotesModel) {
                             onLong = { selectMode = true; model.toggleSelect(n) })
                     }
                     item { Spacer(Modifier.height(80.dp)) }
+                }
                 }
             }
         }

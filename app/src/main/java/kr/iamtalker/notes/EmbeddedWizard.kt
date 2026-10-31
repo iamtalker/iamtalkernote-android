@@ -5,8 +5,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.app.NotificationManagerCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,12 +67,25 @@ fun EmbeddedWizard(model: NotesModel) {
     val scope = rememberCoroutineScope()
     var on by remember { mutableStateOf(EmbeddedSync.wanted(ctx)) }
     var allFiles by remember { mutableStateOf(Environment.isExternalStorageManager()) }
+    var notifOn by remember { mutableStateOf(NotificationManagerCompat.from(ctx).areNotificationsEnabled()) }
+    var battery by remember { mutableStateOf(ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)) }
+    var askedNotif by remember { mutableStateOf(prefs.getBoolean("askedNotif", false)) }
     var pcId by remember { mutableStateOf(prefs.getString("pcId", "") ?: "") }
     var manual by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     val report = EmbeddedSync.report
-    LaunchedEffect(Unit) { while (true) { allFiles = Environment.isExternalStorageManager(); delay(2000) } }
-    val notif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        while (true) {   // 설정 화면에서 돌아왔을 때 바로 반영되게 2초마다 다시 본다
+            allFiles = Environment.isExternalStorageManager()
+            notifOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+            battery = ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)
+            delay(2000)
+        }
+    }
+    // 거절하면 다시 묻는 창이 안 뜨므로, 거절 직후 앱 알림 설정 화면을 열어 준다
+    val notif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) runCatching { ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)) }
+    }
 
     fun pair(id: String) {
         scope.launch {
@@ -87,26 +102,27 @@ fun EmbeddedWizard(model: NotesModel) {
         Text("이 앱에 동기화 엔진이 들어 있어 다른 앱을 깔거나 키를 복사할 필요가 없습니다.", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
 
-        Text("1. 동기화 켜기", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 10.dp))
-        if (!allFiles) {
-            Text("노트 폴더에 접근하려면 ‘모든 파일 접근’ 허용이 필요합니다.", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 4.dp))
-            Button(onClick = {
-                runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}"))) }
-            }) { Text("모든 파일 접근 허용") }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                Button(onClick = {
-                    if (on) { SyncService.stop(ctx); on = false }
-                    else {
-                        if (Build.VERSION.SDK_INT >= 33) notif.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        SyncService.start(ctx); on = true
-                    }
-                }) { Text(if (on) "동기화 끄기" else "동기화 켜기") }
-                Text(if (on) "  켜져 있음 (알림이 떠 있는 동안 동작)" else "  꺼져 있음", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
-            }
-            Text("알림 표시와 배터리 최적화 제외를 허용해야 화면이 꺼져도 계속 동기화됩니다.", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
-            OutlinedButton(onClick = { runCatching { ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } },
-                modifier = Modifier.padding(top = 4.dp)) { Text("배터리 최적화 설정 열기") }
+        Text("1. 권한과 동기화 켜기", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 10.dp))
+        Text("셋 모두 ‘허용됨’이어야 화면이 꺼져도 계속 동기화됩니다.", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
+        PermRow("모든 파일 접근 (노트 폴더 읽고 쓰기)", allFiles, "허용") {
+            runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}"))) }
+        }
+        PermRow("알림 표시 (동기화 중 알림)", notifOn, "허용") {
+            // 안드로이드 13 이상은 처음 한 번만 묻는 창이 뜨고, 한 번 거절하면 창이 안 뜨므로 앱 알림 설정 화면으로 보낸다
+            if (Build.VERSION.SDK_INT >= 33 && !askedNotif) { askedNotif = true; prefs.edit().putBoolean("askedNotif", true).apply(); notif.launch(Manifest.permission.POST_NOTIFICATIONS) }
+            else runCatching { ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)) }
+        }
+        PermRow("배터리 최적화 제외 (백그라운드에서 멈추지 않게)", battery, "제외하기") {
+            runCatching { ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))) }
+                .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
+        }
+        if (!battery) Text("삼성 폰은 설정 → 배터리 → 백그라운드 사용 제한에서 이 앱을 ‘절전 예외 앱’에 넣고, ‘사용하지 않는 앱 절전’도 끄세요.", fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            Button(enabled = allFiles, onClick = {
+                if (on) { SyncService.stop(ctx); on = false } else { SyncService.start(ctx); on = true }
+            }) { Text(if (on) "동기화 끄기" else "동기화 켜기") }
+            Text(if (on) "  켜져 있음" else "  꺼져 있음", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
         }
         report?.error?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp)) }
 
@@ -137,5 +153,22 @@ fun EmbeddedWizard(model: NotesModel) {
         if (report == null || report.folders.isEmpty()) Text("연결되면 컴퓨터가 보낸 노트 폴더를 이 앱이 알아서 받습니다.", fontSize = 12.5.sp,
             color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
         else FolderLines(report)
+
+        var showLog by remember { mutableStateOf(false) }
+        var logText by remember { mutableStateOf("") }
+        LaunchedEffect(showLog) { while (showLog) { logText = withContext(Dispatchers.IO) { EmbeddedSync.logTail(ctx) }; delay(3000) } }
+        OutlinedButton(onClick = { showLog = !showLog }, modifier = Modifier.padding(top = 16.dp)) { Text(if (showLog) "엔진 로그 닫기" else "엔진 로그 보기 (문제 확인용)") }
+        if (showLog) Text(logText.ifEmpty { "(로그가 아직 없습니다)" }, fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+/** 권한 한 줄: 이름 · 허용됨/필요 · 버튼(필요할 때만) */
+@Composable
+private fun PermRow(title: String, ok: Boolean, action: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text((if (ok) "✓ " else "✗ ") + title, fontSize = 14.sp, modifier = Modifier.weight(1f),
+            color = if (ok) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+        if (!ok) OutlinedButton(onClick = onClick) { Text(action) } else Text("허용됨", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
     }
 }
