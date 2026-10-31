@@ -55,6 +55,7 @@ class SyncService : Service() {
         var lastProgress = 0L
         var overall: Overall? = null
         val fileEta = Eta()
+        val syncEta = Eta()   // 폰이 센 값이 없을 때 Syncthing 이 알려 주는 남은 파일 수로 속도를 잰다
         var etaSec = -1L
         var lastText = ""
         while (scope.isActive) {
@@ -70,7 +71,10 @@ class SyncService : Service() {
                     lastProgress = System.currentTimeMillis()
                     runCatching {
                         ForkSync.treePath(tree)?.let { vp ->
-                            Overall.count(java.io.File(vp))?.let { o ->
+                            val vf = java.io.File(vp)
+                            val counted = Overall.count(vf)
+                            if (counted == null) EmbeddedSync.note(ctx, "전체 진행을 셀 수 없음: " + Overall.why(vf))
+                            counted?.let { o ->
                                 PhoneProgress.write(vp, o)
                                 overall = o
                                 val rate = fileEta.update(System.currentTimeMillis(), (o.all - o.have).toLong())   // 남은 파일 수가 줄어드는 속도
@@ -82,10 +86,19 @@ class SyncService : Service() {
                 // 알림: 동기화 상태 N/M (P%) · 남은 시간(글자가 바뀔 때만 갱신)
                 val r = EmbeddedSync.report
                 val o = overall
-                val txt = SyncNotice.text(r?.connected == true, r?.error, o?.have ?: 0, o?.all ?: 0, etaSec)
+                // 폰이 센 전체 개수가 있으면 그것을, 없으면 Syncthing 이 알려 주는 값(공개된 파일 기준)으로라도 진행률을 보인다
+                val f = r?.folders?.firstOrNull()
+                val have: Int; val all: Int; val eta: Long
+                if (o != null) { have = o.have; all = o.all; eta = etaSec }
+                else if (f != null && f.totalFiles > 0) {
+                    have = (f.totalFiles - f.needFiles).toInt(); all = f.totalFiles.toInt()
+                    val rate = syncEta.update(System.currentTimeMillis(), f.needFiles)
+                    eta = Eta.seconds(f.needFiles, rate)
+                } else { have = 0; all = 0; eta = -1L }
+                val txt = SyncNotice.text(r?.connected == true, r?.error, have, all, eta)
                 if (txt != lastText) {
                     lastText = txt
-                    runCatching { getSystemService(NotificationManager::class.java).notify(1, notice(txt, o?.have ?: 0, o?.all ?: 0)) }
+                    runCatching { getSystemService(NotificationManager::class.java).notify(1, notice(txt, have, all)) }
                 }
             } catch (e: Exception) {
                 // 시작 직후에는 아직 응답하지 않는 게 정상이다. 1분(12번) 넘게 응답이 없으면 엔진이 멈춘 것이니 새로 시작한다

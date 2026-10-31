@@ -52,15 +52,41 @@ data class Overall(val notesHave: Int, val notesAll: Int, val mediaHave: Int, va
         have, all, pct(have, all), notesHave, notesAll, pct(notesHave, notesAll), mediaHave, mediaAll, pct(mediaHave, mediaAll))
 
     companion object {
-        /** vault: 노트 폴더. 목록이 없으면 null */
-        fun count(vault: java.io.File): Overall? {
-            val tiers = runCatching { Stages.parse(java.io.File(vault, Stages.FILE).readText()) }.getOrNull() ?: return null
-            var nh = 0; var na = 0; var mh = 0; var ma = 0
-            for (t in tiers) for (rel in t) {
-                val isNote = rel.endsWith(".md")
-                val has = java.io.File(vault, rel).exists()
-                if (isNote) { na++; if (has) nh++ } else { ma++; if (has) mh++ }
+        /** 컴퓨터가 설정 폴더에 적어 준 글·그림 총수(없으면 단계 목록에서 센다) */
+        fun totals(vault: java.io.File): Pair<Int, Int>? {
+            runCatching {
+                val j = org.json.JSONObject(java.io.File(SyncSettings.dir(vault.path), "totals.json").readText())
+                return j.getInt("notesAll") to j.getInt("mediaAll")
             }
+            val tiers = runCatching { Stages.parse(java.io.File(vault, Stages.FILE).readText()) }.getOrNull() ?: return null
+            val all = tiers.flatten()
+            return all.count { it.endsWith(".md") } to all.count { !it.endsWith(".md") }
+        }
+
+        /** 폰 저장소를 직접 훑어 센 글(.md, 점으로 시작하는 폴더 제외)과 그림(.resources 안의 파일) 수 */
+        fun have(vault: java.io.File): Pair<Int, Int> {
+            var notes = 0; var media = 0
+            fun walk(d: java.io.File, inRes: Boolean) {
+                val list = d.listFiles() ?: return
+                for (f in list) {
+                    if (f.isDirectory) {
+                        if (f.name == ".resources") walk(f, true)
+                        else if (inRes || !f.name.startsWith(".")) walk(f, inRes)
+                    } else if (inRes) media++ else if (f.name.endsWith(".md")) notes++
+                }
+            }
+            walk(vault, false)
+            return notes to media
+        }
+
+        /** 개수를 못 셀 때 이유(엔진 로그에 남기려고) */
+        fun why(vault: java.io.File): String =
+            if (!vault.isDirectory) "노트 폴더를 읽을 수 없음(${vault.path})" else if (totals(vault) == null) "컴퓨터가 보낸 총수 파일(설정 폴더 totals.json)도 단계 목록(.sync/stages.json)도 아직 폰에 없음" else "셀 수 있음"
+
+        /** vault: 노트 폴더. 총수를 모르면 null */
+        fun count(vault: java.io.File): Overall? {
+            val (na, ma) = totals(vault) ?: return null
+            val (nh, mh) = have(vault)
             return Overall(nh, na, mh, ma)
         }
     }

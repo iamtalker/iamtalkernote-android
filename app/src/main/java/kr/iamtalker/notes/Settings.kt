@@ -193,7 +193,7 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     LaunchedEffect(Unit) { Updater.check(ctx) }
                     Updater.available?.let { u ->
                         TextRow("새 버전 ${u.version} 받아서 설치", if (Updater.busy) "진행 중" else "업데이트", onClick = { upScope.launch { Updater.updateNow(ctx) } })
-                        if (Updater.status.isNotEmpty()) Text(Updater.status, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+                        Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp)) { UpdateProgress(MaterialTheme.colorScheme.outline) }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                     TextRow("업데이트 확인", Updater.checkedMsg.ifEmpty { "누르세요" }, onClick = { upScope.launch { Updater.check(ctx, force = true) } })

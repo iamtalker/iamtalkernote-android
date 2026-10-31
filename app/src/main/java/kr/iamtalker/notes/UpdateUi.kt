@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -16,6 +17,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
+/** 업데이트 진행 줄: 안내 문구와 진행 막대(받는 동안은 비율, 설치 준비 중에는 계속 도는 막대) */
+@Composable
+fun UpdateProgress(color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onPrimaryContainer) {
+    if (Updater.status.isNotEmpty()) Text(Updater.status, fontSize = 12.sp, color = color, modifier = Modifier.padding(top = 2.dp))
+    if (Updater.busy) {
+        if (Updater.progress >= 0f) LinearProgressIndicator(progress = { Updater.progress }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+        else LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+    }
+}
+
 /** 새 버전이 있을 때 노트 목록 맨 위에 뜨는 띠: 누르면 받아서 설치 화면까지 연다 */
 @Composable
 fun UpdateBanner() {
@@ -25,7 +36,7 @@ fun UpdateBanner() {
     Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth().clickable(enabled = !Updater.busy) { scope.launch { Updater.updateNow(ctx) } }) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             Text("새 버전 ${info.version} 이 있습니다 — 눌러서 업데이트", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            if (Updater.status.isNotEmpty()) Text(Updater.status, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
+            UpdateProgress()
         }
     }
 }

@@ -46,9 +46,24 @@ class OverallTest {
         java.io.File(v, ".sync/stages.json").writeText("""{"tiers":[{"name":"a","files":["a.md",".resources/x.png"]},{"name":"b","files":["b.md",".resources/y.png",".resources/z.png"]}]}""")
         java.io.File(v, "a.md").writeText("x"); java.io.File(v, ".resources/y.png").writeText("x")
         val o = Overall.count(v)!!
-        org.junit.Assert.assertEquals(Overall(1, 2, 1, 3), o)
+        org.junit.Assert.assertEquals(Overall(1, 2, 1, 3), o)   // 총수는 단계 목록, 받은 수는 폴더를 훑어서
         org.junit.Assert.assertEquals(2, o.have); org.junit.Assert.assertEquals(5, o.all)
         org.junit.Assert.assertTrue(o.text().contains("글 1 / 2개 (50%)"))
         org.junit.Assert.assertNull(Overall.count(java.io.File(v, "none")))
+    }
+}
+
+class OverallTotalsTest {
+    @org.junit.Test fun usesTotalsFileAndWalksFolders() {
+        val v = java.io.File.createTempFile("vault", "").also { it.delete(); it.mkdirs() }
+        java.io.File(v, "ScrapBook").mkdirs(); java.io.File(v, ".resources/sub").mkdirs(); java.io.File(v, ".history").mkdirs(); java.io.File(v, ".sync").mkdirs()
+        java.io.File(v, "ScrapBook/a.md").writeText("x"); java.io.File(v, "b.md").writeText("x"); java.io.File(v, ".history/h.md").writeText("x")
+        java.io.File(v, ".resources/1.png").writeText("x"); java.io.File(v, ".resources/sub/2.png").writeText("x")
+        org.junit.Assert.assertEquals(2 to 2, Overall.have(v))              // .history 안의 .md 는 안 센다
+        org.junit.Assert.assertNull(Overall.count(v))                        // 총수를 모르면 null
+        org.junit.Assert.assertTrue(Overall.why(v).contains("totals.json"))
+        val d = SyncSettings.dir(v.path).also { it.mkdirs() }
+        java.io.File(d, "totals.json").writeText("""{"notesAll":10,"mediaAll":20}""")
+        org.junit.Assert.assertEquals(Overall(2, 10, 2, 20), Overall.count(v))
     }
 }

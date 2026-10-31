@@ -30,6 +30,7 @@ object Updater {
     var available by mutableStateOf<Info?>(null)      // 새 버전이 있으면
     var status by mutableStateOf("")                   // 받는 중 45% / 설치 확인 중 / 실패 이유
     var busy by mutableStateOf(false)
+    var progress by mutableStateOf(-1f)                // 0..1 받은 비율, 음수면 얼마나 걸릴지 모르는 단계(설치 준비)
     var checkedMsg by mutableStateOf("")               // 마지막 확인 결과(설정 화면용)
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("settings", 0)
@@ -91,13 +92,21 @@ object Updater {
             return
         }
         busy = true
+        progress = 0f
+        status = "새 버전 ${info.version} 받는 중 0%"
         try {
             val file = withContext(Dispatchers.IO) { download(ctx, info) }
-            status = "설치 화면을 여는 중…"
+            progress = -1f
+            status = "내려받기 완료 · 설치를 준비하는 중…"
+            notify(ctx, "설치를 준비하는 중…", -1)
             withContext(Dispatchers.IO) { install(ctx, file) }
         } catch (e: Exception) {
             status = "업데이트하지 못했습니다: ${e.message}"
-        } finally { busy = false }
+        } finally {
+            busy = false
+            progress = -1f
+            cancelNotice(ctx)
+        }
     }
 
     private fun download(ctx: Context, info: Info): File {
@@ -113,12 +122,35 @@ object Updater {
                 val n = i.read(buf); if (n < 0) break
                 o.write(buf, 0, n); got += n
                 val pct = if (total > 0) (got * 100 / total).toInt() else 0
-                if (pct != lastPct) { lastPct = pct; status = "받는 중 $pct%" }
+                if (pct != lastPct) {
+                    lastPct = pct
+                    progress = if (total > 0) got.toFloat() / total else -1f
+                    status = "새 버전 ${info.version} 받는 중 $pct%" + (if (total > 0) " (%.1f / %.1fMB)".format(got / 1048576.0, total / 1048576.0) else "")
+                    notify(ctx, "새 버전 ${info.version} 받는 중 $pct%", pct)
+                }
             }
         } }
         if (total > 0 && got != total) { tmp.delete(); throw IllegalStateException("받은 크기가 다릅니다") }
         out.delete(); tmp.renameTo(out)
         return out
+    }
+
+    private const val NOTICE_ID = 2
+
+    /** 받는 동안 작업표시줄에도 진행 막대를 보인다(알림 권한이 없으면 조용히 건너뜀) */
+    private fun notify(ctx: Context, text: String, pct: Int) {
+        runCatching {
+            val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("update", "앱 업데이트", android.app.NotificationManager.IMPORTANCE_LOW))
+            val b = android.app.Notification.Builder(ctx, "update").setSmallIcon(R.mipmap.ic_launcher).setContentTitle("iamtalkernote 업데이트")
+                .setContentText(text).setOngoing(true).setOnlyAlertOnce(true)
+            if (pct in 0..100) b.setProgress(100, pct, false) else b.setProgress(0, 0, true)
+            nm.notify(NOTICE_ID, b.build())
+        }
+    }
+
+    private fun cancelNotice(ctx: Context) {
+        runCatching { ctx.getSystemService(android.app.NotificationManager::class.java).cancel(NOTICE_ID) }
     }
 
     private fun install(ctx: Context, apk: File) {
@@ -143,9 +175,9 @@ class UpdateReceiver : BroadcastReceiver() {
                 @Suppress("DEPRECATION") val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 runCatching { ctx.startActivity(confirm) }
-                Updater.status = "설치 확인 화면에서 ‘설치’를 눌러 주세요"
+                Updater.status = "설치 확인 화면이 떴습니다 — ‘설치’(또는 ‘업데이트’)를 눌러 주세요"
             }
-            PackageInstaller.STATUS_SUCCESS -> Updater.status = "설치했습니다"
+            PackageInstaller.STATUS_SUCCESS -> Updater.status = "설치했습니다 — 앱이 새 버전으로 다시 시작됩니다"
             else -> Updater.status = "설치하지 못했습니다: " + (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "알 수 없는 오류")
         }
     }
