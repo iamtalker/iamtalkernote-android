@@ -206,7 +206,7 @@ fun NotebookRow(name: String, count: Int, depth: Int, selected: Boolean, key: St
 /** 노트 목록의 한 줄(업노트처럼 제목·한 줄 미리보기·날짜) */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun NoteRow(n: Note, pinned: Boolean, chosen: Boolean, fmt: SimpleDateFormat, onClick: () -> Unit, onLong: () -> Unit) {
+fun NoteRow(n: Note, pinned: Boolean, chosen: Boolean, fmt: SimpleDateFormat, onClick: () -> Unit, onLong: () -> Unit, fav: Boolean = false) {
     Column(
         Modifier.fillMaxWidth().background(if (chosen) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLong)
@@ -214,6 +214,7 @@ fun NoteRow(n: Note, pinned: Boolean, chosen: Boolean, fmt: SimpleDateFormat, on
         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (pinned) { PinIcon(MaterialTheme.colorScheme.primary); Spacer(Modifier.width(6.dp)) }
+                if (fav) Text("★ ", fontSize = 16.sp, color = Color(0xFFE0A020))
                 Text(n.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (n.snip.isNotEmpty()) Text(n.snip, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -356,7 +357,7 @@ fun App(model: NotesModel) {
         drawerContent = {
             ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface, drawerTonalElevation = 0.dp, drawerShape = androidx.compose.ui.graphics.RectangleShape, modifier = Modifier.fillMaxWidth(0.80f)) {
                 fun go(block: () -> Unit) { block(); scope.launch { drawer.close() } }
-                val allSel = !model.showDocs && model.folder == null && model.tag == null
+                val allSel = !model.showDocs && model.folder == null && model.tag == null && !model.favOnly
                 LazyColumn {
                     item { Spacer(Modifier.height(8.dp)) }
                     item {
@@ -366,6 +367,14 @@ fun App(model: NotesModel) {
                             Text("모든 노트", fontSize = 17.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 14.dp))
                             Text("${model.notes.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 10.dp).weight(1f))
                             BarButton({ allOpen = !allOpen }) { ChevronIcon(!allOpen, MaterialTheme.colorScheme.outline) }
+                        }
+                    }
+                    item {
+                        Row(Modifier.fillMaxWidth().background(if (model.favOnly) soft else Color.Transparent).clickable { go { model.changeFav(true) } }
+                            .heightIn(min = 48.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("★", fontSize = 20.sp, color = Color(0xFFE0A020), modifier = Modifier.width(24.dp))
+                            Text("즐겨찾기", fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+                            Text("${model.favs.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                         }
                     }
                     if (allOpen) {
@@ -546,14 +555,14 @@ fun App(model: NotesModel) {
                         if (pinnedOpen) items(pinnedList, key = { "p:" + it.uri.toString() }) { n ->
                             NoteRow(n, true, n.uri.toString() in model.selected, fmt,
                                 onClick = { if (selecting) model.toggleSelect(n) else { model.addRecent(model.query); open = n } },
-                                onLong = { selectMode = true; model.toggleSelect(n) })
+                                onLong = { selectMode = true; model.toggleSelect(n) }, fav = Favorites.relOf(n) in model.favs)
                         }
                         item(key = "pin-end") { Box(Modifier.fillMaxWidth().height(10.dp).background(soft)) }
                     }
                     items(restList, key = { it.uri.toString() }) { n ->
                         NoteRow(n, false, n.uri.toString() in model.selected, fmt,
                             onClick = { if (selecting) model.toggleSelect(n) else { model.addRecent(model.query); open = n } },
-                            onLong = { selectMode = true; model.toggleSelect(n) })
+                            onLong = { selectMode = true; model.toggleSelect(n) }, fav = Favorites.relOf(n) in model.favs)
                     }
                     item { Spacer(Modifier.height(80.dp)) }
                 }

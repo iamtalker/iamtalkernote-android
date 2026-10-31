@@ -51,6 +51,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -153,6 +154,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
 
     BackHandler { save(); onClose() }
     val pinned = note.uri.toString() in model.pins
+    val isFav = Favorites.relOf(note) in model.favs
     Scaffold(
         topBar = {
             Column { Surface(color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) { Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -160,6 +162,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                 Text(note.title, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 run {
+                    TextButton(onClick = { model.toggleFavorite(note) }) { Text(if (isFav) "★" else "☆", fontSize = 22.sp, color = if (isFav) Color(0xFFE0A020) else MaterialTheme.colorScheme.outline) }
                     TextButton(onClick = { save(); editing = !editing }) { Text(if (editing) "보기" else "편집", color = MaterialTheme.colorScheme.primary) }
                     BarMenu({ DotsIcon(MaterialTheme.colorScheme.onSurface) }) { close ->
                         DropdownMenuItem(text = { Text("문서에서 찾기") }, onClick = { close(); findOpen = true })
@@ -167,6 +170,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         DropdownMenuItem(text = { Text("이전 버전") }, onClick = { close(); dialog = "versions" })
                         DropdownMenuItem(text = { Text("속성") }, onClick = { close(); dialog = "props" })
                         HorizontalDivider()
+                        DropdownMenuItem(text = { Text(if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가") }, onClick = { model.toggleFavorite(note); close() })
                         DropdownMenuItem(text = { Text(if (pinned) "고정 해제" else "맨 위에 고정") }, onClick = { model.togglePin(note); close() })
                         DropdownMenuItem(text = { Text("공유") }, onClick = {
                             close()

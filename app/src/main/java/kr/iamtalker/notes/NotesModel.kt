@@ -61,12 +61,45 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     /** 고정(즐겨찾기)한 노트의 uri — 이 폰에만 저장한다(파일에는 쓰지 않는다) */
     var pins by mutableStateOf<Set<String>>(prefs.getStringSet("pins", emptySet())!!.toSet())
         private set
+    /** 즐겨찾기(컴퓨터와 맞춤): 노트 경로(폴더/이름.md) 집합. 설정 폴더의 favorites-*.json 에서 읽는다(Favorites.kt) */
+    var favs by mutableStateOf<Set<String>>(emptySet())
+        private set
+    var favOnly by mutableStateOf(false)
+        private set
     var folderCounts by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
 
     /** 노트북 이름 → 문서 id (노트가 있는 폴더만). 맨 위 폴더는 "" */
     var folderIds by mutableStateOf<Map<String, String>>(emptyMap())
         private set
+
+    /** 설정 폴더에서 즐겨찾기를 다시 읽는다(컴퓨터에서 바꾼 것이 동기화로 왔을 수 있다) */
+    fun reloadFavs() {
+        val t = tree ?: return
+        viewModelScope.launch {
+            val s = withContext(Dispatchers.IO) { ForkSync.treePath(t)?.let { vp -> Favorites.load(vp).filterValues { it }.keys } ?: emptySet() }
+            if (s != favs) { favs = s; reapply() }
+        }
+    }
+
+    fun toggleFavorite(n: Note) {
+        val t = tree ?: return
+        val rel = Favorites.relOf(n)
+        val on = rel !in favs
+        favs = if (on) favs + rel else favs - rel
+        reapply()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                ForkSync.treePath(t)?.let { vp ->
+                    Favorites.set(vp, rel, on)
+                    EmbeddedSync.api(getApplication()).scanSettingsFolder()      // 컴퓨터에 바로 가게 설정 폴더를 즉시 검사
+                }
+            }
+        }
+    }
+
+    /** 서랍의 '즐겨찾기': 켜면 폴더·태그 거르기는 해제한다 */
+    fun changeFav(on: Boolean) { favOnly = on; if (on) { folder = null; tag = null }; showDocs = false; reapply() }
 
     fun togglePin(n: Note) {
         val u = n.uri.toString()
@@ -108,8 +141,8 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
 
     fun changeQuery(q: String) { query = q; reapply() }
     fun changeInBody(b: Boolean) { inBody = b; prefs.edit().putBoolean("inBody", b).apply(); reapply() }
-    fun changeFolder(f: String?) { folder = f; showDocs = false; reapply() }
-    fun changeTag(t: String?) { tag = t; showDocs = false; reapply() }
+    fun changeFolder(f: String?) { folder = f; favOnly = false; showDocs = false; reapply() }
+    fun changeTag(t: String?) { tag = t; favOnly = false; showDocs = false; reapply() }
 
     // ---- 가져온 파일(데스크톱이 내보낸 요약, 읽기 전용)
     var docs by mutableStateOf<List<Doc>>(emptyList())
@@ -273,6 +306,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     fun refresh() {
         val t = tree ?: return
         lastScan = System.currentTimeMillis()
+        reloadFavs()
         job?.cancel()
         job = viewModelScope.launch {
             loading = true
@@ -412,11 +446,13 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             val sorter = sort
             val seen = indexed
             val pinned = pins
+            val favSet = if (favOnly) favs else null
             val per = period
             val result = withContext(Dispatchers.IO) {
                 var list = base
                 if (f != null) list = list.filter { it.folder == f || it.folder.startsWith("$f/") }
                 if (t != null) list = list.filter { n -> n.tags.any { it.equals(t, ignoreCase = true) } }
+                if (favSet != null) list = list.filter { Favorites.relOf(it) in favSet }
                 if (per != Period.ALL) {
                     val since = System.currentTimeMillis() - per.days * 86_400_000L
                     list = list.filter { it.date >= since }
