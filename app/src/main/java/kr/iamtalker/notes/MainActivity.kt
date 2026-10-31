@@ -138,6 +138,23 @@ val Bar = Color(0xFF32373F)
 val Accent = Color(0xFF0B72C9)   // 업노트처럼 차분한 파랑
 
 /** 위 막대의 눌리는 칸(아이콘용) */
+/** 모든 보조 화면의 위 막대: 얇은 56dp 줄 + 밑줄(본문 화면과 같은 모양). TopAppBar 대신 같은 인자로 쓴다 */
+@Composable
+fun PageBar(title: @Composable () -> Unit, navigationIcon: @Composable () -> Unit = {}, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}) {
+    Column {
+        Surface(color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
+            Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+                navigationIcon()
+                Box(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                    androidx.compose.material3.ProvideTextStyle(androidx.compose.ui.text.TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Medium)) { title() }
+                }
+                actions()
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
 @Composable
 fun BarButton(onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(Modifier.size(48.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) { content() }
@@ -182,7 +199,7 @@ fun NavHeading(text: String, trailing: (@Composable () -> Unit)? = null, onClick
     }
 }
 
-private val NbColors = listOf(Color(0xFF0A90C2), Color(0xFF0E9F6E), Color(0xFF7C5CD6), Color(0xFFE8833A), Color(0xFFD6558B))
+private val NbColors = listOf(Color(0xFF8A94A6))   // 노트북 네모는 한 가지 차분한 색(색이 많으면 산만하다)
 
 /** 노트북 한 줄: 색 네모 + 이름 + 개수(+ 접기 화살표) */
 @OptIn(ExperimentalFoundationApi::class)
@@ -194,9 +211,8 @@ fun NotebookRow(name: String, count: Int, depth: Int, selected: Boolean, key: St
             .combinedClickable(onClick = onClick, onLongClick = onLong).heightIn(min = 52.dp).padding(start = 16.dp + (depth * 24).dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(28.dp).clip(RoundedCornerShape(7.dp)).background(Brush.verticalGradient(listOf(base, base.copy(alpha = 0.78f)))))
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Text(name, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 14.dp, end = 8.dp).weight(1f, fill = false))
+            Text(name, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 8.dp).weight(1f, fill = false))
             Text("$count", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
         }
         if (collapsed != null) BarButton(onToggle) { ChevronIcon(collapsed, MaterialTheme.colorScheme.outline) }
@@ -361,8 +377,7 @@ fun App(model: NotesModel) {
                     item {
                         Row(Modifier.fillMaxWidth().background(if (allSel) soft else Color.Transparent).clickable { go { model.changeFolder(null); model.changeTag(null) } }
                             .heightIn(min = 52.dp).padding(start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            NotesIcon(accent)
-                            Text("모든 파일", fontSize = 17.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 14.dp))
+                            Text("모든 파일", fontSize = 17.sp, fontWeight = FontWeight.Medium)
                             Text("${model.notes.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 10.dp).weight(1f))
                         }
                     }

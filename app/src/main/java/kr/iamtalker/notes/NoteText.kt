@@ -97,6 +97,23 @@ object NoteText {
     fun <T> findByTitle(items: List<T>, title: String, titleOf: (T) -> String): T? =
         items.firstOrNull { titleOf(it).equals(title.trim(), ignoreCase = true) }
 
+    /** 제목 없이 쓴 새 노트의 제목: 본문 첫 줄(머리말·빈 줄·마크다운 기호를 뺀 첫 글). PC 앱 autotitle.py 와 같은 규칙 */
+    fun titleFromBody(text: String): String {
+        val body = Meta.split(text).second
+        for (raw in body.split("\n")) {
+            var line = raw.trim()
+            if (line.isEmpty() || line.all { it in "-*_=` " }) continue
+            line = line.replace(Regex("^(?:[>#]+\\s*|[-*+]\\s+|\\d+[.)]\\s+)+"), "")
+            line = line.replace(Regex("^\\[[ xX]\\]\\s*"), "")
+            line = line.replace(Regex("!?\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
+            line = line.replace(Regex("[*_`~]+"), "")
+            line = line.replace(Regex("[\\\\/:*?\"<>|]"), " ")
+            line = line.replace(Regex("\\s+"), " ").trim(' ', '.')
+            if (line.isNotEmpty()) return line.take(50).trimEnd(' ', '.')
+        }
+        return ""
+    }
+
     /** 같은 제목이 여럿이면 가장 최근(시각이 큰) 것으로 연결한다(PC 위키 규칙) */
     fun <T> findLatestByTitle(items: List<T>, title: String, titleOf: (T) -> String, timeOf: (T) -> Long): T? =
         items.filter { titleOf(it).equals(title.trim(), ignoreCase = true) }.maxByOrNull(timeOf)

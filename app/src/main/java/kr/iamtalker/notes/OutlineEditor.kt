@@ -126,7 +126,7 @@ fun OutlineEditor(text: String, fontSize: Int, onChange: (String) -> Unit, modif
                 }
             }
             item {
-                Text("＋ 항목 추가", fontSize = 14.sp, color = accent, modifier = Modifier.fillMaxWidth().clickable {
+                Row(Modifier.fillMaxWidth().clickable {
                     safe {
                         val l = cur()
                         if (zoom >= 0) {                                              // 줌인한 항목의 마지막 하위 뒤에 새 항목(하위로)
@@ -144,7 +144,9 @@ fun OutlineEditor(text: String, fontSize: Int, onChange: (String) -> Unit, modif
                             }
                         }
                     }
-                }.padding(vertical = 14.dp, horizontal = 4.dp))
+                }.padding(vertical = 14.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PlusIcon(accent); Text("  항목 추가", fontSize = 14.sp, color = accent)
+                }
                 Spacer(Modifier.height(60.dp))
             }
         }
@@ -154,8 +156,8 @@ fun OutlineEditor(text: String, fontSize: Int, onChange: (String) -> Unit, modif
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Surface(tonalElevation = 3.dp) {
                 Row(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { safe { if (canOut) OutlineEdit.outdent(cur(), i)?.let { put(it) } } }) { Text("⇤ 내어쓰기") }
-                    TextButton(onClick = { safe { OutlineEdit.indent(cur(), i)?.let { put(it) } } }) { Text("⇥ 들여쓰기") }
+                    TextButton(onClick = { safe { if (canOut) OutlineEdit.outdent(cur(), i)?.let { put(it) } } }) { Text("내어쓰기") }
+                    TextButton(onClick = { safe { OutlineEdit.indent(cur(), i)?.let { put(it) } } }) { Text("들여쓰기") }
                     if (i != zoom) TextButton(onClick = { safe { val (n, f) = OutlineEdit.delete(cur(), i); put(n); focusIdx = -1; if (f >= 0) pending = f } }) { Text("삭제") }
                 }
             }

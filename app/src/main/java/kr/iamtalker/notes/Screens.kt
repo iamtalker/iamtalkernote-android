@@ -22,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,9 +72,9 @@ fun TrashScreen(model: NotesModel, onBack: () -> Unit) {
     }
     BackHandler { onBack() }
     Scaffold(topBar = {
-        TopAppBar(
+        PageBar(
             title = { Text("휴지통") },
-            navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } },
+            navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } },
             actions = {
                 MenuButton("⋮") { close ->
                     DropdownMenuItem(text = { Text("30일 지난 것 정리") }, onClick = { close(); confirm = "old" })
@@ -142,7 +141,7 @@ fun JournalScreen(model: NotesModel, onBack: () -> Unit, onOpen: (Note) -> Unit)
     }
     BackHandler { onBack() }
     Scaffold(topBar = {
-        TopAppBar(title = { Text("전체 변경 이력") }, navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } })
+        PageBar(title = { Text("전체 변경 이력") }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } })
     }) { pad ->
         val list = recs
         Box(Modifier.padding(pad).fillMaxSize()) {
@@ -176,9 +175,9 @@ fun DuplicatesScreen(model: NotesModel, onBack: () -> Unit, onOpen: (Note) -> Un
     LaunchedEffect(Unit) { groups = withContext(Dispatchers.IO) { runCatching { model.findDuplicates() }.getOrDefault(emptyList()) } }
     BackHandler { onBack() }
     Scaffold(topBar = {
-        TopAppBar(
+        PageBar(
             title = { Text("중복 노트 찾기") },
-            navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } },
+            navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } },
             actions = {
                 val g = groups
                 if (!g.isNullOrEmpty()) TextButton(onClick = { confirm = g.flatMap { it.drop(1) } }) { Text("모두 정리") }
@@ -234,9 +233,9 @@ fun UnusedMediaScreen(model: NotesModel, onBack: () -> Unit) {
     }
     BackHandler { onBack() }
     Scaffold(topBar = {
-        TopAppBar(
+        PageBar(
             title = { Text("안 쓰는 미디어") },
-            navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } },
+            navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } },
             actions = { if (!found.isNullOrEmpty()) TextButton(enabled = picked.isNotEmpty(), onClick = { confirm = true }) { Text("지우기") } }
         )
     }) { pad ->
@@ -291,7 +290,7 @@ fun ConflictsScreen(model: NotesModel, onBack: () -> Unit) {
     var compare by remember { mutableStateOf<Conflicts.Pair?>(null) }
     BackHandler { onBack() }
     Scaffold(topBar = {
-        TopAppBar(title = { Text("동기화 충돌") }, navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } })
+        PageBar(title = { Text("동기화 충돌") }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } })
     }) { pad ->
         val list = model.conflicts
         Box(Modifier.padding(pad).fillMaxSize()) {
@@ -382,7 +381,7 @@ fun DocScreen(doc: Doc, model: NotesModel, onBack: () -> Unit) {
     LaunchedEffect(doc.id) { text = withContext(Dispatchers.IO) { model.docText(doc) } }
     BackHandler { onBack() }
     Scaffold(topBar = {
-        TopAppBar(title = { Text(doc.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { TextButton(onClick = onBack) { Text("←", fontSize = 20.sp) } })
+        PageBar(title = { Text(doc.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } })
     }) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text("컴퓨터의 가져온 폴더 ‘${doc.folder}’ · ${doc.rel}", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)

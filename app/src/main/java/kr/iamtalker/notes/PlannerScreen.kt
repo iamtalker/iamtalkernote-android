@@ -30,7 +30,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,7 +81,7 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val vault = remember(model.tree) { model.tree?.let { ForkSync.treePath(it) } }
     if (vault == null) {
-        Scaffold(topBar = { TopAppBar(title = { Text("달력·할일") }, navigationIcon = { TextButton(onClick = onBack) { Text("‹ 뒤로") } }) }) { Box(Modifier.padding(it).padding(24.dp)) { Text("노트 폴더를 먼저 고르세요.") } }
+        Scaffold(topBar = { PageBar(title = { Text("달력·할일") }, navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } }) }) { Box(Modifier.padding(it).padding(24.dp)) { Text("노트 폴더를 먼저 고르세요.") } }
         return
     }
     val store = remember(vault) { PlannerStore(vault) }
@@ -115,11 +114,11 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
     val line = MaterialTheme.colorScheme.outlineVariant
 
     Scaffold(topBar = {
-        TopAppBar(
+        PageBar(
             title = { Text("달력·할일") },
-            navigationIcon = { TextButton(onClick = onBack) { Text("‹ 뒤로") } },
+            navigationIcon = { BarButton(onBack) { BackIcon(MaterialTheme.colorScheme.onSurface) } },
             actions = {
-                TextButton(onClick = { menuOpen = true }) { Text("⋮", fontSize = 20.sp) }
+                BarButton({ menuOpen = true }) { DotsIcon(MaterialTheme.colorScheme.onSurface) }
                 DropdownMenu(menuOpen, { menuOpen = false }) {
                     DropdownMenuItem(text = { Text(if (showGongsu) "✓ 공수달력" else "공수달력") }, onClick = { showGongsu = !showGongsu; prefs.edit().putBoolean("gongsu", showGongsu).apply(); menuOpen = false })
                     if (showGongsu) DropdownMenuItem(text = { Text("단가·일비 설정") }, onClick = { priceDialog = true; menuOpen = false })
@@ -130,9 +129,9 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
         Column(Modifier.padding(pad).fillMaxSize()) {
             // 머리: ◀ 2026년 11월 ▶  오늘
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("◀", fontSize = 16.sp, color = outline, modifier = Modifier.clickable { month = month.minusMonths(1) }.padding(horizontal = 10.dp, vertical = 8.dp))
+                Box(Modifier.clickable { month = month.minusMonths(1) }.padding(horizontal = 10.dp, vertical = 8.dp)) { ChevronSideIcon(true, outline) }
                 Text("${month.year}년 ${month.monthValue}월", fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                Text("▶", fontSize = 16.sp, color = outline, modifier = Modifier.clickable { month = month.plusMonths(1) }.padding(horizontal = 10.dp, vertical = 8.dp))
+                Box(Modifier.clickable { month = month.plusMonths(1) }.padding(horizontal = 10.dp, vertical = 8.dp)) { ChevronSideIcon(false, outline) }
                 Text("오늘", fontSize = 14.sp, color = accent, modifier = Modifier.clickable { month = YearMonth.now(); sel = today.toString() }.padding(horizontal = 10.dp, vertical = 8.dp))
             }
             if (showGongsu) {
@@ -164,7 +163,7 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
                             .combinedClickable(onClick = { sel = ds }, onLongClick = { sel = ds; dayMenu = ds }).padding(2.dp)) {
                             Column {
                                 Text(d.dayOfMonth.toString() + (if (h != null) " " + h else ""), fontSize = 10.sp, color = fg, maxLines = 1, overflow = TextOverflow.Clip)
-                                for (t in here.take(2)) Text((if (t.done) "✓" else "●") + t.text.take(5) + (if (t.text.length > 5) "…" else ""), fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Clip,
+                                for (t in here.take(2)) Text(t.text.take(5) + (if (t.text.length > 5) "…" else ""), fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Clip,
                                     color = if (t.done) outline else MaterialTheme.colorScheme.onSurface)
                                 if (here.size > 2) Text("+${here.size - 2}", fontSize = 9.sp, color = outline)
                                 if (showGongsu && g != null) Text("공수 " + PlannerMd.fmt(g), fontSize = 9.sp, color = accent)
@@ -186,15 +185,15 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
             // 할일 목록
             Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("할일", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                TextButton(onClick = { addDialog = "" }) { Text("＋", fontSize = 16.sp) }
+                BarButton({ addDialog = "" }) { PlusIcon(accent) }
                 Box(Modifier.weight(1f))
-                Checkbox(hideDone, { hideDone = it; prefs.edit().putBoolean("hideDone", it).apply() })
-                Text("완료 숨기기", fontSize = 12.sp, color = outline)
+                Text("완료 숨기기", fontSize = 13.sp, color = if (hideDone) accent else outline, fontWeight = if (hideDone) FontWeight.Medium else FontWeight.Normal,
+                    modifier = Modifier.clickable { hideDone = !hideDone; prefs.edit().putBoolean("hideDone", hideDone).apply() }.padding(horizontal = 8.dp, vertical = 10.dp))
             }
             Row(Modifier.fillMaxWidth().background(soft).padding(horizontal = 8.dp, vertical = 4.dp)) {
                 Text("추가한 날", fontSize = 11.sp, color = outline, modifier = Modifier.width(84.dp))
                 Text("완료한 날", fontSize = 11.sp, color = outline, modifier = Modifier.width(76.dp))
-                Text("할일  (☐ 를 누르면 완료 · 길게: 변경·삭제)", fontSize = 11.sp, color = outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("할일", fontSize = 11.sp, color = outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (shown.isEmpty()) Text("할일이 없습니다.", fontSize = 14.sp, color = outline, modifier = Modifier.padding(16.dp))
             LazyColumn(Modifier.weight(1f)) {
@@ -221,7 +220,7 @@ fun PlannerScreen(model: NotesModel, onBack: () -> Unit) {
                         }
                         Box(Modifier.weight(1f).combinedClickable(onClick = {}, onLongClick = { m = "text" })) {
                             Row(verticalAlignment = Alignment.Top) {
-                                Text(if (t.done) "☑ " else "☐ ", fontSize = 18.sp, modifier = Modifier.clickable { change { store.setDone(t.id, !t.done) } }.padding(vertical = 4.dp))
+                                Box(Modifier.clickable { change { store.setDone(t.id, !t.done) } }.padding(end = 8.dp, top = 9.dp, bottom = 9.dp)) { TodoBox(t.done, accent, outline) }
                                 Text(t.text, fontSize = 14.sp, color = if (t.done) outline else MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(vertical = 8.dp))
                             }
                             DropdownMenu(m == "text", { m = "" }) {

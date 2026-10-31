@@ -45,12 +45,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-private val Green = Color(0xFF7DC25A)
-private val Purple = Color(0xFF8B5FD6)
-private val Pink = Color(0xFFFF5C9E)
-private val Orange = Color(0xFFFF8A3D)
-private val Sky = Color(0xFF2A9DF0)
-private val Teal = Color(0xFF4DC0A3)
+private val Green = Color(0xFF8A94A6)
+private val Purple = Color(0xFF8A94A6)
+private val Pink = Color(0xFF8A94A6)
+private val Orange = Color(0xFF8A94A6)
+private val Sky = Color(0xFF8A94A6)
+private val Teal = Color(0xFF8A94A6)
 
 /** 동그라미 안의 그림 + 이름 + 화살표(업노트 설정 목록 모양) */
 @Composable
