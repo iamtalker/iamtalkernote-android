@@ -79,6 +79,12 @@
 - **남은 것(정리 우선)**: 실기기 확인(에뮬레이터에서만 확인함) · 동기화 속도 확인(디스크 쓰기 대기 줄임·깨워 두기를 넣었으나 효과는 폰에서 재야 함) · 강조색은 팔레트 9색(PC 는 자유 선택) · 한글 입력(조합)에서의 아웃라이너 동작.
 - **시험 방법**: 한글 경로에서는 클래스를 못 찾는다 → `C:\Users\Public\iat-android` 로 복사(build·.gradle·.git 제외)해서 `./gradlew.bat --offline -q testDebugUnitTest --tests "kr.iamtalker.notes.PlannerTest"`. 푸시·릴리스는 사용자가 시킨 뒤에만.
 
+## 로드맵 — 세계 공개 (2026-11-01)
+상세 계획은 PC 저장소 README 의 로드맵 *세계 공개 준비*(① 저작권 표기 ② 다국어 ③ 구글 플레이 등록)에 있습니다. 폰 쪽 요점: **제3자 라이선스 화면과 `THIRD_PARTY_NOTICES`**(Syncthing MPL-2.0 소스 위치 포함), **`strings.xml` 영어·한국어**(앱별 언어 설정), **`play` 빌드 변형**(앱 자체 업데이트 제거, 모든 파일 접근 대신 앱 전용 저장소·SAF, AAB·정식 서명, targetSdk 상향, 16KB 정렬).
+
+## 1.4.21 (릴리스함 — 2026-11-01)
+- **설정 → 정보 → 오픈소스 라이선스**: 내장 Syncthing(MPL-2.0, 소스 위치 링크)과 AndroidX·Kotlin(Apache-2.0)의 저작권·라이선스 전문(`assets/THIRD_PARTY_NOTICES.md`). 컴퓨터 v0.6.30 과 함께 쓰세요.
+
 ## 1.4.20 (릴리스함 — 2026-11-01)
 - **테마: 내 테마 + 새 프리셋(PC 와 같음)** — 라이트 보라·라이트 파랑·라이트 초록·다크 검정·다크 회색, 시스템 따라가기, 그리고 **내 테마**(배경색·강조색 두 가지를 직접 골라 만듦). 예전의 *강조색 직접 고르기* 팔레트는 없앴고 그 설정은 같은 색의 내 테마로 옮긴다. 없앤 프리셋(세피아·다크 보라·다크 파랑)을 쓰던 설정도 같은 색의 내 테마로 옮긴다.
 - **색 고르는 창**(`ColorPicker.kt`): 사각형(채도·밝기)과 무지개 막대(색상). 배경이 어두우면 글자는 밝게, 밝으면 어둡게 저절로 맞춘다(`AppThemes.custom`, PC `custom_base` 와 같은 계산).
@@ -194,6 +200,8 @@
 - [`prototypes/syncthing-embed`](prototypes/syncthing-embed) — Syncthing 을 이 앱 안에 내장해 직접 실행하는 시험 앱(에뮬레이터에서 동작 확인, 실제 폰·포그라운드 서비스는 아직). 계획은 컴퓨터 저장소 README 의 로드맵 *동기화 다시 짜기* 2단계.
 
 ## 라이선스
+제3자 소프트웨어(Syncthing MPL-2.0, AndroidX·Kotlin Apache-2.0 등)의 저작권·라이선스 전문은 [`app/src/main/assets/THIRD_PARTY_NOTICES.md`](app/src/main/assets/THIRD_PARTY_NOTICES.md) 에 있고 앱의 설정 → 정보 → *오픈소스 라이선스* 에서 봅니다.
+
 [PolyForm Noncommercial License 1.0.0](LICENSE) (비상업).
 
 ## 빌드

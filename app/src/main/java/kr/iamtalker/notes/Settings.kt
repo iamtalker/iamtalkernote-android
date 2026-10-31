@@ -264,6 +264,13 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("컴퓨터 앱", "github.com/iamtalker/iamtalkernote")
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    var licShown by remember { mutableStateOf(false) }
+                    TextRow("오픈소스 라이선스", "보기", onClick = { licShown = true })
+                    if (licShown) {
+                        val text = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.md").bufferedReader().use { it.readText() } }.getOrDefault("라이선스 파일을 찾을 수 없습니다.") }
+                        ErrorDialog(text, "오픈소스 라이선스") { licShown = false }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow("노트 폴더", model.tree?.lastPathSegment?.substringAfter(':') ?: "-")
                 }
             }
