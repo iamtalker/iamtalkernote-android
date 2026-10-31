@@ -306,8 +306,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
         }
     }
     error?.let { msg ->
-        AlertDialog(onDismissRequest = { error = null }, title = { Text("할 수 없습니다") }, text = { Text(msg) },
-            confirmButton = { TextButton(onClick = { error = null }) { Text("닫기") } })
+        ErrorDialog(msg, "할 수 없습니다") { error = null }
     }
     when (dialog) {
         "rename" -> {

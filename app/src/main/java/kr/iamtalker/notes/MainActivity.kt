@@ -279,14 +279,7 @@ fun App(model: NotesModel) {
     val ctx = LocalContext.current
 
     var crash by remember { mutableStateOf(CrashLog.take(ctx)) }
-    crash?.let { text ->
-        AlertDialog(
-            onDismissRequest = { crash = null },
-            title = { Text("지난 실행에서 오류가 났습니다") },
-            text = { SelectionContainer { Text(text.take(1800), fontSize = 11.sp, modifier = Modifier.verticalScroll(rememberScrollState())) } },
-            confirmButton = { TextButton(onClick = { crash = null }) { Text("닫기") } }
-        )
-    }
+    crash?.let { text -> ErrorDialog(text, "지난 실행에서 오류가 났습니다") { crash = null } }
 
     var screen by remember { mutableStateOf("") }
     var fromSettings by remember { mutableStateOf(false) }
@@ -670,7 +663,7 @@ fun App(model: NotesModel) {
         )
     }
     model.message?.let { m ->
-        AlertDialog(onDismissRequest = { model.message = null }, text = { Text(m) }, confirmButton = { TextButton(onClick = { model.message = null }) { Text("닫기") } })
+        ErrorDialog(m) { model.message = null }
     }
     deleteSaved?.let { sv ->
         AlertDialog(

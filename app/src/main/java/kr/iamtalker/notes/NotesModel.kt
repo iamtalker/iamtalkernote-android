@@ -352,7 +352,8 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             try {
                 withContext(Dispatchers.IO) { Conflicts.resolve(getApplication(), tree!!, this@NotesModel, p, choice) }
             } catch (e: Exception) {
-                message = e.message ?: e.javaClass.simpleName
+                val raw = e.message ?: e.javaClass.simpleName
+                message = if (raw.contains("Missing file") || raw.contains("FileNotFound")) "이 충돌 복사본은 이미 없어졌습니다(동기화가 정리했을 수 있습니다). 목록을 새로 고칩니다.\n\n$raw" else raw
             }
             refresh()
         }

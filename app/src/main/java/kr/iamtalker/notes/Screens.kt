@@ -106,7 +106,7 @@ fun TrashScreen(model: NotesModel, onBack: () -> Unit) {
         }
     }
     message?.let { m ->
-        AlertDialog(onDismissRequest = { message = null }, text = { Text(m) }, confirmButton = { TextButton(onClick = { message = null }) { Text("닫기") } })
+        ErrorDialog(m) { message = null }
     }
     if (confirm.isNotEmpty()) {
         val old = confirm == "old"
