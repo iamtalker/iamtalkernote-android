@@ -300,6 +300,7 @@ object I18nEn {
         "라이선스 파일을 찾을 수 없습니다." to "The license file could not be found.",
         "동기화 방향" to "Sync direction",
         "외부 폴더 (음악·PDF 등)" to "External folders (music, PDF, etc.)",
+        "컴퓨터가 뺀 외부 폴더 %s개의 등록을 지웠습니다(받은 파일은 그대로 있습니다)" to "Removed %s external folder(s) the computer no longer shares (downloaded files are kept)",
         "컴퓨터 → 폰 (받기만)" to "Computer → Phone (receive only)",
         "폰 → 컴퓨터 (보내기만)" to "Phone → Computer (send only)",
         "함께 맞출 것" to "Also sync",

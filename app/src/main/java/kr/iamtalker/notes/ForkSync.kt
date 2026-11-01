@@ -100,6 +100,25 @@ object ForkSync {
 
     private fun sha1Hex(s: String) = MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
+    /** 이 볼트의 외부 폴더(ext) 중 정책(keep: 지금 정책에 있는 외부 폴더 ID)에서 빠진 것 — 컴퓨터가 더는 공유하지 않는 폴더 */
+    fun goneExt(ids: List<String>, vault: String, keep: Set<String>): List<String> =
+        ids.filter { it.startsWith("$ID_PREFIX$vault-") && kindOf(it) == "ext" && it !in keep }
+
+    private const val GONE_AFTER_MS = 10 * 60_000L   // 정책 파일이 늦게 도착하는 때를 피하려고 이만큼 계속 빠져 있어야 지운다
+    private val goneSince = HashMap<String, Long>()
+
+    /** 컴퓨터가 정책에서 뺀 외부 폴더의 Syncthing 등록을 지운다(받은 파일은 그대로). 지운 폴더 ID 목록 */
+    fun dropGoneExt(api: Api, vault: String, keep: Set<String>, connected: Boolean, now: Long): List<String> {
+        val gone = goneExt(api.folders().map { it.getString("id") }, vault, keep)
+        goneSince.keys.retainAll(gone.toSet())
+        val out = ArrayList<String>()
+        for (id in gone) {
+            val since = goneSince.getOrPut(id) { now }
+            if (connected && now - since >= GONE_AFTER_MS) { api.removeFolder(id); goneSince.remove(id); out.add(id) }
+        }
+        return out
+    }
+
     /** 컴퓨터 앱의 syncpolicy.folder_id 와 같은 값 */
     fun folderId(vault: String, kind: String, mid: String) = "$ID_PREFIX$vault-${kind.take(3)}-" + sha1Hex(mid).take(8)
 
@@ -414,6 +433,12 @@ object ForkSync {
                     val want = typeFor(m.optString("direction")) ?: continue
                     val f = have[folderId(vault, m.optString("kind"), mid)] ?: continue
                     if (f.optString("type") != want) api.setFolderType(f, want)
+                }
+                // 컴퓨터가 정책에서 뺀 외부 폴더는 등록만 지운다(받은 파일은 그대로): 안 지우면 '대기 중'으로 계속 남는다
+                if (mods.has("markdown")) {
+                    val conn = known.any { runCatching { api.connected(it) }.getOrDefault(false) }
+                    val dropped = dropGoneExt(api, vault, SyncSettings.extModules(pol).keys, conn, System.currentTimeMillis())
+                    if (dropped.isNotEmpty()) note = trf("컴퓨터가 뺀 외부 폴더 %s개의 등록을 지웠습니다(받은 파일은 그대로 있습니다)", dropped.size)
                 }
                 // 새 방식(노트 폴더 하나·방향 하나): 제외 목록을 컴퓨터와 같게 하고, 쓸 일 없어진 옛 폴더를 정리한다
                 pol.optJSONObject("simple")?.let { sm -> simpleNote(ctx, api, vault, sm, vaultPath, staged).takeIf { it.isNotEmpty() }?.let { note = it } }

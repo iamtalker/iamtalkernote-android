@@ -57,6 +57,17 @@ class SyncSettingsTest {
     }
 }
 
+class GoneExtTest {
+    @Test fun onlyThisVaultsExternalFoldersMissingFromPolicy() {
+        val a = ForkSync.folderId("ab12", "external", "ext:aaa")
+        val b = ForkSync.folderId("ab12", "external", "ext:bbb")
+        val ids = listOf(a, b, ForkSync.folderId("ab12", "markdown", "markdown"), ForkSync.folderId("zz99", "external", "ext:ccc"), "other-app-folder")
+        assertEquals(listOf(b), ForkSync.goneExt(ids, "ab12", setOf(a)))          // 정책에 있는 a·노트 폴더·다른 볼트·다른 앱은 건드리지 않는다
+        assertEquals(listOf(a, b), ForkSync.goneExt(ids, "ab12", emptySet()))
+        assertTrue(ForkSync.goneExt(ids, "ab12", setOf(a, b)).isEmpty())
+    }
+}
+
 class SyncNoticeCompleteTest {
     private fun line(state: String = "idle", need: Long = 0) = ForkSync.FolderLine("iamtalkernote", state, 0, 0, needFiles = need, totalFiles = 10)
     private fun rep(connected: Boolean = true, error: String? = null, vararg f: ForkSync.FolderLine) = ForkSync.Report(connected = connected, folders = f.toList(), error = error)
