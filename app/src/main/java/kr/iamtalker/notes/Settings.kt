@@ -244,6 +244,8 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     }
                 }
                 "sync" -> {
+                    // 가장 중요한 규칙을 맨 위에 둔다
+                    Text(tr("컴퓨터와 폰의 동기화 규칙(방향·함께 맞출 것)이 같아야 동기화됩니다. 다르면 그 폴더는 멈춥니다."), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(16.dp))
                     SyncWizard(model)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SyncControls(model)
@@ -386,7 +388,5 @@ private fun SyncControls(model: NotesModel) {
             Warn(id)
         }
     }
-    Text(tr("컴퓨터와 폰의 규칙이 같아야 동기화됩니다. 다르면 그 폴더는 멈추고, 컴퓨터 앱 옵션 → 동기화에서도 같은 경고가 보입니다."),
-        fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }

@@ -299,6 +299,7 @@ object I18nEn {
         "보기" to "View",
         "라이선스 파일을 찾을 수 없습니다." to "The license file could not be found.",
         "동기화 방향" to "Sync direction",
+        "컴퓨터와 폰의 동기화 규칙(방향·함께 맞출 것)이 같아야 동기화됩니다. 다르면 그 폴더는 멈춥니다." to "Sync runs only when the computer and the phone use the same sync rules (direction and what to sync). If they differ, that folder stops.",
         "외부 폴더 (음악·PDF 등)" to "External folders (music, PDF, etc.)",
         "방향" to "Direction",
         "컴퓨터 → 폰" to "Computer → Phone",
