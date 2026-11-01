@@ -3,18 +3,22 @@ package kr.iamtalker.notes
 import org.json.JSONObject
 import java.io.File
 
-/** 설정 양방향 맞추기(컴퓨터 앱 syncsettings.py 와 같은 규칙): 방향·함께 보낼 것을 폰에서도 고치고, '더 최근에 바꾼 쪽'이 이긴다.
- *  설정만 담는 작은 폴더(종류 cfg, 항상 양방향)의 settings.json 으로 컴퓨터와 주고받는다. */
+/** 컴퓨터와 폰의 동기화 규칙(방향·함께 보낼 것)이 같은지 맞춰 본다(컴퓨터 앱 syncsettings.py 와 같은 규칙): 같아야 동기화하고, 다르면 그 폴더는 멈춘다.
+ *  설정만 담는 작은 폴더(종류 cfg, 항상 양방향)로 각자 자기 파일만 쓴다(서로 덮어쓰지 않으니 '누가 더 나중에 바꿨나' 를 가릴 일이 없다).
+ *   · pc-config.json    (컴퓨터가 씀) 컴퓨터의 지금 규칙
+ *   · phone-config.json (폰이 씀)   폰이 컴퓨터와 다르게 정한 것만(없는 항목은 컴퓨터를 따른다) */
 object SyncSettings {
-    const val FILE = "settings.json"
+    const val PC_FILE = "pc-config.json"
+    const val OWN_FILE = "phone-config.json"
     val KEYS = listOf("media", "imported", "history", "trash")
     val DIRECTIONS = listOf("both", "pc2mobile", "mobile2pc", "off")
+    const val NOTES = "notes"   // mismatched() 가 돌려주는 값 중 노트 폴더를 가리키는 이름(외부 폴더는 Syncthing 폴더 ID)
 
-    /** 외부 폴더(음악·PDF 등) 하나의 방향과 바꾼 시각. 노트 폴더와 따로 '더 최근에 바꾼 쪽'이 이긴다 */
-    data class ExtDir(val direction: String, val updated: Long)
+    /** 한쪽의 규칙. ext: 외부 폴더 Syncthing 폴더 ID → 방향 */
+    data class Rules(val direction: String, val include: Map<String, Boolean>, val ext: Map<String, String>)
 
-    /** ext: Syncthing 폴더 ID → 외부 폴더 방향(컴퓨터 syncsettings.py 의 ext_snapshot 과 같은 키) */
-    data class S(val updated: Long, val direction: String, val include: Map<String, Boolean>, val ext: Map<String, ExtDir> = emptyMap())
+    /** 폰이 컴퓨터와 다르게 정한 것만 */
+    data class Over(val direction: String? = null, val include: Map<String, Boolean> = emptyMap(), val ext: Map<String, String> = emptyMap())
 
     /** 폰의 설정 폴더 위치(노트 폴더 옆). ForkSync.localPath 의 cfg 와 같다 */
     fun dir(vaultPath: String) = File(vaultPath.trimEnd('/') + "-settings")
@@ -26,78 +30,114 @@ object SyncSettings {
         return mods.keys().asSequence().filter { mods.getJSONObject(it).optString("kind") == "external" }.associateBy { ForkSync.folderId(vault, "external", it) }
     }
 
-    fun fromPolicy(pol: JSONObject): S? {
+    /** 옛 컴퓨터 앱(설정 폴더에 규칙 파일을 안 쓰는 버전)을 위해 정책 파일에서 컴퓨터의 규칙을 읽는다 */
+    fun fromPolicy(pol: JSONObject): Rules? {
         val sm = pol.optJSONObject("simple") ?: return null
         val inc = sm.optJSONObject("include")
         val mods = pol.optJSONObject("modules")
-        val ext = extModules(pol).mapValues { (_, mid) -> mods!!.getJSONObject(mid).let { ExtDir(it.optString("direction", "off"), it.optLong("updated", 0L)) } }
-        return S(sm.optLong("updated", 0L), sm.optString("direction", "both"), KEYS.associateWith { inc?.optBoolean(it, false) == true }, ext)
+        val ext = extModules(pol).mapValues { (_, mid) -> mods!!.getJSONObject(mid).optString("direction", "off") }
+        return Rules(sm.optString("direction", "both"), KEYS.associateWith { inc?.optBoolean(it, false) == true }, ext)
     }
 
-    fun parse(text: String): S? = runCatching {
+    fun parseRules(text: String): Rules? = runCatching {
         val o = JSONObject(text)
-        val dir = o.getString("direction")
+        val n = o.getJSONObject("notes")
+        val dir = n.getString("direction")
         if (dir !in DIRECTIONS) return null
-        val inc = o.optJSONObject("include")
+        val inc = n.optJSONObject("include")
         val e = o.optJSONObject("ext")
-        val ext = HashMap<String, ExtDir>()
-        e?.keys()?.forEach { id -> e.optJSONObject(id)?.let { j -> j.optString("direction").takeIf { it in DIRECTIONS }?.let { ext[id] = ExtDir(it, j.optLong("updated", 0L)) } } }
-        S(o.getLong("updated"), dir, KEYS.associateWith { inc?.optBoolean(it, false) == true }, ext)
+        val ext = HashMap<String, String>()
+        e?.keys()?.forEach { id -> e.optString(id).takeIf { it in DIRECTIONS }?.let { ext[id] = it } }
+        Rules(dir, KEYS.associateWith { inc?.optBoolean(it, false) == true }, ext)
     }.getOrNull()
 
-    fun toJson(s: S): String = JSONObject().put("updated", s.updated).put("direction", s.direction)
-        .put("include", JSONObject().also { j -> KEYS.forEach { j.put(it, s.include[it] == true) } })
-        .put("ext", JSONObject().also { j -> s.ext.forEach { (id, d) -> j.put(id, JSONObject().put("direction", d.direction).put("updated", d.updated)) } }).toString()
+    /** 컴퓨터의 규칙: 설정 폴더의 pc-config.json, 없으면(옛 컴퓨터 앱) 정책 파일에서 */
+    fun pcRules(vaultPath: String, pol: JSONObject?): Rules? =
+        runCatching { parseRules(File(dir(vaultPath), PC_FILE).readText()) }.getOrNull() ?: pol?.let { fromPolicy(it) }
 
-    fun read(vaultPath: String): S? = runCatching { parse(File(dir(vaultPath), FILE).readText()) }.getOrNull()
+    fun parseOver(text: String): Over = runCatching {
+        val o = JSONObject(text)
+        val n = o.optJSONObject("notes")
+        val dir = n?.optString("direction")?.takeIf { it in DIRECTIONS }
+        val inc = HashMap<String, Boolean>()
+        n?.optJSONObject("include")?.let { j -> KEYS.forEach { k -> if (j.has(k)) inc[k] = j.optBoolean(k) } }
+        val e = o.optJSONObject("ext")
+        val ext = HashMap<String, String>()
+        e?.keys()?.forEach { id -> e.optString(id).takeIf { it in DIRECTIONS }?.let { ext[id] = it } }
+        Over(dir, inc, ext)
+    }.getOrDefault(Over())
 
-    fun write(vaultPath: String, s: S) {
+    fun toJson(o: Over): String {
+        val notes = JSONObject()
+        o.direction?.let { notes.put("direction", it) }
+        if (o.include.isNotEmpty()) notes.put("include", JSONObject().also { j -> o.include.forEach { (k, v) -> j.put(k, v) } })
+        return JSONObject().put("notes", notes).put("ext", JSONObject().also { j -> o.ext.forEach { (k, v) -> j.put(k, v) } }).toString()
+    }
+
+    fun overrides(vaultPath: String): Over = runCatching { parseOver(File(dir(vaultPath), OWN_FILE).readText()) }.getOrDefault(Over())
+
+    private fun writeOver(vaultPath: String, o: Over) {
         val d = dir(vaultPath).apply { mkdirs() }
-        val tmp = File(d, "$FILE.tmp")
-        tmp.writeText(toJson(s))
-        tmp.renameTo(File(d, FILE)).also { if (!it) { File(d, FILE).writeText(toJson(s)); tmp.delete() } }
+        val tmp = File(d, "$OWN_FILE.tmp")
+        tmp.writeText(toJson(o))
+        tmp.renameTo(File(d, OWN_FILE)).also { if (!it) { File(d, OWN_FILE).writeText(toJson(o)); tmp.delete() } }
     }
 
-    /** 컴퓨터가 준 정책과 설정 파일 중 더 최근 것(같으면 정책) */
-    fun effective(policy: S, file: S?): S {
-        // 외부 폴더는 폴더마다 따로 가린다(같은 시각이면 정책). 노트 폴더 방향·함께 보낼 것은 이전처럼 한 덩어리
-        val ext = HashMap(policy.ext)
-        file?.ext?.forEach { (id, d) -> if (d.updated > (ext[id]?.updated ?: -1L)) ext[id] = d }
-        val base = if (file != null && file.updated > policy.updated) file else policy
-        return base.copy(ext = ext)
+    /** 폰의 지금 규칙: 폰이 따로 정한 것이 있으면 그것, 없으면 컴퓨터를 따른다 */
+    fun effective(pc: Rules, o: Over): Rules = Rules(
+        o.direction ?: pc.direction,
+        pc.include.mapValues { (k, v) -> o.include[k] ?: v },
+        pc.ext.mapValues { (id, v) -> o.ext[id] ?: v })
+
+    /** 컴퓨터와 폰의 규칙이 다른 것: [NOTES](노트 폴더)와 외부 폴더 ID. 다르면 그 폴더는 멈춘다 */
+    fun mismatched(pc: Rules, eff: Rules): Set<String> {
+        val out = HashSet<String>()
+        if (pc.direction != eff.direction || pc.include != eff.include) out.add(NOTES)
+        pc.ext.forEach { (id, v) -> if (eff.ext[id] != v) out.add(id) }
+        return out
     }
 
-    /** 정책 JSON 에 설정을 덮어쓴 복사본(방향·함께 보낼 것·외부 폴더 방향·옛 형식 modules 까지) */
-    fun overlay(pol: JSONObject, s: S): JSONObject {
+    /** 다른 폴더의 Syncthing 폴더 ID(노트 폴더는 정책의 vault 로 계산) */
+    fun blockedFolderIds(vault: String, bad: Set<String>): Set<String> =
+        bad.map { if (it == NOTES) ForkSync.folderId(vault, "markdown", "markdown") else it }.toSet()
+
+    /** 정책 JSON 에 폰의 규칙을 덮어쓴 복사본(방향·함께 보낼 것·외부 폴더 방향·옛 형식 modules 까지). 폰의 Syncthing 폴더 종류와 가림 목록을 이 값으로 정한다 */
+    fun overlay(pol: JSONObject, eff: Rules): JSONObject {
         val c = JSONObject(pol.toString())
         val sm = c.optJSONObject("simple") ?: return c
-        sm.put("direction", s.direction).put("updated", s.updated)
-        sm.put("include", JSONObject().also { j -> KEYS.forEach { j.put(it, s.include[it] == true) } })
+        sm.put("direction", eff.direction)
+        sm.put("include", JSONObject().also { j -> KEYS.forEach { j.put(it, eff.include[it] == true) } })
         c.optJSONObject("modules")?.let { mods ->
-            mods.optJSONObject("markdown")?.put("direction", s.direction)
-            for (k in KEYS) mods.optJSONObject(k)?.put("direction", if (s.include[k] == true) s.direction else "off")
-            for ((id, mid) in extModules(c)) s.ext[id]?.let { mods.getJSONObject(mid).put("direction", it.direction).put("updated", it.updated) }
+            mods.optJSONObject("markdown")?.put("direction", eff.direction)
+            for (k in KEYS) mods.optJSONObject(k)?.put("direction", if (eff.include[k] == true) eff.direction else "off")
+            for ((id, mid) in extModules(c)) eff.ext[id]?.let { mods.getJSONObject(mid).put("direction", it) }
         }
         return c
     }
 
-    /** 이 폰에서 설정을 고친다: 바뀐 것이 있으면 지금 시각으로 적는다. 돌려주는 값: 적었는가 */
-    fun change(vaultPath: String, policy: JSONObject, direction: String? = null, key: String? = null, on: Boolean? = null, now: Long = System.currentTimeMillis()): Boolean {
-        val cur = effective(fromPolicy(policy) ?: return false, read(vaultPath))
-        val inc = cur.include.toMutableMap()
-        if (key != null && on != null) inc[key] = on
-        val next = cur.copy(direction = direction ?: cur.direction, include = inc, updated = now)
-        if (next.direction == cur.direction && next.include == cur.include) return false
-        write(vaultPath, next)
+    /** 이 폰에서 노트 폴더의 방향·함께 보낼 것을 고친다. 컴퓨터와 같게 하면 따로 적어 둘 필요가 없어 지운다. 바뀐 것이 있으면 적고 true */
+    fun change(vaultPath: String, pc: Rules, direction: String? = null, key: String? = null, on: Boolean? = null): Boolean {
+        val o = overrides(vaultPath)
+        val cur = effective(pc, o)
+        var dir = o.direction
+        val inc = o.include.toMutableMap()
+        if (direction != null && direction in DIRECTIONS) dir = direction.takeIf { it != pc.direction }
+        if (key != null && on != null) { if (on == pc.include[key]) inc.remove(key) else inc[key] = on }
+        val next = o.copy(direction = dir, include = inc)
+        if (effective(pc, next) == cur) return false
+        writeOver(vaultPath, next)
         return true
     }
 
-    /** 이 폰에서 외부 폴더 하나의 방향을 고친다(노트 폴더 설정과 그 시각은 그대로). 바뀐 것이 있으면 적고 true */
-    fun changeExt(vaultPath: String, policy: JSONObject, folderId: String, direction: String, now: Long = System.currentTimeMillis()): Boolean {
-        if (direction !in DIRECTIONS || folderId !in extModules(policy)) return false
-        val cur = effective(fromPolicy(policy) ?: return false, read(vaultPath))
-        if (cur.ext[folderId]?.direction == direction) return false
-        write(vaultPath, cur.copy(ext = cur.ext + (folderId to ExtDir(direction, now))))
+    /** 이 폰에서 외부 폴더 하나의 방향을 고친다. 컴퓨터와 같게 하면 따로 적어 둘 필요가 없어 지운다 */
+    fun changeExt(vaultPath: String, pc: Rules, folderId: String, direction: String): Boolean {
+        if (direction !in DIRECTIONS || folderId !in pc.ext) return false
+        val o = overrides(vaultPath)
+        val ext = o.ext.toMutableMap()
+        if (direction == pc.ext[folderId]) ext.remove(folderId) else ext[folderId] = direction
+        val next = o.copy(ext = ext)
+        if (effective(pc, next) == effective(pc, o)) return false
+        writeOver(vaultPath, next)
         return true
     }
 }

@@ -235,6 +235,13 @@ object ForkSync {
             call("/rest/config/folders/$id", "DELETE")
         }
 
+        /** 폴더를 멈춘다(설정·받은 파일은 그대로) */
+        fun pause(id: String) {
+            val f = folders().firstOrNull { it.getString("id") == id } ?: return
+            f.put("paused", true)
+            call("/rest/config/folders/$id", "PUT", f)
+        }
+
         /** 멈춰 둔 폴더를 다시 시작한다 */
         fun resume(id: String) {
             val f = folders().firstOrNull { it.getString("id") == id } ?: return
@@ -375,7 +382,8 @@ object ForkSync {
                           val failed: Int = 0, val firstError: String = "", val path: String = "", val id: String = "")
     data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0,
                       val note: String = "", val error: String? = null,
-                      /** 컴퓨터가 더는 공유하지 않는 외부 폴더(폴더 ID, 이름) */ val gone: List<Pair<String, String>> = emptyList())
+                      /** 컴퓨터가 더는 공유하지 않는 외부 폴더(폴더 ID, 이름) */ val gone: List<Pair<String, String>> = emptyList(),
+                      /** 컴퓨터와 규칙이 달라 멈춘 폴더의 Syncthing 폴더 ID */ val blocked: Set<String> = emptySet())
 
     /** 5초마다 한 번: 컴퓨터가 보낸 공유 요청을 받고, 정책 파일이 생겼으면 방향(폴더 종류)을 맞추고, 상태를 모은다 */
     fun tick(ctx: Context, api: Api, pcId: String, tree: Uri, staged: Boolean = false): Report {
@@ -384,10 +392,15 @@ object ForkSync {
         var accepted = 0
         var note = ""
         var gone = emptyList<Pair<String, String>>()
-        // 컴퓨터가 준 정책에, 폰이나 컴퓨터가 더 최근에 바꾼 설정(설정 폴더의 settings.json)을 덮어 쓴다
+        // 컴퓨터의 규칙(방향·함께 보낼 것)에 폰이 따로 정한 것(설정 폴더의 phone-config.json)을 덮어 폰의 규칙을 만든다. 둘이 다르면 그 폴더는 멈춘다
+        var blocked = emptySet<String>()   // 규칙이 달라 멈출 Syncthing 폴더 ID
         val policy = runCatching { readPolicy(ctx, tree) }.getOrNull()?.let { pol ->
-            val base = SyncSettings.fromPolicy(pol)
-            if (base == null) pol else SyncSettings.overlay(pol, SyncSettings.effective(base, SyncSettings.read(vaultPath)))
+            val pc = SyncSettings.pcRules(vaultPath, pol)
+            if (pc == null) pol else {
+                val eff = SyncSettings.effective(pc, SyncSettings.overrides(vaultPath))
+                blocked = SyncSettings.blockedFolderIds(pol.optString("vault"), SyncSettings.mismatched(pc, eff))
+                SyncSettings.overlay(pol, eff)
+            }
         }
         // 새 방식 정책이면 옛 종류의 폴더(미디어·이력 등)는 받지 않는다(컴퓨터가 아직 공유 중이어도 노트 폴더 안에서 함께 보낸다)
         val simpleVault = if (policy?.optJSONObject("simple") != null) policy.optString("vault") else ""
@@ -443,6 +456,12 @@ object ForkSync {
                     val f = have[folderId(vault, m.optString("kind"), mid)] ?: continue
                     if (f.optString("type") != want) api.setFolderType(f, want)
                 }
+                // 규칙이 컴퓨터와 다른 폴더는 멈춘다(설정은 그대로 두고 일시정지만). 같아지면 이 앱이 멈춘 것만 다시 켠다
+                val prefs = ctx.getSharedPreferences("settings", 0)
+                val stopped = prefs.getStringSet("mismatchPaused", emptySet())!!.toMutableSet()
+                for (id in blocked) have[id]?.let { f -> if (!f.optBoolean("paused")) api.pause(id); stopped.add(id) }
+                for (id in stopped.toList()) if (id !in blocked) { have[id]?.let { f -> if (f.optBoolean("paused")) api.resume(id) }; stopped.remove(id) }
+                prefs.edit().putStringSet("mismatchPaused", stopped).apply()
                 // 컴퓨터가 정책에서 뺀 외부 폴더: '대기 중'으로 계속 남으니 화면에서 '폴더가 없습니다. 작업 취소할까요?' 로 물어 지운다
                 if (mods.has("markdown")) {
                     val conn = known.any { runCatching { api.connected(it) }.getOrDefault(false) }
@@ -481,6 +500,6 @@ object ForkSync {
             d.copy(label = it.optString("label"), path = it.optString("path"), id = id, rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
         }
         val connected = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { runCatching { api.connected(it) }.getOrDefault(false) }
-        return Report(me, connected, lines, accepted, note, gone = gone)
+        return Report(me, connected, lines, accepted, note, gone = gone, blocked = blocked)
     }
 }

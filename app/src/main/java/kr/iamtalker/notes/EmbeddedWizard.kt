@@ -66,6 +66,7 @@ fun FolderLines(r: ForkSync.Report) {
         val s = when {
             done -> tr("최신")
             idleDone && whole -> tr("다음 범위 기다리는 중")
+            f.id in r.blocked -> tr("멈춤")
             f.state == "idle" -> tr("대기 중")
             f.state.startsWith("sync") -> tr("받는 중")
             f.state.startsWith("scan") -> tr("확인 중")
@@ -77,6 +78,7 @@ fun FolderLines(r: ForkSync.Report) {
                 Text(f.label, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 Text(if (done) s else "$s $pct%", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
             }
+            if (f.id in r.blocked) Text(tr("⚠ 컴퓨터와 규칙이 달라 이 폴더의 동기화를 멈췄습니다. 설정 → 동기화에서 컴퓨터와 같게 맞추세요."), fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
             // 외부 폴더(음악·PDF 등)는 받는 위치가 설정에 따라 달라서 실제 경로를 보인다(파일 관리 앱에서 찾을 때 쓴다)
             if (f.label.startsWith("외부 폴더") && f.path.isNotEmpty()) Text(trf("받는 위치: %s", f.path), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
             if (f.label.startsWith("외부 폴더") && f.needFiles > 0L) Text(trf("완료 %s / 전체 %s개 · 받는 중인 파일은 파일 관리 앱에서 크기가 다 차 보이거나 .tmp 로 보여도 아직 미완성입니다. 다 받으면 알림이 옵니다.", got, f.totalFiles), fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))

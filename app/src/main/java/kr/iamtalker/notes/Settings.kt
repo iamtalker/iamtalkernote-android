@@ -127,16 +127,6 @@ private fun TextRow(label: String, value: String = "", onClick: (() -> Unit)? = 
     }
 }
 
-/** 컴퓨터 앱이 노트 폴더 안 .sync/policy.json 에 저장한 동기화 정책을 읽는다 → (모듈 이름, 방향) 목록. 없으면 null */
-private fun readPolicy(ctx: android.content.Context, tree: android.net.Uri): List<Pair<String, String>>? {
-    val root = android.provider.DocumentsContract.getTreeDocumentId(tree)
-    val dir = History.list(ctx, tree, root).firstOrNull { it.isDir && it.name == ".sync" } ?: return null
-    val file = History.list(ctx, tree, dir.id).firstOrNull { !it.isDir && it.name == "policy.json" } ?: return null
-    val mods = JSONObject(NoteRepo.read(ctx, History.docUri(tree, file.id))).optJSONObject("modules") ?: return null
-    val names = mapOf("both" to tr("양방향"), "pc2mobile" to tr("PC → 모바일"), "mobile2pc" to tr("모바일 → PC"), "off" to tr("동기화 안 함"))
-    return mods.keys().asSequence().filter { mods.getJSONObject(it).optString("kind") != "external" }.map { k -> mods.getJSONObject(k).let { it.optString("label", k) to (names[it.optString("direction")] ?: "?") } }.toList()
-}
-
 @Composable
 fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, onBack: () -> Unit, onTool: (String) -> Unit, onPick: () -> Unit, onPickExt: () -> Unit = {}) {
     BackHandler { if (page.isEmpty()) onBack() else onPage("") }
@@ -258,22 +248,8 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SyncControls(model)
                     TextRow(tr("외부 폴더 저장 위치"), model.extRoot?.substringAfterLast('/') ?: tr("자동"), onClick = onPickExt)
-                    Text(trf("컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)를 받을 폴더입니다. 외부 폴더가 하나뿐이면 고른 폴더가 곧 받는 폴더이고, 둘 이상이면 그 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더(컴퓨터 → 폰 받기 전용)는 위치를 바꾸면 새 위치로 다시 받습니다. 예전 위치의 파일은 지우지 않습니다.", model.extRoot ?: tr("자동(공유 저장소의 iamtalkernote-files)")), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    Text(trf("컴퓨터에서 공유한 외부 폴더(음악·PDF 등)를 받을 폴더입니다. 고른 폴더가 곧 받는 폴더이고, SD카드의 폴더도 고를 수 있습니다. 지금: %s. 위치를 바꾸면 받기 전용(컴퓨터 → 폰) 폴더는 새 위치로 다시 받습니다. 예전 위치의 파일은 지우지 않습니다.", model.extRoot ?: tr("자동(공유 저장소의 iamtalkernote-files)")), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    var policy by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
-                    var loaded by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) {
-                        policy = withContext(Dispatchers.IO) { runCatching { model.tree?.let { readPolicy(ctx, it) } }.getOrNull() }
-                        loaded = true
-                    }
-                    Text(tr("컴퓨터의 iamtalkernote(옵션 → 동기화)에서 정한 방향입니다. 파일은 폰의 Syncthing-Fork 가 맞추고, 이 앱은 그 폴더를 읽고 씁니다."),
-                        fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    val list = policy
-                    if (!loaded) Text(tr("읽는 중…"), modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.outline)
-                    else if (list == null) Text(tr("아직 정책 파일(.sync/policy.json)이 없습니다. 컴퓨터 앱(0.5.1 이상)의 옵션 → 동기화에서 켜고 ‘적용’을 누르면 생깁니다."),
-                        modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.outline)
-                    else for ((name, dir) in list) { TextRow(name, dir); HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                     Text(tr("폴더 경로(폰의 Syncthing-Fork): 노트 폴더, 그 안의 .resources(미디어), .history, .trash, .imported 는 앱이 자동으로 만들어 둡니다."),
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
                 }
@@ -320,61 +296,97 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
     }
 }
 
-/** 동기화 방향과 함께 보낼 항목을 폰에서 고친다. 컴퓨터와 '가장 최근에 바꾼 쪽'이 적용된다(설정 폴더로 주고받음, SyncSettings.kt) */
+/** 방향·함께 보낼 것의 한 줄 드롭다운(컴퓨터 옵션 → 동기화와 같은 모양). 눌러서 고른다 */
+@Composable
+private fun DropRow(label: String, value: String, options: List<Pair<String, String>>, onSelect: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(Modifier.fillMaxWidth().clickable { open = true }.heightIn(min = 52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+            Text("$value ▾", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
+        }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for ((k, v) in options) androidx.compose.material3.DropdownMenuItem(text = { Text(v) }, onClick = { open = false; onSelect(k) })
+        }
+    }
+}
+
+/** 컴퓨터와 폰의 규칙이 어디가 어떻게 다른지(경고에 보일 글). id: [SyncSettings.NOTES] 또는 외부 폴더 ID */
+private fun diffLines(pc: SyncSettings.Rules, eff: SyncSettings.Rules, id: String, names: Map<String, String>, includeLabels: Map<String, String>): List<String> {
+    val out = ArrayList<String>()
+    if (id == SyncSettings.NOTES) {
+        if (pc.direction != eff.direction) out.add(trf("방향(컴퓨터 / 폰): %s / %s", names[pc.direction] ?: "?", names[eff.direction] ?: "?"))
+        for (k in SyncSettings.KEYS) if (pc.include[k] != eff.include[k]) {
+            val onoff = { v: Boolean? -> if (v == true) tr("켬") else tr("끔") }
+            out.add(trf("%s(컴퓨터 / 폰): %s / %s", includeLabels[k] ?: k, onoff(pc.include[k]), onoff(eff.include[k])))
+        }
+    } else if (pc.ext[id] != eff.ext[id]) out.add(trf("방향(컴퓨터 / 폰): %s / %s", names[pc.ext[id]] ?: "?", names[eff.ext[id]] ?: "?"))
+    return out
+}
+
+/** 동기화 규칙(방향·함께 보낼 것)을 폰에서 정한다. 컴퓨터(옵션 → 동기화)와 같아야 동기화되고, 다르면 그 폴더는 멈춘다(SyncSettings.kt) */
 @Composable
 private fun SyncControls(model: NotesModel) {
     val ctx = LocalContext.current
     val tree = model.tree ?: return
     val vault = remember(tree) { ForkSync.treePath(tree) } ?: return
     var pol by remember { mutableStateOf<JSONObject?>(null) }
-    var eff by remember { mutableStateOf<SyncSettings.S?>(null) }
+    var pc by remember { mutableStateOf<SyncSettings.Rules?>(null) }
+    var eff by remember { mutableStateOf<SyncSettings.Rules?>(null) }
     var again by remember { mutableStateOf(0) }
-    // 컴퓨터가 바꾼 방향(정책 파일)과 폰의 설정 파일을 몇 초마다 다시 읽어, 이 화면을 연 채로도 상대가 바꾼 값이 보이게 한다
+    // 컴퓨터가 바꾼 규칙(설정 폴더의 pc-config.json)을 몇 초마다 다시 읽어, 이 화면을 연 채로도 보이게 한다
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(3000); again++ } }
     LaunchedEffect(again) {
-        val p = withContext(Dispatchers.IO) { runCatching { ForkSync.readPolicy(ctx, tree) }.getOrNull() }
-        pol = p
-        eff = p?.let { SyncSettings.fromPolicy(it) }?.let { SyncSettings.effective(it, withContext(Dispatchers.IO) { SyncSettings.read(vault) }) }
+        val r = withContext(Dispatchers.IO) {
+            val p = runCatching { ForkSync.readPolicy(ctx, tree) }.getOrNull()
+            val c = SyncSettings.pcRules(vault, p)
+            Triple(p, c, c?.let { SyncSettings.effective(it, SyncSettings.overrides(vault)) })
+        }
+        pol = r.first; pc = r.second; eff = r.third
     }
     val p = pol
+    val c = pc
     val e = eff
-    if (p == null || e == null) return   // 컴퓨터의 새 방식 정책(.sync/policy.json)이 아직 없다
+    if (p == null || c == null || e == null) {   // 컴퓨터의 새 방식 정책(.sync/policy.json)이 아직 없다
+        Text(tr("아직 컴퓨터의 정책 파일(.sync/policy.json)이 없습니다. 컴퓨터 앱 옵션 → 동기화에서 켜고 ‘적용’을 누르면 생깁니다."),
+            fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
+        return
+    }
     val scope = rememberCoroutineScope()
-    fun change(direction: String? = null, key: String? = null, on: Boolean? = null, extId: String? = null) {
+    fun write(block: () -> Boolean) {
         scope.launch {
-            withContext(Dispatchers.IO) {
-                val wrote = if (extId != null && direction != null) SyncSettings.changeExt(vault, p, extId, direction) else SyncSettings.change(vault, p, direction, key, on)
-                if (wrote) EmbeddedSync.api(ctx).scanSettingsFolder()   // 컴퓨터에 바로 가게 설정 폴더를 즉시 검사
-            }
+            withContext(Dispatchers.IO) { if (block()) EmbeddedSync.api(ctx).scanSettingsFolder() }   // 컴퓨터에 바로 가게 설정 폴더를 즉시 검사
             again++
         }
     }
-    var extPick by remember { mutableStateOf<String?>(null) }   // 방향을 고르는 중인 외부 폴더(Syncthing 폴더 ID)
-    Text(tr("동기화 방향"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
-    for ((d, label) in listOf("both" to tr("양방향"), "pc2mobile" to tr("컴퓨터 → 폰 (받기만)"), "mobile2pc" to tr("폰 → 컴퓨터 (보내기만)"), "off" to tr("동기화 안 함")))
-        ChoiceRow(label, e.direction == d) { change(direction = d) }
-    Text(tr("함께 맞출 것"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
-    for ((k, label, hint) in listOf(Triple("media", tr("미디어(그림·첨부)"), tr("끄면 그림은 폰으로 오지 않습니다")), Triple("imported", tr("가져온 문서 요약"), tr("폰 앱이 읽는 가져온 문서 파일")),
-        Triple("history", tr("변경 이력 (고급)"), tr("파일이 아주 많습니다")), Triple("trash", tr("휴지통 (고급)"), tr("지운 노트 보관본"))))
-        SwitchRow(label, hint, e.include[k] == true) { change(key = k, on = it) }
+    val dirs = listOf("both" to tr("양방향"), "pc2mobile" to tr("컴퓨터 → 폰"), "mobile2pc" to tr("폰 → 컴퓨터"), "off" to tr("동기화 안 함"))
+    val names = dirs.toMap()
+    val includes = listOf(Triple("media", tr("미디어(그림·첨부)"), tr("끄면 그림은 폰으로 오지 않습니다")), Triple("imported", tr("가져온 문서 요약"), tr("폰 앱이 읽는 가져온 문서 파일")),
+        Triple("history", tr("변경 이력 (고급)"), tr("파일이 아주 많습니다")), Triple("trash", tr("휴지통 (고급)"), tr("지운 노트 보관본")))
+    val labels = includes.associate { it.first to it.second }
+    val bad = SyncSettings.mismatched(c, e)
+    @Composable
+    fun Warn(id: String) {
+        if (id in bad) Text("⚠ " + tr("컴퓨터와 규칙이 달라 이 폴더의 동기화를 멈췄습니다 — ") + diffLines(c, e, id, names, labels).joinToString("; ") + tr(". 컴퓨터나 폰을 같게 맞추면 다시 동기화됩니다."),
+            fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+    }
+    @Composable
+    fun Head(t: String) = Text(t, fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+    Head(tr("노트 폴더"))
+    DropRow(tr("방향"), names[e.direction] ?: "?", dirs) { d -> write { SyncSettings.change(vault, c, direction = d) } }
+    Warn(SyncSettings.NOTES)
+    Head(tr("함께 맞출 것"))
+    for ((k, label, hint) in includes) SwitchRow(label, hint, e.include[k] == true) { on -> write { SyncSettings.change(vault, c, key = k, on = on) } }
     val exts = SyncSettings.extModules(p)
     if (exts.isNotEmpty()) {
-        val dirLabels = listOf("both" to tr("양방향"), "pc2mobile" to tr("컴퓨터 → 폰 (받기만)"), "mobile2pc" to tr("폰 → 컴퓨터 (보내기만)"), "off" to tr("동기화 안 함"))
-        Text(tr("외부 폴더 (음악·PDF 등)"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+        Head(tr("외부 폴더 (음악·PDF 등)"))
         for ((id, mid) in exts) {
             val name = p.getJSONObject("modules").getJSONObject(mid).optString("label", mid).substringAfter("외부 폴더 · ").trim()
-            TextRow(name, dirLabels.firstOrNull { it.first == (e.ext[id]?.direction ?: "off") }?.second ?: "?", onClick = { extPick = id })
-        }
-        extPick?.let { id ->
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { extPick = null }, title = { Text(p.getJSONObject("modules").getJSONObject(exts.getValue(id)).optString("label", "").substringAfter("외부 폴더 · ").trim()) },
-                text = { Column { for ((d, label) in dirLabels) ChoiceRow(label, e.ext[id]?.direction == d) { change(direction = d, extId = id); extPick = null } } },
-                confirmButton = {}, dismissButton = { TextButton(onClick = { extPick = null }) { Text(tr("취소")) } }
-            )
+            DropRow(name, names[e.ext[id]] ?: "?", dirs) { d -> write { SyncSettings.changeExt(vault, c, id, d) } }
+            Warn(id)
         }
     }
-    Text(tr("여기서 바꾸면 몇 초 안에 적용되고, 컴퓨터(0.6.3 이상)에도 반영됩니다. 양쪽에서 바꾸면 가장 최근에 바꾼 쪽이 이깁니다."),
+    Text(tr("컴퓨터와 폰의 규칙이 같아야 동기화됩니다. 다르면 그 폴더는 멈추고, 컴퓨터 앱 옵션 → 동기화에서도 같은 경고가 보입니다."),
         fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
-

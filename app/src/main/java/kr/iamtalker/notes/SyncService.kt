@@ -162,7 +162,7 @@ class SyncService : Service() {
                     eta = Eta.seconds(f.needFiles, rate)
                 } else { have = 0; all = 0; eta = -1L }
                 hold(r?.connected == true && all > 0 && have < all)
-                val txt = SyncNotice.text(r?.connected == true, r?.error, have, all, eta)
+                val txt = SyncNotice.text(r?.connected == true, r?.error ?: r?.blocked?.takeIf { it.isNotEmpty() }?.let { tr("컴퓨터와 규칙이 달라 멈춘 폴더가 있습니다 — 설정 → 동기화에서 확인하세요") }, have, all, eta)
                 // 다 받았으면(몇 번 연달아 확인한 뒤) 알림을 내리고, 받을 것이 다시 생기면 올린다
                 val complete = SyncNotice.complete(r, have, all)
                 doneTicks = if (complete) doneTicks + 1 else 0
@@ -226,6 +226,7 @@ object SyncNotice {
     /** 알림을 내려도 되는 '다 받음': 컴퓨터와 연결돼 있고 오류가 없고, 노트 전체를 다 받았고, 모든 폴더(외부 폴더 포함)에 받을 파일이 없다 */
     fun complete(r: ForkSync.Report?, have: Int, all: Int): Boolean {
         r ?: return false
+        if (r.blocked.isNotEmpty()) return false   // 컴퓨터와 규칙이 달라 멈춘 폴더가 있으면 끝난 것이 아니다(알림으로 알린다)
         val gone = r.gone.map { it.first }.toSet()   // 컴퓨터가 더는 공유하지 않는 폴더는 앞으로도 받을 수 없으니 판정에서 뺀다
         return r.connected && r.error == null && all > 0 && have >= all &&
             // 받을 파일·용량이 0이면 상태가 syncing·scanning 이어도 끝난 것으로 본다(큰 폴더는 받은 뒤에도 한참 상태가 안 바뀐다). 오류 상태만 제외
