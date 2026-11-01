@@ -66,4 +66,20 @@ class NoteTextTest {
         assertEquals("태그: #a\n", NoteText.retag("태그: #a #b\n", "b", "a"))
         assertEquals("그대로 #z", NoteText.retag("그대로 #z", "q", "r"))
     }
+
+    @Test fun dropTitleLineRemovesOnlyTheLineUsedAsTitle() {
+        // 첫 줄이 제목이 되면 본문에서는 빠진다(제목 test / 본문 test 처럼 두 번 나오지 않게)
+        assertEquals("", NoteText.dropTitleLine("test"))
+        assertEquals("둘째 줄" + "\n" + "셋째", NoteText.dropTitleLine("test" + "\n" + "\n" + "둘째 줄" + "\n" + "셋째"))
+        // 맨 앞의 빈 줄·마크다운 기호가 있어도 제목으로 고른 줄을 뺀다
+        assertEquals("본문", NoteText.dropTitleLine("\n" + "# 제목" + "\n" + "본문"))
+        // 머리말은 그대로 둔다
+        assertEquals("---" + "\n" + "tags: [a]" + "\n" + "---" + "\n" + "본문", NoteText.dropTitleLine("---" + "\n" + "tags: [a]" + "\n" + "---" + "\n" + "제목" + "\n" + "본문"))
+        // 제목으로 삼을 줄이 없으면 그대로
+        assertEquals("---", NoteText.dropTitleLine("---"))
+        // titleFromBody 가 고른 줄과 같은 줄을 뺀다
+        val text = "첫 글" + "\n" + "나머지"
+        assertEquals("첫 글", NoteText.titleFromBody(text))
+        assertEquals("나머지", NoteText.dropTitleLine(text))
+    }
 }

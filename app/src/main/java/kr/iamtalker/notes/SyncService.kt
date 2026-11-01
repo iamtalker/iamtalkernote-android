@@ -102,6 +102,9 @@ class SyncService : Service() {
         val syncEta = Eta()   // 폰이 센 값이 없을 때 Syncthing 이 알려 주는 남은 파일 수로 속도를 잰다
         var etaSec = -1L
         var lastText = ""
+        var downSince = 0L      // 컴퓨터와 연결이 끊긴 채로 지내기 시작한 때
+        var lastRecover = 0L    // 마지막으로 기기를 다시 연결시킨 때
+        var lastRestart = 0L    // 마지막으로 엔진을 다시 시작한 때
         while (scope.isActive) {
             try {
                 if (!EmbeddedSync.alive()) EmbeddedSync.start(ctx)
@@ -151,6 +154,24 @@ class SyncService : Service() {
                 }
                 // 알림: 동기화 상태 N/M (P%) · 남은 시간(글자가 바뀔 때만 갱신)
                 val r = EmbeddedSync.report
+                // 연결이 계속 안 되면 스스로 되살린다(전엔 폰에서 동기화를 껐다 켜야 다시 시작됐다): 1분 반 넘게 → 기기를 다시 연결, 5분 넘게 → 엔진을 다시 시작
+                val nowMs = System.currentTimeMillis()
+                if (r == null || r.connected || tree == null || r.error != null) downSince = 0L
+                else {
+                    if (downSince == 0L) downSince = nowMs
+                    val down = nowMs - downSince
+                    val hasPeer = runCatching { api.deviceIds().size > 1 }.getOrDefault(false)
+                    if (hasPeer && down > 90_000 && nowMs - lastRecover > 120_000) {
+                        lastRecover = nowMs
+                        EmbeddedSync.note(ctx, "컴퓨터와 ${down / 1000}초째 연결이 안 돼 기기를 다시 연결합니다")
+                        EmbeddedSync.refreshNow(ctx)
+                    }
+                    if (hasPeer && down > 300_000 && nowMs - lastRestart > 600_000) {
+                        lastRestart = nowMs
+                        EmbeddedSync.note(ctx, "컴퓨터와 ${down / 1000}초째 연결이 안 돼 엔진을 다시 시작합니다")
+                        EmbeddedSync.stop(); downSince = nowMs
+                    }
+                }
                 val o = overall
                 // 폰이 센 전체 개수가 있으면 그것을, 없으면 Syncthing 이 알려 주는 값(공개된 파일 기준)으로라도 진행률을 보인다
                 val f = r?.folders?.firstOrNull()
@@ -230,7 +251,7 @@ object SyncNotice {
         val gone = r.gone.map { it.first }.toSet()   // 컴퓨터가 더는 공유하지 않는 폴더는 앞으로도 받을 수 없으니 판정에서 뺀다
         return r.connected && r.error == null && all > 0 && have >= all &&
             // 받을 파일·용량이 0이면 상태가 syncing·scanning 이어도 끝난 것으로 본다(큰 폴더는 받은 뒤에도 한참 상태가 안 바뀐다). 오류 상태만 제외
-            r.folders.filter { it.id !in gone }.all { it.needFiles == 0L && it.needBytes == 0L && it.state != "error" }
+            r.folders.filter { it.id !in gone }.all { it.needFiles == 0L && it.needBytes == 0L && it.upNeed == 0L && it.state != "error" }
     }
 
     fun text(connected: Boolean, error: String?, have: Int, all: Int, etaSec: Long): String {

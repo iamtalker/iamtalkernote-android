@@ -76,6 +76,19 @@ object EmbeddedSync {
         running = true
     }
 
+    /** 상태 갱신: 등록된 기기와 연결을 다시 맺고, 이 앱의 폴더를 바로 다시 검사시킨다(껐다 켜지 않아도 멈춘 동기화가 다시 돈다) */
+    fun refreshNow(ctx: Context) {
+        Thread {
+            runCatching {
+                val api = api(ctx)
+                val me = api.myId()
+                api.deviceIds().filter { it != me }.forEach { runCatching { api.reconnect(it) } }
+                api.folders().map { it.getString("id") }.filter { it.startsWith(ForkSync.ID_PREFIX) }.forEach { runCatching { api.scan(it) } }
+                note(ctx, "상태 갱신: 기기 다시 연결, 폴더 검사")
+            }
+        }.start()
+    }
+
     @Synchronized
     fun stop() {
         proc?.destroy()

@@ -677,8 +677,18 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     /** 백그라운드에서 한 번 실행(화면이 닫혀도 끝까지 간다). 실패는 무시 */
     fun bg(block: () -> Unit) { viewModelScope.launch(Dispatchers.IO) { runCatching(block) } }
 
+    /** 이름을 바꾸거나 옮긴 노트의 즐겨찾기를 새 경로로 옮긴다(안 옮기면 풀려 버린다) */
+    private fun favMove(old: Note, new: Note) {
+        val o = Favorites.relOf(old)
+        val nw = Favorites.relOf(new)
+        if (o == nw || o !in favs) return
+        favs = favs - o + nw
+        runCatching { ForkSync.treePath(tree!!)?.let { Favorites.move(it, o, nw) } }
+    }
+
     fun renameNote(n: Note, title: String): Note {
         val r = NoteRepo.rename(getApplication(), n, title)
+        favMove(n, r)
         runCatching {
             History.moveHistory(getApplication(), tree!!, History.relOf(n), History.relOf(r))
             History.journal(getApplication(), tree!!, "rename", History.relOf(n), History.relOf(r))
@@ -690,6 +700,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         val id = folderIds[dstFolder] ?: if (dstFolder.isEmpty()) android.provider.DocumentsContract.getTreeDocumentId(tree!!)
             else throw IllegalStateException(tr("이 노트북으로는 옮길 수 없습니다"))
         val r = NoteRepo.move(getApplication(), tree!!, n, dstFolder, id)
+        favMove(n, r)
         runCatching {
             History.moveHistory(getApplication(), tree!!, History.relOf(n), History.relOf(r))
             History.journal(getApplication(), tree!!, "move", History.relOf(n), History.relOf(r))

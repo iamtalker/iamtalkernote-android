@@ -186,6 +186,12 @@ object ForkSync {
             call("/rest/config/devices/$id", "PUT", d.put("paused", false))
         }
 
+        /** 이 폴더를 상대 기기가 얼마나 받았는지: (아직 못 받은 개수, 전체 개수). 폰이 올리는 폴더의 진행을 보려고 쓴다 */
+        fun remoteCompletion(folder: String, device: String): Pair<Long, Long>? = runCatching {
+            val j = JSONObject(call("/rest/db/completion?folder=" + java.net.URLEncoder.encode(folder, "UTF-8") + "&device=" + device))
+            j.optLong("needItems") to j.optLong("globalItems")
+        }.getOrNull()
+
         fun deviceIds(): List<String> {
             val a = config().getJSONArray("devices")
             return (0 until a.length()).map { a.getJSONObject(it).getString("deviceID") }
@@ -379,7 +385,8 @@ object ForkSync {
 
     data class FolderLine(val label: String, val state: String, val needBytes: Long, val totalBytes: Long,
                           val needFiles: Long = 0, val totalFiles: Long = 0, val rate: Double = 0.0,
-                          val failed: Int = 0, val firstError: String = "", val path: String = "", val id: String = "")
+                          val failed: Int = 0, val firstError: String = "", val path: String = "", val id: String = "",
+                          /** 폰이 올린 것 중 컴퓨터가 아직 못 받은 개수 / 컴퓨터에 있는 전체 개수(올리는 폴더만) */ val upNeed: Long = 0, val upTotal: Long = 0)
     data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0,
                       val note: String = "", val error: String? = null,
                       /** 컴퓨터가 더는 공유하지 않는 외부 폴더(폴더 ID, 이름) */ val gone: List<Pair<String, String>> = emptyList(),
@@ -490,6 +497,7 @@ object ForkSync {
                 }
             }
         }
+        val upDev = known.firstOrNull { c -> runCatching { api.connected(c) }.getOrDefault(false) }   // 올리는 진행을 물어볼 연결된 컴퓨터
         val lines = api.folders().filter { it.getString("id").startsWith(ID_PREFIX) && kindOf(it.getString("id")) != "cfg" }.map {
             val id = it.getString("id")
             val d = runCatching { api.folderDetail(id) }.getOrDefault(FolderLine("", "?", 0L, 0L))
@@ -497,7 +505,8 @@ object ForkSync {
             val conn = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { c -> runCatching { api.connected(c) }.getOrDefault(false) }
             if (kickIfStuck(api, id, d, conn, System.currentTimeMillis())) note = note.ifEmpty { tr("받기에 실패한 파일이 있어 다시 시도했습니다") }
             val errs = if (d.needFiles > 0) api.folderErrors(id) else emptyList()
-            d.copy(label = it.optString("label"), path = it.optString("path"), id = id, rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
+            val up = if (upDev != null && it.optString("type") != "receiveonly" && !it.optBoolean("paused")) api.remoteCompletion(id, upDev) else null
+            d.copy(label = it.optString("label"), path = it.optString("path"), id = id, upNeed = up?.first ?: 0L, upTotal = up?.second ?: 0L, rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
         }
         val connected = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { runCatching { api.connected(it) }.getOrDefault(false) }
         return Report(me, connected, lines, accepted, note, gone = gone, blocked = blocked)

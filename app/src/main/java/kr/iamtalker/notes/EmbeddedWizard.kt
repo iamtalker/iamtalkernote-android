@@ -86,6 +86,7 @@ fun FolderLines(r: ForkSync.Report) {
             val small = MaterialTheme.colorScheme.outline
             if (whole) Text(tr("전체 %,d개 중 받음 %,d개 · 남음 %,d개").format(ov!!.all, ov.have, (ov.all - ov.have).coerceAtLeast(0)), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
             else Text(trf("파일 전체 %s개 · 받음 %s개 · 남음 %s개", f.totalFiles, got, f.needFiles), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
+            if (f.upNeed > 0) Text(trf("올리는 중: 컴퓨터가 아직 못 받은 파일 %s개 / 전체 %s개", f.upNeed, f.upTotal), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 2.dp))
             if (f.failed > 0) Text(trf("받지 못한 파일 %s개 (자동으로 다시 시도합니다): %s", f.failed, f.firstError.take(120)), fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
             if (whole && !done) {
                 val left = (ov!!.all - ov.have).coerceAtLeast(0).toLong()
@@ -154,6 +155,7 @@ fun EmbeddedWizard(model: NotesModel) {
                 }
                 Text(tr("동기화 상태"), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 Text(head, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
+                if (on) OutlinedButton(onClick = { EmbeddedSync.refreshNow(ctx) }, modifier = Modifier.padding(top = 6.dp)) { Text(tr("상태 갱신")) }
                 OverallProgress()
                 if (report != null && report.folders.isNotEmpty()) FolderLines(report)
                 else if (on && report != null && report.error == null) Text(tr("아직 받을 폴더가 없습니다. 연결되면 컴퓨터가 보낸 노트 폴더가 여기에 나타납니다."), fontSize = 12.sp,

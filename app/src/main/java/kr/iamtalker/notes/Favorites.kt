@@ -6,7 +6,7 @@ import java.io.File
 
 /** 즐겨찾기: 노트 파일은 건드리지 않고 설정 폴더(컴퓨터와 항상 양방향으로 맞추는 작은 폴더)의 작은 파일에 적는다(컴퓨터 앱 favorites.py 와 같은 규칙).
  *  충돌이 없도록 폰은 favorites-phone.json 만 쓰고 컴퓨터가 쓴 favorites-pc.json 은 읽기만 한다. 읽을 때는 둘을 합쳐 노트마다 더 최근에 바꾼 쪽을 따른다.
- *  노트 경로는 노트 폴더 기준 `폴더/이름.md`. 이름을 바꾸거나 옮기면 그 노트의 즐겨찾기는 풀린다. */
+ *  노트 경로는 노트 폴더 기준 `폴더/이름.md`. 이름을 바꾸거나 옮기면 move 로 새 경로에 옮겨 즐겨찾기가 풀리지 않게 한다. */
 object Favorites {
     const val OWN = "favorites-phone.json"
     const val OTHER = "favorites-pc.json"
@@ -36,6 +36,14 @@ object Favorites {
     fun load(vaultPath: String): Map<String, Boolean> {
         val d = SyncSettings.dir(vaultPath)
         return merge(read(File(d, OWN)), read(File(d, OTHER)))
+    }
+
+    /** 노트 이름을 바꾸거나 옮겼을 때 즐겨찾기를 새 경로로 옮긴다(안 옮기면 풀려 버린다). 옮겼으면 true */
+    fun move(vaultPath: String, old: String, new: String, now: Long = System.currentTimeMillis()): Boolean {
+        if (old == new || load(vaultPath)[old] != true) return false
+        set(vaultPath, old, false, now)
+        set(vaultPath, new, true, now + 1)
+        return true
     }
 
     /** 즐겨찾기를 켜거나 끈다(내 파일에만 적는다) */

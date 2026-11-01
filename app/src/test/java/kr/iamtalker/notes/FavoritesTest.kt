@@ -43,4 +43,15 @@ class FavoritesTest {
         assertEquals("ScrapBook/하위/한글 제목.md", Favorites.relOf("ScrapBook/하위", "한글 제목.md"))
         assertEquals("a.md", Favorites.relOf("", "a.md"))
     }
+
+    @Test fun renameOrMoveKeepsTheFavorite() {
+        val v = vault()
+        Favorites.set(v, "클로드 변경.md", true, now = 10)
+        assertTrue(Favorites.move(v, "클로드 변경.md", "클로드 변경2.md", now = 20))   // 제목을 바꿔도 즐겨찾기가 풀리지 않는다
+        assertEquals(mapOf("클로드 변경.md" to false, "클로드 변경2.md" to true), Favorites.load(v))
+        assertTrue(Favorites.move(v, "클로드 변경2.md", "업무/클로드 변경2.md", now = 30))   // 옮겨도 유지
+        assertEquals(true, Favorites.load(v)["업무/클로드 변경2.md"])
+        assertFalse(Favorites.move(v, "없던.md", "새로.md", now = 40))                      // 즐겨찾기가 아니던 노트는 그대로
+        assertFalse(Favorites.move(v, "업무/클로드 변경2.md", "업무/클로드 변경2.md", now = 50))
+    }
 }

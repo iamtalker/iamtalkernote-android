@@ -114,6 +114,19 @@ object NoteText {
         return ""
     }
 
+    /** 첫 줄을 제목으로 삼았을 때 본문에서 그 줄(과 바로 뒤 빈 줄)을 뺀다. 안 빼면 제목과 본문 첫 줄이 같은 글로 두 번 나온다. titleFromBody 가 고른 줄과 같은 줄을 뺀다 */
+    fun dropTitleLine(text: String): String {
+        val body = Meta.split(text).second
+        val off = text.length - body.length
+        if (off < 0 || text.substring(off) != body) return text
+        val lines = body.split("\n")
+        val idx = lines.indexOfFirst { raw -> val l = raw.trim(); l.isNotEmpty() && !l.all { it in "-*_=` " } }
+        if (idx < 0) return text
+        val rest = lines.drop(idx + 1).dropWhile { it.isBlank() }
+        val before = lines.take(idx).filter { it.isNotBlank() }
+        return text.substring(0, off) + (before + rest).joinToString("\n")
+    }
+
     /** 같은 제목이 여럿이면 가장 최근(시각이 큰) 것으로 연결한다(PC 위키 규칙) */
     fun <T> findLatestByTitle(items: List<T>, title: String, titleOf: (T) -> String, timeOf: (T) -> Long): T? =
         items.filter { titleOf(it).equals(title.trim(), ignoreCase = true) }.maxByOrNull(timeOf)
