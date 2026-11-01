@@ -41,6 +41,13 @@ class ForkSyncTest {
         // 설정에서 받을 곳(SD카드)을 정하면 그 안에 이름별로 만든다. 끝의 슬래시·공백은 무시
         assertEquals("/storage/1234-ABCD/동기화/PDF", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · PDF", "/storage/1234-ABCD/동기화/"))
         assertEquals("/storage/emulated/0/iamtalkernote-files/PDF", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · PDF", "  "))
+        // 외부 폴더가 하나뿐이고 위치를 골랐으면 고른 폴더가 곧 받는 폴더(Data/Cloud 를 골랐는데 Data/Cloud/Cloud 가 생기지 않는다)
+        assertEquals("/storage/0000-0000/Data/Cloud", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · Cloud", "/storage/0000-0000/Data/Cloud/", true))
+        // 위치를 안 골랐으면(자동) 하나여도 이름별 폴더, 둘 이상이면 이름별 하위 폴더
+        assertEquals("/storage/emulated/0/iamtalkernote-files/Cloud", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · Cloud", null, true))
+        assertEquals("/storage/0000-0000/Data/Cloud/Cloud", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · Cloud", "/storage/0000-0000/Data/Cloud", false))
+        // 노트 폴더 등 다른 종류는 이 규칙의 영향을 받지 않는다
+        assertEquals("$app/.resources", ForkSync.localPath(app, "inn-abcd1234-med-bb362a46", "미디어", "/storage/x", true))
     }
 
     @Test fun directionsBecomePhoneFolderTypes() {

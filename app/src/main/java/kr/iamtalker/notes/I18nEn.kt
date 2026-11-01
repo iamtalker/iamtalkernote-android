@@ -502,7 +502,7 @@ object I18nEn {
         "이 폴더의 실제 경로를 알 수 없습니다. 내장 메모리나 SD카드의 폴더를 고르세요." to "Cannot determine this folder's real path. Pick a folder on internal storage or the SD card.",
         "외부 폴더 저장 위치" to "External folders location",
         "자동" to "Automatic",
-        "컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)가 이 폴더 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더(컴퓨터 → 폰 받기 전용)는 위치를 바꾸면 새 위치로 다시 받습니다. 예전 위치의 파일은 지우지 않습니다." to "External folders shared from the computer (music, PDFs…) are created inside this folder by name. An SD card folder works too. Now: %s. External folders already being received (computer → phone, receive-only) are received again at the new location. Files at the old location are not deleted.",
+        "컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)를 받을 폴더입니다. 외부 폴더가 하나뿐이면 고른 폴더가 곧 받는 폴더이고, 둘 이상이면 그 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더(컴퓨터 → 폰 받기 전용)는 위치를 바꾸면 새 위치로 다시 받습니다. 예전 위치의 파일은 지우지 않습니다." to "The folder that receives external folders shared from the computer (music, PDFs…). With only one external folder, the folder you pick is the receiving folder itself; with two or more, they are created inside it by name. An SD card folder works too. Now: %s. External folders already being received (computer → phone, receive-only) are received again at the new location. Files at the old location are not deleted.",
         "자동(공유 저장소의 iamtalkernote-files)" to "Automatic (iamtalkernote-files in shared storage)",
         "자동으로 되돌리기" to "Reset to automatic",
         "외부 폴더 %s개의 저장 위치가 바뀌어 새 위치로 다시 받습니다" to "Storage location of %s external folder(s) changed; receiving again at the new location",

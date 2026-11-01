@@ -50,7 +50,7 @@ object ForkSync {
     fun kindOf(folderId: String): String = folderId.split('-').getOrElse(2) { "" }
 
     /** 컴퓨터가 알려 준 폴더 이름표와 ID 로 폰의 저장 경로를 정한다. 외부 폴더는 노트 폴더 옆 '<노트폴더>-files/<이름>' */
-    fun localPath(vaultPath: String, folderId: String, label: String, extRoot: String? = null): String {
+    fun localPath(vaultPath: String, folderId: String, label: String, extRoot: String? = null, singleExt: Boolean = false): String {
         fun sub(rel: String) = if (rel.isEmpty()) vaultPath else "$vaultPath/$rel"
         // 노트 폴더가 앱 안(/data/…)이면 그 옆(-files)도 앱 안이라 다른 앱(음악 앱·파일 관리 앱)이 못 본다 → 외부 폴더는 공유 저장소에 둔다
         // 사용자가 설정에서 외부 폴더를 받을 곳(SD카드 포함)을 정했으면 그 안에 이름별로 만든다
@@ -64,7 +64,8 @@ object ForkSync {
             "tra" -> sub(".trash")
             "not" -> sub(label.substringAfter("노트북 · ", "").trim().ifEmpty { "notebook" })
             "cfg" -> vaultPath.trimEnd('/') + "-settings"
-            "ext" -> "$files/" + label.substringAfter("외부 폴더 · ", "").trim().ifEmpty { "external" }
+            // 사용자가 위치를 골랐고 외부 폴더가 하나뿐이면 고른 폴더가 곧 받는 폴더다(그 안에 같은 이름의 폴더를 또 만들지 않는다)
+            "ext" -> if (singleExt && !extRoot.isNullOrBlank()) files else "$files/" + label.substringAfter("외부 폴더 · ", "").trim().ifEmpty { "external" }
             else -> "$files/" + label.ifEmpty { folderId }
         }
     }
@@ -396,14 +397,16 @@ object ForkSync {
         if (known.isEmpty()) note = tr("Fork 에 컴퓨터가 아직 등록되지 않았습니다. 3단계에서 ‘컴퓨터 추가’를 누르세요.")
         else try {
             // 외부 폴더(음악·PDF 등)의 등록 경로가 지금 설정(외부 폴더 저장 위치)과 다르면 등록을 지워 새 경로로 다시 받게 한다.
-            // 받기 전용(컴퓨터 → 폰)일 때만 한다: 폰에서 파일이 사라져도 컴퓨터로 삭제가 가지 않는다. 예전 위치의 파일은 지우지 않는다
+            // 받기 전용(컴퓨터 → 폰)이거나 아직 받은 파일이 없을 때만 한다: 폰에서 파일이 사라져도 컴퓨터로 삭제가 가지 않는다. 예전 위치의 파일은 지우지 않는다
             val extRoot = ctx.getSharedPreferences("settings", 0).getString("extRoot", null)
+            val singleExt = policy?.let { SyncSettings.extModules(it).size == 1 } == true
             var moved = 0
             for (f in api.folders()) {
                 val id = f.getString("id")
                 if (!id.startsWith(ID_PREFIX) || kindOf(id) != "ext") continue
-                val want = localPath(vaultPath, id, f.optString("label"), extRoot).trimEnd('/', '\\')
-                if (f.optString("path").trimEnd('/', '\\') != want && f.optString("type") == "receiveonly") { api.removeFolder(id); moved++ }
+                val want = localPath(vaultPath, id, f.optString("label"), extRoot, singleExt).trimEnd('/', '\\')
+                if (f.optString("path").trimEnd('/', '\\') != want &&
+                    (f.optString("type") == "receiveonly" || runCatching { api.folderDetail(id).totalFiles }.getOrDefault(-1L) == 0L)) { api.removeFolder(id); moved++ }
             }
             if (moved > 0) {
                 known.forEach { runCatching { api.reconnect(it) } }   // 컴퓨터가 공유 목록을 다시 보내 새 요청이 오게 한다
@@ -415,7 +418,7 @@ object ForkSync {
                 val from = v.second.filter { it in known }
                 if (from.isEmpty()) continue
                 val gate = staged && kindOf(fid) == "mar"   // 노트 폴더는 멈춘 채로 받아 무시 목록(전부 가림)부터 걸고 시작한다
-                api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first, ctx.getSharedPreferences("settings", 0).getString("extRoot", null)), "sendreceive", listOf(me) + from, paused = gate)
+                api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first, ctx.getSharedPreferences("settings", 0).getString("extRoot", null), singleExt), "sendreceive", listOf(me) + from, paused = gate)
                 if (gate) { api.setIgnores(fid, Stages.GATE); api.resume(fid) }
                 accepted++
             }
