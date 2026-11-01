@@ -67,7 +67,6 @@ fun FolderLines(r: ForkSync.Report) {
             }
             // 외부 폴더(음악·PDF 등)는 받는 위치가 설정에 따라 달라서 실제 경로를 보인다(파일 관리 앱에서 찾을 때 쓴다)
             if (f.label.startsWith("외부 폴더") && f.path.isNotEmpty()) Text(trf("받는 위치: %s", f.path), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
-            if (f.label.startsWith("외부 폴더") && f.needFiles > 0L) Text(trf("완료 %s / 전체 %s개 · 받는 중인 파일은 파일 관리 앱에서 크기가 다 차 보이거나 .tmp 로 보여도 아직 미완성입니다. 다 받으면 알림이 옵니다.", got, f.totalFiles), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
             androidx.compose.material3.LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             val small = MaterialTheme.colorScheme.outline
             if (whole) Text(tr("전체 %,d개 중 받음 %,d개 · 남음 %,d개").format(ov!!.all, ov.have, (ov.all - ov.have).coerceAtLeast(0)), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
