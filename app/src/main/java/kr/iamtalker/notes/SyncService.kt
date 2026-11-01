@@ -228,7 +228,8 @@ object SyncNotice {
         r ?: return false
         val gone = r.gone.map { it.first }.toSet()   // 컴퓨터가 더는 공유하지 않는 폴더는 앞으로도 받을 수 없으니 판정에서 뺀다
         return r.connected && r.error == null && all > 0 && have >= all &&
-            r.folders.filter { it.id !in gone }.all { it.needFiles == 0L && it.state in setOf("idle", "paused") }
+            // 받을 파일·용량이 0이면 상태가 syncing·scanning 이어도 끝난 것으로 본다(큰 폴더는 받은 뒤에도 한참 상태가 안 바뀐다). 오류 상태만 제외
+            r.folders.filter { it.id !in gone }.all { it.needFiles == 0L && it.needBytes == 0L && it.state != "error" }
     }
 
     fun text(connected: Boolean, error: String?, have: Int, all: Int, etaSec: Long): String {

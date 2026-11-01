@@ -81,7 +81,10 @@ class SyncNoticeCompleteTest {
         assertFalse(SyncNotice.complete(rep(true, null, line()), 9, 10))                 // 노트 전체를 다 못 받음
         assertFalse(SyncNotice.complete(rep(true, null, line()), 0, 0))                  // 개수를 아직 모름
         assertFalse(SyncNotice.complete(rep(true, null, line(), line(need = 3)), 10, 10)) // 외부 폴더에 받을 파일이 남음
-        assertFalse(SyncNotice.complete(rep(true, null, line("syncing")), 10, 10))
+        assertTrue(SyncNotice.complete(rep(true, null, line("syncing")), 10, 10))            // 받을 것이 0이면 상태가 syncing·scanning 이어도 끝
+        assertTrue(SyncNotice.complete(rep(true, null, line("scanning")), 10, 10))
+        assertFalse(SyncNotice.complete(rep(true, null, line("syncing", need = 2)), 10, 10))  // 받을 파일이 남았으면 끝이 아님
+        assertFalse(SyncNotice.complete(rep(true, null, line("error")), 10, 10))
     }
 
     @Test fun foldersTheComputerNoLongerSharesDoNotBlockCompletion() {
