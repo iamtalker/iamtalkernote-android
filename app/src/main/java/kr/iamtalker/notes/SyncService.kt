@@ -73,7 +73,7 @@ class SyncService : Service() {
         var fails = 0
         var lastProgress = 0L
         var overall: Overall? = null
-        val fileEta = Eta()
+        val fileEta = Eta(300_000, 60_000)   // 합친 파일 개수가 줄어드는 속도: 최근 5분(폰이 센 값은 2분마다 갱신)
         val syncEta = Eta()   // 폰이 센 값이 없을 때 Syncthing 이 알려 주는 남은 파일 수로 속도를 잰다
         var etaSec = -1L
         var lastText = ""
@@ -112,6 +112,7 @@ class SyncService : Service() {
                                 overall = o
                                 val rate = fileEta.update(System.currentTimeMillis(), (o.all - o.have).toLong())   // 남은 파일 수가 줄어드는 속도
                                 etaSec = Eta.seconds((o.all - o.have).toLong(), rate)
+                                EmbeddedSync.fileRate = rate
                             }
                         }
                     }

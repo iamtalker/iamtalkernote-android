@@ -70,8 +70,13 @@ fun FolderLines(r: ForkSync.Report) {
             if (whole) Text(tr("전체 %,d개 중 받음 %,d개 · 남음 %,d개").format(ov!!.all, ov.have, (ov.all - ov.have).coerceAtLeast(0)), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
             else Text(trf("파일 전체 %s개 · 받음 %s개 · 남음 %s개", f.totalFiles, got, f.needFiles), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))
             if (f.failed > 0) Text(trf("받지 못한 파일 %s개 (자동으로 다시 시도합니다): %s", f.failed, f.firstError.take(120)), fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
+            if (whole && !done) {
+                val left = (ov!!.all - ov.have).coerceAtLeast(0).toLong()
+                val fr = EmbeddedSync.fileRate
+                Text(if (fr > 0) trf("속도 초당 %s개 · 남은 시간 %s", "%.1f".format(fr), Eta.text(Eta.seconds(left, fr))) else tr("속도 계산 중"), fontSize = 12.5.sp, color = small)
+            }
             if (!idleDone) Text((if (whole) tr("지금 받는 범위 ") else "") + "용량 ${Eta.size((f.totalBytes - f.needBytes).coerceAtLeast(0))} / ${Eta.size(f.totalBytes)}" +
-                (if (f.rate > 0) trf(" · 속도 %s/초 · 남은 시간 %s", Eta.size(f.rate.toLong()), Eta.text(Eta.seconds(f.needBytes, f.rate))) else ""), fontSize = 12.5.sp, color = small)
+                (if (f.rate > 0) trf(if (whole) " · 순간 속도 %s/초" else " · 속도 %s/초 · 남은 시간 %s", *(if (whole) arrayOf<Any>(Eta.size(f.rate.toLong())) else arrayOf<Any>(Eta.size(f.rate.toLong()), Eta.text(Eta.seconds(f.needBytes, f.rate))))) else ""), fontSize = 12.5.sp, color = small)
         }
     }
 }

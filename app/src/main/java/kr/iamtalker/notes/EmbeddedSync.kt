@@ -17,6 +17,8 @@ object EmbeddedSync {
 
     /** 서비스가 5초마다 갱신하는 상태(설정 화면이 보여 준다) */
     var report by mutableStateOf<ForkSync.Report?>(null)
+    /** 합친 파일(글+그림) 개수가 늘어나는 속도(초당). 용량 속도(MB/초)는 큰 파일 몇 개가 지나가는 순간 값이라 실제 진행과 맞지 않아 개수로 잰다 */
+    var fileRate by mutableStateOf(0.0)
     var running by mutableStateOf(false)
     /** 컴퓨터의 단계 목록 전체 기준 진행(글·그림 따로). 상태 카드의 진행 막대가 쓴다 */
     var overall by mutableStateOf<Overall?>(null)
