@@ -259,7 +259,6 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     SyncControls(model)
                     TextRow(tr("외부 폴더 저장 위치"), model.extRoot?.substringAfterLast('/') ?: tr("자동"), onClick = onPickExt)
                     Text(trf("컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)가 이 폴더 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더(컴퓨터 → 폰 받기 전용)는 위치를 바꾸면 새 위치로 다시 받습니다. 예전 위치의 파일은 지우지 않습니다.", model.extRoot ?: tr("자동(공유 저장소의 iamtalkernote-files)")), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    if (model.extRoot != null) TextRow(tr("자동으로 되돌리기"), onClick = { model.changeExtRoot(null) })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     var policy by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
                     var loaded by remember { mutableStateOf(false) }
