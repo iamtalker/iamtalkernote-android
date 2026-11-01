@@ -389,8 +389,9 @@ object ForkSync {
                 if (!id.startsWith(ID_PREFIX) || kindOf(id) != "mar" || id in tuned) continue
                 tuned.add(id)
                 // 파일 하나를 처리하는 데 몇 초씩 걸리는데 동시에 2개(기본)만 처리해 분당 10개 안팎이었다 → 동시 처리(copiers)와 요청 중인 양을 키운다
-                if (!f.optBoolean("disableFsync") || f.optInt("maxConcurrentWrites") < 16 || f.optInt("copiers") < 8 || f.optInt("pullerMaxPendingKiB") < 65536) {
-                    f.put("disableFsync", true).put("maxConcurrentWrites", 16).put("copiers", 8).put("pullerMaxPendingKiB", 65536); api.putFolder(f)
+                // 받는 순서: 최근 수정 순. 노트(.md)는 전부 가장 최근 시각이고 그림은 대부분 오래돼서, 노트가 그림보다 먼저 온다(임의 순서에서는 노트가 분당 33개로 그림의 1/20 이었음)
+                if (!f.optBoolean("disableFsync") || f.optInt("maxConcurrentWrites") < 16 || f.optInt("copiers") < 8 || f.optInt("pullerMaxPendingKiB") < 65536 || f.optString("order") != "newestFirst") {
+                    f.put("disableFsync", true).put("maxConcurrentWrites", 16).put("copiers", 8).put("pullerMaxPendingKiB", 65536).put("order", "newestFirst"); api.putFolder(f)
                 }
             }
         }
