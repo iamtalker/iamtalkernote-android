@@ -138,7 +138,7 @@ private fun readPolicy(ctx: android.content.Context, tree: android.net.Uri): Lis
 }
 
 @Composable
-fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, onBack: () -> Unit, onTool: (String) -> Unit, onPick: () -> Unit) {
+fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, onBack: () -> Unit, onTool: (String) -> Unit, onPick: () -> Unit, onPickExt: () -> Unit = {}) {
     BackHandler { if (page.isEmpty()) onBack() else onPage("") }
     val ctx = LocalContext.current
     val titles = mapOf("sync" to tr("동기화"), "theme" to tr("테마"), "general" to tr("일반"), "scrap" to tr("스크랩"), "editor" to tr("에디터"), "tools" to tr("도구"), "help" to tr("도움말"), "info" to tr("정보"))
@@ -209,6 +209,10 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow(tr("지금 새로고침"), onClick = { model.refresh(); onBack() })
                     TextRow(tr("노트 폴더 다시 고르기"), onClick = onPick)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    TextRow(tr("외부 폴더 저장 위치"), model.extRoot?.substringAfterLast('/') ?: tr("자동"), onClick = onPickExt)
+                    Text(trf("컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)가 이 폴더 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더에는 적용되지 않으니, 바꾼 뒤 컴퓨터에서 그 폴더 공유를 껐다 켜세요.", model.extRoot ?: tr("자동(공유 저장소의 iamtalkernote-files)")), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    if (model.extRoot != null) TextRow(tr("자동으로 되돌리기"), onClick = { model.changeExtRoot(null) })
                     model.oldFolderPath()?.let { p ->
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         TextRow(if (model.importing) tr("예전 폴더에서 가져오는 중…") else tr("예전 폴더에서 노트 가져오기"), onClick = { if (!model.importing) model.importFromOld() })

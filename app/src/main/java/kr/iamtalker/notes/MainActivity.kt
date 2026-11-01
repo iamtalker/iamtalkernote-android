@@ -291,6 +291,11 @@ fun App(model: NotesModel) {
     // 노트를 열면 아래 목록 화면이 composition 에서 빠지므로, 보던 위치를 지키려고 여는 분기보다 앞에 둔다
     val noteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) model.pick(uri) }
+    val extPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+        val p = uri?.let { ForkSync.treePath(it) }
+        if (p != null) model.changeExtRoot(p)
+        else if (uri != null) android.widget.Toast.makeText(model.getApplication<android.app.Application>(), tr("이 폴더의 실제 경로를 알 수 없습니다. 내장 메모리나 SD카드의 폴더를 고르세요."), android.widget.Toast.LENGTH_LONG).show()
+    }
     var folderChoice by remember { mutableStateOf(false) }
     var askImport by remember { mutableStateOf(false) }
     if (askImport) androidx.compose.material3.AlertDialog(
@@ -358,7 +363,7 @@ fun App(model: NotesModel) {
     if (screen == "media") { UnusedMediaScreen(model, onBack = { closeTool(); model.refresh() }); return }
     if (screen == "planner") { PlannerScreen(model, onBack = { closeTool() }); return }
     if (screen == "journal") { JournalScreen(model, onBack = { closeTool() }, onOpen = { screen = ""; open = it }); return }
-    if (screen == "settings") { SettingsScreen(model, settingsPage, { settingsPage = it }, onBack = { screen = ""; settingsPage = "" }, onTool = { fromSettings = true; screen = it }, onPick = { folderChoice = true }); return }
+    if (screen == "settings") { SettingsScreen(model, settingsPage, { settingsPage = it }, onBack = { screen = ""; settingsPage = "" }, onTool = { fromSettings = true; screen = it }, onPick = { folderChoice = true }, onPickExt = { extPicker.launch(null) }); return }
     val cur = open
     if (cur != null) {
         androidx.compose.runtime.key(cur.uri) {

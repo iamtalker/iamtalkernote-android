@@ -364,6 +364,10 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     var clipFolder by mutableStateOf<String?>(prefs.getString("clipFolder", null))
     fun changeClipFolder(f: String?) { clipFolder = f; prefs.edit().apply { if (f == null) remove("clipFolder") else putString("clipFolder", f) }.apply() }
 
+    /** 외부 폴더(컴퓨터에서 따로 공유한 폴더: 음악·PDF 등)를 받을 곳. null 이면 자동(공유 저장소의 iamtalkernote-files). SD카드 폴더도 된다 */
+    var extRoot by mutableStateOf<String?>(prefs.getString("extRoot", null))
+    fun changeExtRoot(p: String?) { extRoot = p; prefs.edit().apply { if (p == null) remove("extRoot") else putString("extRoot", p) }.apply() }
+
     fun changeClipWifiOnly(b: Boolean) { clipWifiOnly = b; prefs.edit().putBoolean("clipWifiOnly", b).apply() }
     fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
     var wikiAuto by mutableStateOf(prefs.getBoolean("wikiAuto", false).also { WikiAuto.enabled = it })

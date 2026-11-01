@@ -50,10 +50,12 @@ object ForkSync {
     fun kindOf(folderId: String): String = folderId.split('-').getOrElse(2) { "" }
 
     /** 컴퓨터가 알려 준 폴더 이름표와 ID 로 폰의 저장 경로를 정한다. 외부 폴더는 노트 폴더 옆 '<노트폴더>-files/<이름>' */
-    fun localPath(vaultPath: String, folderId: String, label: String): String {
+    fun localPath(vaultPath: String, folderId: String, label: String, extRoot: String? = null): String {
         fun sub(rel: String) = if (rel.isEmpty()) vaultPath else "$vaultPath/$rel"
         // 노트 폴더가 앱 안(/data/…)이면 그 옆(-files)도 앱 안이라 다른 앱(음악 앱·파일 관리 앱)이 못 본다 → 외부 폴더는 공유 저장소에 둔다
-        val files = if (vaultPath.startsWith("/data/")) "/storage/emulated/0/iamtalkernote-files" else "$vaultPath-files"
+        // 사용자가 설정에서 외부 폴더를 받을 곳(SD카드 포함)을 정했으면 그 안에 이름별로 만든다
+        val files = extRoot?.trim()?.trimEnd('/', '\\')?.takeIf { it.isNotEmpty() }
+            ?: if (vaultPath.startsWith("/data/")) "/storage/emulated/0/iamtalkernote-files" else "$vaultPath-files"
         return when (kindOf(folderId)) {
             "mar" -> sub("")
             "med" -> sub(".resources")
@@ -355,7 +357,7 @@ object ForkSync {
                 val from = v.second.filter { it in known }
                 if (from.isEmpty()) continue
                 val gate = staged && kindOf(fid) == "mar"   // 노트 폴더는 멈춘 채로 받아 무시 목록(전부 가림)부터 걸고 시작한다
-                api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first), "sendreceive", listOf(me) + from, paused = gate)
+                api.acceptFolder(fid, v.first, localPath(vaultPath, fid, v.first, ctx.getSharedPreferences("settings", 0).getString("extRoot", null)), "sendreceive", listOf(me) + from, paused = gate)
                 if (gate) { api.setIgnores(fid, Stages.GATE); api.resume(fid) }
                 accepted++
             }

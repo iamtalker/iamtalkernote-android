@@ -38,6 +38,9 @@ class ForkSyncTest {
         val app = "/data/user/0/kr.iamtalker.notes/files/iamtalkernote"
         assertEquals("/storage/emulated/0/iamtalkernote-files/Music", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · Music"))
         assertEquals("$app/.resources", ForkSync.localPath(app, "inn-abcd1234-med-bb362a46", "미디어"))
+        // 설정에서 받을 곳(SD카드)을 정하면 그 안에 이름별로 만든다. 끝의 슬래시·공백은 무시
+        assertEquals("/storage/1234-ABCD/동기화/PDF", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · PDF", "/storage/1234-ABCD/동기화/"))
+        assertEquals("/storage/emulated/0/iamtalkernote-files/PDF", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · PDF", "  "))
     }
 
     @Test fun directionsBecomePhoneFolderTypes() {
