@@ -349,7 +349,9 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             status = tr("노트를 찾는 중…")
             try {
                 withContext(Dispatchers.IO) { runCatching { History.ensureLayout(getApplication(), t) } }   // 실패해도(읽기 전용 폴더 등) 노트 읽기는 계속한다
+                val t0 = System.nanoTime()
                 val scanned = withContext(Dispatchers.IO) { NoteRepo.scan(getApplication(), t) { n -> say(trf("노트를 찾는 중… %s", n)) } }
+                android.util.Log.i("IATPERF", "scan ${scanned.size} notes ${(System.nanoTime() - t0) / 1_000_000} ms fast=${NoteRepo.fastBase(t) != null}")
                 val have = withContext(Dispatchers.IO) { index().load() }
                 indexed = have.keys
                 publish(merge(scanned, have))
@@ -439,6 +441,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             }.getOrDefault(emptySet())
         }
         if (external.size > 200) runCatching { History.journal(getApplication(), tree!!, "external", ".", detail = "앱 밖에서 노트 ${external.size}개 수정") }
+        val t1 = System.nanoTime()
         val rows = HashMap<String, Index.Row>(have)
         withContext(Dispatchers.IO) {
             val ix = index()
@@ -484,6 +487,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             }
             ix.removeMissing(scanned.map { it.uri.toString() }.toSet())
         }
+        android.util.Log.i("IATPERF", "index todo=${todo.size} ${(System.nanoTime() - t1) / 1_000_000} ms")
         indexed = rows.keys
         if (todo.isNotEmpty()) publish(merge(scanned, rows))
         else status = trf("노트 %s개", scanned.size)
