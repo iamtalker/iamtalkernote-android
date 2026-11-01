@@ -141,7 +141,7 @@ private fun readPolicy(ctx: android.content.Context, tree: android.net.Uri): Lis
 fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, onBack: () -> Unit, onTool: (String) -> Unit, onPick: () -> Unit) {
     BackHandler { if (page.isEmpty()) onBack() else onPage("") }
     val ctx = LocalContext.current
-    val titles = mapOf("sync" to tr("동기화"), "theme" to tr("테마"), "general" to tr("일반"), "editor" to tr("에디터"), "tools" to tr("도구"), "help" to tr("도움말"), "info" to tr("정보"))
+    val titles = mapOf("sync" to tr("동기화"), "theme" to tr("테마"), "general" to tr("일반"), "scrap" to tr("스크랩"), "editor" to tr("에디터"), "tools" to tr("도구"), "help" to tr("도움말"), "info" to tr("정보"))
     Scaffold(topBar = {
         Column {
             Box(Modifier.fillMaxWidth().height(56.dp).background(MaterialTheme.colorScheme.surface)) {
@@ -168,6 +168,7 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     Gap()
                     SettingsRow(Purple, tr("테마"), { onPage("theme") }) { GlyphIcon("theme") }
                     SettingsRow(Green, tr("일반"), { onPage("general") }) { GlyphIcon("general") }
+                    SettingsRow(Orange, tr("스크랩"), { onPage("scrap") }) { Text("✂", color = Color.White, fontSize = 18.sp) }
                     SettingsRow(Pink, tr("에디터"), { onPage("editor") }) { Text("Aa", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
                     Gap()
                     SettingsRow(Orange, tr("도구") + if (model.conflicts.isEmpty()) "" else trf(" (충돌 %s)", model.conflicts.size), { onPage("tools") }) { GlyphIcon("tools") }
@@ -206,10 +207,32 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SwitchRow(tr("위키 낱말 자동 연결"), tr("괄호 없이도 다른 노트 제목과 같은 낱말(2글자 이상)을 그 노트로 연결합니다. 같은 제목이 여럿이면 가장 최근 노트"), model.wikiAuto) { model.changeWikiAuto(it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SwitchRow(tr("웹 클리퍼: 그림은 와이파이에서만"), tr("공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)"), model.clipWifiOnly) { model.changeClipWifiOnly(it) }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow(tr("지금 새로고침"), onClick = { model.refresh(); onBack() })
                     TextRow(tr("노트 폴더 다시 고르기"), onClick = onPick)
+                }
+                "scrap" -> {
+                    var dlg by remember { mutableStateOf(false) }
+                    val cf = model.clipFolder
+                    TextRow(tr("저장할 노트북"), if (cf == null) tr("지금 보던 노트북") else cf.ifEmpty { tr("(맨 위)") }.substringAfterLast('/'), onClick = { dlg = true })
+                    Text(tr("다른 앱에서 공유(보내기)로 저장할 때 들어갈 노트북입니다. 공유 창에서 그때그때 바꿀 수도 있습니다."), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SwitchRow(tr("웹 클리퍼: 그림은 와이파이에서만"), tr("공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)"), model.clipWifiOnly) { model.changeClipWifiOnly(it) }
+                    if (dlg) {
+                        var typed by remember { mutableStateOf("") }
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { dlg = false }, title = { Text(tr("저장할 노트북")) },
+                            text = {
+                                Column(Modifier.verticalScroll(rememberScrollState())) {
+                                    ChoiceRow(tr("지금 보던 노트북"), cf == null) { model.changeClipFolder(null); dlg = false }
+                                    ChoiceRow(tr("(맨 위)"), cf == "") { model.changeClipFolder(""); dlg = false }
+                                    for (f in model.folders) ChoiceRow("  ".repeat(f.count { it == '/' }) + f.substringAfterLast('/'), cf == f) { model.changeClipFolder(f); dlg = false }
+                                    androidx.compose.material3.OutlinedTextField(value = typed, onValueChange = { typed = it }, singleLine = true, label = { Text(tr("새 노트북 이름(없으면 만듭니다)")) }, modifier = Modifier.padding(top = 8.dp))
+                                }
+                            },
+                            confirmButton = { TextButton(enabled = typed.isNotBlank(), onClick = { model.changeClipFolder(typed.trim().trim('/')); dlg = false }) { Text(tr("이 이름으로")) } },
+                            dismissButton = { TextButton(onClick = { dlg = false }) { Text(tr("취소")) } }
+                        )
+                    }
                 }
                 "editor" -> {
                     SwitchRow(tr("노트를 열 때 바로 편집"), tr("끄면 노트를 보기 모드로 열고 ‘편집’을 눌러 고칩니다"), model.openEditing) { model.changeOpenEditing(it) }

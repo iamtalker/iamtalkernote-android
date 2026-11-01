@@ -1,0 +1,75 @@
+{
+ "cleanup": {
+  "aagag.com": [
+   ".s_opt",
+   ".v_progress"
+  ],
+  "bbs.ruliweb.com": [
+   ".reply_count",
+   ".rv-video-control-panel"
+  ],
+  "etoland.co.kr": [
+   "[class*=\"peer/controls\"]"
+  ],
+  "gall.dcinside.com": [
+   ".btn_recommend_box",
+   ".appending_file_box",
+   "[id^='sch_alliance_box']",
+   ".adsbygoogle",
+   "ins.adsbygoogle",
+   ".writer_nikcon img"
+  ],
+  "n.news.naver.com": [
+   ".vod_player_wrap",
+   ".mask"
+  ],
+  "web.humoruniv.com": [
+   "img[src*=\"loading_bar\"]"
+  ],
+  "www.chosun.com": [
+   ".arcad-wrapper"
+  ],
+  "www.mt.co.kr": [
+   ".article_ads",
+   ".ad-tag"
+  ],
+  "www.ohmynews.com": [
+   ".tag_txt"
+  ]
+ },
+ "content": {
+  "aagag.com": "h1.title, #vContent",
+  "arca.live": ".fr-view.article-content",
+  "bbs.ruliweb.com": "h4.subject, .view_content.autolink",
+  "blog.naver.com": ".se-main-container",
+  "damoang.net": "h1, #economy-post-content",
+  "etoland.co.kr": "article h1, .view-content",
+  "gall.dcinside.com": ".view_content_wrap",
+  "ggoorr.net": ".slatc-header-title, .slatc-body",
+  "m.dcinside.com": ".thum-txt, .view_content_wrap",
+  "n.news.naver.com": "#title_area, .media_end_head_journalist_name, .media_end_head_info_datestamp_time, #dic_area",
+  "qquing.net": "#bo_v_con",
+  "theqoo.net": ".rd_hd .title, .rd_body",
+  "v.daum.net": "h3.tit_view, .info_view, .article_view",
+  "web.humoruniv.com": "#cnts",
+  "www.82cook.com": "h4.title.bbstitle, #readHead, #articleBody",
+  "www.chosun.com": ".article-header__headline, section.article-body",
+  "www.clien.net": ".post_title, .post_author, .post_view",
+  "www.fmkorea.com": ".rd_hd .np_18px_span, .rd_body article",
+  "www.inven.co.kr": ".articleTitle h1, #powerbbsContent, .news-hero__title, .news-hero__subtitle, .news-hero__reporter-line, .news-hero__date, #imageCollectDiv",
+  "www.mt.co.kr": "#articleTitle h1, #articleTitle .name, #articleTitle .date, #articleView",
+  "www.ohmynews.com": ".view_title, .vod, .txt_view",
+  "www.ppomppu.co.kr": ".board-contents",
+  "www.slrclub.com": "#userct",
+  "www.todayhumor.co.kr": ".viewSubjectDiv, .viewContent"
+ },
+ "iframe": {
+  "blog.naver.com": "#mainFrame"
+ },
+ "label": {
+  "www.clien.net": [
+   ".post_reply",
+   ".post_symph"
+  ]
+ }
+}

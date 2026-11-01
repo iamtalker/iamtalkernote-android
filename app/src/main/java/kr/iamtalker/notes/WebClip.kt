@@ -24,6 +24,35 @@ object WebClip {
     private const val TIMEOUT_MS = 30_000L
     private const val SETTLE_MS = 1500L   // 불러온 뒤 자바스크립트가 본문을 그릴 시간
 
+    /** 사이트별 규칙(컴퓨터 클리퍼 표에서 뽑은 JSON). 앱에 든 것을 기본으로 쓰고, 일주일에 한 번 GitHub 의 최신 파일을 받아 두었으면 그것을 쓴다(앱 새 버전 없이 규칙만 갱신) */
+    private const val RULES_URL = "https://raw.githubusercontent.com/iamtalker/iamtalkernote-android/main/app/src/main/assets/clip/site-rules.json"
+    private const val RULES_EVERY_MS = 7L * 24 * 3600 * 1000
+
+    /** 앱이 새로 설치되면 이름이 바뀌어 묵은 사본이 앱에 든 새 규칙을 가리지 않는다 */
+    private fun rulesCache(ctx: Context): java.io.File {
+        val code = runCatching { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(ctx.packageManager.getPackageInfo(ctx.packageName, 0)) }.getOrDefault(0L)
+        return java.io.File(ctx.filesDir, "site-rules-$code.json")
+    }
+
+    private fun rules(ctx: Context): String =
+        runCatching { rulesCache(ctx).takeIf { it.isFile }?.readText(Charsets.UTF_8)?.also { JSONObject(it) } }.getOrNull()
+            ?: runCatching { asset(ctx, "site-rules.json") }.getOrDefault("{}")
+
+    /** 최신 규칙을 받아 둔다(일주일에 한 번, 실패하면 조용히 넘어감). 내려받은 글이 JSON 이 아니면 버린다. 보내는 정보는 없다(공개 파일 하나 읽기) */
+    fun refreshRules(ctx: Context) {
+        val f = rulesCache(ctx)
+        if (f.isFile && System.currentTimeMillis() - f.lastModified() < RULES_EVERY_MS) return
+        runCatching {
+            val c = java.net.URL(RULES_URL).openConnection() as java.net.HttpURLConnection
+            c.connectTimeout = 10_000; c.readTimeout = 15_000
+            val text = c.inputStream.use { String(it.readBytes(), Charsets.UTF_8) }
+            c.disconnect()
+            val o = JSONObject(text)
+            if (!o.has("content")) return
+            f.writeText(text, Charsets.UTF_8)
+        }
+    }
+
     private fun asset(ctx: Context, name: String) = ctx.assets.open("clip/$name").use { String(it.readBytes(), Charsets.UTF_8) }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -64,7 +93,7 @@ object WebClip {
     }
 
     private fun extract(ctx: Context, wv: WebView, onResult: (kotlin.Result<Result>) -> Unit) {
-        val js = asset(ctx, "Readability.js") + "\n;" + asset(ctx, "turndown.js") + "\n;" + asset(ctx, "turndown-plugin-gfm.js") + "\n;" + asset(ctx, "webclip.js")
+        val js = "var __siteRules = " + rules(ctx) + ";\n;" + asset(ctx, "Readability.js") + "\n;" + asset(ctx, "turndown.js") + "\n;" + asset(ctx, "turndown-plugin-gfm.js") + "\n;" + asset(ctx, "webclip.js")
         wv.evaluateJavascript(js) { raw ->
             onResult(runCatching {
                 val s = JSONTokener(raw ?: "null").nextValue() as? String ?: throw IllegalStateException(tr("본문을 찾지 못했습니다"))

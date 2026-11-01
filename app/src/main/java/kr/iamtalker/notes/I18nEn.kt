@@ -471,6 +471,12 @@ object I18nEn {
         "페이지 본문을 가져오는 중…" to "Fetching the page text…",
         "본문을 가져오지 못해 주소만 저장합니다: %s" to "Could not fetch the text; saving the address only: %s",
         "⚠ 이미 저장한 주소입니다: %s" to "⚠ This address was already saved: %s",
+        "스크랩" to "Clipper",
+        "저장할 노트북" to "Notebook to save into",
+        "지금 보던 노트북" to "The notebook I was viewing",
+        "다른 앱에서 공유(보내기)로 저장할 때 들어갈 노트북입니다. 공유 창에서 그때그때 바꿀 수도 있습니다." to "The notebook used when saving from another app via Share. You can still change it in the share dialog each time.",
+        "새 노트북 이름(없으면 만듭니다)" to "New notebook name (created if missing)",
+        "이 이름으로" to "Use this name",
         "웹 클리퍼: 그림은 와이파이에서만" to "Web clipper: download images on Wi-Fi only",
         "공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)" to "When saving from Share, images are not downloaded over mobile data and keep their web address (the page text is always fetched)",
     )

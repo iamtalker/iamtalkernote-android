@@ -11,6 +11,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -294,6 +297,10 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putLong("customBg", bg).putLong("customAccent", accent).putString("themeName", themeName).apply()
     }
     fun changeOpenEditing(b: Boolean) { openEditing = b; prefs.edit().putBoolean("openEditing", b).apply() }
+    /** 웹 클리퍼: 공유로 저장할 노트북(경로). null 이면 공유 창을 열 때 보고 있던 노트북, "" 이면 맨 위. 없는 노트북이면 저장할 때 만든다 */
+    var clipFolder by mutableStateOf<String?>(prefs.getString("clipFolder", null))
+    fun changeClipFolder(f: String?) { clipFolder = f; prefs.edit().apply { if (f == null) remove("clipFolder") else putString("clipFolder", f) }.apply() }
+
     fun changeClipWifiOnly(b: Boolean) { clipWifiOnly = b; prefs.edit().putBoolean("clipWifiOnly", b).apply() }
     fun changeEditorFont(sp: Int) { editorFont = sp; prefs.edit().putInt("editorFont", sp).apply() }
     var wikiAuto by mutableStateOf(prefs.getBoolean("wikiAuto", false).also { WikiAuto.enabled = it })
@@ -437,12 +444,26 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             val ix = index()
             val db = ix.writableDatabase
             var done = 0
-            for (chunk in todo.chunked(40)) {
+            val base = NoteRepo.fastBase(tree!!)
+            for (chunk in todo.chunked(200)) {
                 ensureActive()
+                // 본문 읽기는 기다리는 시간이 대부분이라 여러 개를 동시에 읽는다(파일 직접 읽기가 되면 그것으로, 아니면 저장소 API 로)
+                val texts: List<String> = coroutineScope {
+                    chunk.chunked(maxOf(1, (chunk.size + 3) / 4)).map { part ->
+                        async {
+                            part.map { n ->
+                                if (n.size !in 0..2_000_000) ""
+                                else runCatching {
+                                    if (base != null) java.io.File(base, History.relOf(n)).readText(Charsets.UTF_8) else NoteRepo.read(getApplication(), n.uri)
+                                }.getOrDefault("")
+                            }
+                        }
+                    }.awaitAll().flatten()
+                }
                 db.beginTransaction()
                 try {
-                    for (n in chunk) {
-                        val text = if (n.size in 0..2_000_000) runCatching { NoteRepo.read(getApplication(), n.uri) }.getOrDefault("") else ""
+                    for ((ni, n) in chunk.withIndex()) {
+                        val text = texts[ni]
                         val info = Meta.parse(text)
                         if (external.size in 1..200 && n.uri.toString() in external) runCatching {
                             // 바뀌기 전 내용은 알 수 없지만, 고친 뒤의 내용을 노트 버전으로 남겨 이후에 돌아올 수 있게 한다
@@ -640,6 +661,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         val url = clipUrl(text)
         if (url == null) { clip = null; return }
         clip = ClipState(true)
+        viewModelScope.launch(Dispatchers.IO) { WebClip.refreshRules(getApplication()) }
         clipJob = viewModelScope.launch {
             clip = try {
                 val r = WebClip.fetch(getApplication(), url)
@@ -657,6 +679,17 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
 
     fun cancelShared() { clipJob?.cancel(); clip = null; shared = null }
 
+    /** 노트북 경로(a/b/c)를 없는 것만 만들어 가며 맞추고 마지막 폴더의 문서 id 를 돌려준다 */
+    private fun ensureFolder(t: Uri, path: String): String {
+        var pid = rootDocId()
+        var cur = ""
+        for (seg in path.split('/').filter { it.isNotEmpty() }) {
+            cur = if (cur.isEmpty()) seg else "$cur/$seg"
+            pid = folderIds[cur] ?: NoteRepo.createFolder(getApplication(), t, pid, seg)
+        }
+        return pid
+    }
+
     /** 공유받은 글을 새 노트로 저장한다. 주소가 있으면 데스크톱 클리퍼처럼 머리말 source 에 적는다 */
     fun saveShared(title: String, text: String, folder: String) {
         val t = tree ?: return
@@ -666,7 +699,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val note = withContext(Dispatchers.IO) {
-                    val parent = if (folder.isEmpty()) null else folderIds[folder]
+                    val parent = if (folder.isEmpty()) null else folderIds[folder] ?: ensureFolder(t, folder)
                     val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else folder, title) ?: throw IllegalStateException(tr("노트를 만들 수 없습니다"))
                     val url = Regex("https?://\\S+").find(text)?.value
                     val content = if (body != null) ClipImages.localize(getApplication(), t, body, if (parent == null) "" else folder, wifiOnly = clipWifiOnly) else text.trim()
@@ -675,7 +708,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     History.journal(getApplication(), t, "create", History.relOf(n), detail = "공유로 받음")
                     n
                 }
-                message = trf("저장했습니다: %s", note.title)
+                android.widget.Toast.makeText(getApplication(), trf("저장했습니다: %s", note.title), android.widget.Toast.LENGTH_SHORT).show()
                 refresh()
             } catch (e: Exception) {
                 message = e.message ?: e.javaClass.simpleName

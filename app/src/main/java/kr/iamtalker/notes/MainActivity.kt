@@ -631,7 +631,7 @@ fun App(model: NotesModel) {
         } else {
             val first = sh.first.ifBlank { sh.second.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty() }.trim().take(60)
             var title by remember(sh) { mutableStateOf(first) }
-            var folder by remember(sh) { mutableStateOf(model.folder ?: "") }
+            var folder by remember(sh) { mutableStateOf(model.clipFolder ?: model.folder ?: "") }
             val clip = model.clip
             // 페이지 제목을 가져오면 제목칸이 비었거나 아직 공유 제목 그대로일 때만 채운다
             LaunchedEffect(clip) { if (clip != null && !clip.loading && clip.title.isNotBlank() && (title.isBlank() || title == first)) title = clip.title.take(100) }

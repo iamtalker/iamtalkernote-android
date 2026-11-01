@@ -29,7 +29,49 @@ object NoteRepo {
     /** 마지막 scan 에서 찾은 모든 노트북(폴더): 경로 → 문서 id. 노트가 없는 빈 노트북도 들어 있다 */
     @Volatile var dirs: Map<String, String> = emptyMap()
 
+    /** 모든 파일 접근이 허용돼 있고 트리의 실제 경로를 알면 그 폴더(파일을 직접 읽는 빠른 길), 아니면 null.
+     *  안드로이드 저장소 API(SAF)는 파일마다 프로세스 간 호출이라 노트 수천 개에서 훑기·읽기가 수십 배 느리다 */
+    fun fastBase(tree: Uri): java.io.File? {
+        if (!android.os.Environment.isExternalStorageManager()) return null
+        val p = ForkSync.treePath(tree) ?: return null
+        return java.io.File(p).takeIf { it.isDirectory && it.canRead() }
+    }
+
+    /** SAF 문서 id 규칙(ExternalStorageProvider): 트리 id + "/" + 상대 경로 */
+    private fun childId(treeId: String, rel: String) = if (rel.isEmpty()) treeId else if (treeId.endsWith(":") || treeId.endsWith("/")) treeId + rel else "$treeId/$rel"
+
+    /** 파일을 직접 훑어 scan 과 같은 결과(같은 uri·이름·시각·크기)를 만든다. 읽지 못하면 null 이라 호출하는 쪽이 SAF 로 되돌아간다 */
+    private fun scanFast(tree: Uri, base: java.io.File, onProgress: (Int) -> Unit): List<Note>? {
+        val out = ArrayList<Note>()
+        val found = HashMap<String, String>()
+        val treeId = DocumentsContract.getTreeDocumentId(tree)
+        var failed = false
+        fun walk(dir: java.io.File, folder: String) {
+            val docId = childId(treeId, folder)
+            if (folder.isNotEmpty()) found[folder] = docId
+            val files = dir.listFiles()
+            if (files == null) { if (folder.isEmpty()) failed = true; return }
+            val subs = ArrayList<Pair<java.io.File, String>>()
+            for (f in files) {
+                val name = f.name
+                if (f.isDirectory) {
+                    if (!skipDir(name)) subs.add(f to (if (folder.isEmpty()) name else "$folder/$name"))
+                } else if (name.endsWith(".md", ignoreCase = true)) {
+                    val rel = if (folder.isEmpty()) name else "$folder/$name"
+                    out.add(Note(DocumentsContract.buildDocumentUriUsingTree(tree, childId(treeId, rel)), name, folder, docId, f.lastModified(), f.length()))
+                }
+            }
+            onProgress(out.size)
+            for ((d, fo) in subs) walk(d, fo)
+        }
+        walk(base, "")
+        if (failed) return null
+        dirs = found
+        return out
+    }
+
     fun scan(ctx: Context, tree: Uri, onProgress: (Int) -> Unit = {}): List<Note> {
+        fastBase(tree)?.let { b -> scanFast(tree, b, onProgress)?.let { return it } }
         val out = ArrayList<Note>()
         val found = HashMap<String, String>()
         val rootId = DocumentsContract.getTreeDocumentId(tree)
