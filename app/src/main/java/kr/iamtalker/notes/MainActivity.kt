@@ -292,6 +292,36 @@ fun App(model: NotesModel) {
     val noteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) model.pick(uri) }
     var folderChoice by remember { mutableStateOf(false) }
+    var askImport by remember { mutableStateOf(false) }
+    if (askImport) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { askImport = false }, title = { Text(tr("예전 폴더의 노트를 가져올까요?")) },
+        text = { Text(tr("이미 받은 파일을 다시 받지 않고, 폰에서만 만든 노트도 지킬 수 있습니다. 새 위치에 없는 파일만 복사하고 예전 폴더는 지우지 않습니다. 파일이 많으면 몇 분 걸립니다."), fontSize = 13.sp) },
+        confirmButton = { TextButton(onClick = { askImport = false; model.importFromOld() }) { Text(tr("가져오기")) } },
+        dismissButton = { TextButton(onClick = { askImport = false }) { Text(tr("나중에")) } }
+    )
+    model.importState?.let { st ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { model.closeImport() },
+            title = { Text(tr("예전 폴더에서 가져오기")) },
+            text = {
+                Column {
+                    if (st.finished != null) Text(st.finished, fontSize = 14.sp)
+                    else if (st.total < 0) {
+                        Text(tr("복사할 파일을 찾는 중…"), fontSize = 14.sp)
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+                    } else {
+                        Text(trf("%s / %s개 복사 중", st.done, st.total), fontSize = 14.sp)
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.material3.LinearProgressIndicator(progress = { if (st.total == 0) 1f else st.done.toFloat() / st.total }, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        Text(tr("이 창을 닫지 말고 기다려 주세요."), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                    }
+                }
+            },
+            confirmButton = { if (st.finished != null) TextButton(onClick = { model.closeImport() }) { Text(tr("닫기")) } }
+        )
+    }
     if (folderChoice) androidx.compose.material3.AlertDialog(
         onDismissRequest = { folderChoice = false }, title = { Text(tr("노트 폴더")) },
         text = {
@@ -301,7 +331,7 @@ fun App(model: NotesModel) {
                 Text(tr("기기에서 폴더 고르기: 다른 앱과 같은 폴더를 함께 씁니다. 동기화는 느립니다."), fontSize = 13.sp)
             }
         },
-        confirmButton = { TextButton(onClick = { folderChoice = false; model.useAppFolder() }) { Text(tr("앱 안에 만들기")) } },
+        confirmButton = { TextButton(onClick = { folderChoice = false; model.useAppFolder(); if (model.oldFolderPath() != null) askImport = true }) { Text(tr("앱 안에 만들기")) } },
         dismissButton = { TextButton(onClick = { folderChoice = false; picker.launch(null) }) { Text(tr("폴더 고르기")) } }
     )
     val ctx = LocalContext.current

@@ -138,8 +138,12 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         return ForkSync.treePath(old)?.takeIf { java.io.File(it).isDirectory }
     }
 
-    var importing by mutableStateOf(false)
+    /** 예전 폴더 가져오기 진행: 처음엔 복사할 파일을 찾는 중(total<0), 그다음 done/total, 끝나면 finished 에 결과 글 */
+    class ImportState(val total: Int = -1, val done: Int = 0, val finished: String? = null)
+    var importState by mutableStateOf<ImportState?>(null)
         private set
+    val importing: Boolean get() = importState?.let { it.finished == null } == true
+    fun closeImport() { if (!importing) importState = null }
 
     /** 예전 폴더에서 새 위치(앱 안)에 **없는** 파일만 복사한다(이미 받은 것은 건너뜀). 폰에서만 만든 노트가 컴퓨터로 올라가지 않았을 수 있어서 옮긴 뒤에도 잃지 않게 한다.
      *  예전 폴더는 지우지 않는다 */
@@ -147,34 +151,36 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         val oldPath = oldFolderPath() ?: return
         val dstRoot = NotesProvider.root ?: return
         if (importing) return
-        importing = true
+        importState = ImportState()
         viewModelScope.launch {
             try {
-                val (copied, skipped) = withContext(Dispatchers.IO) {
-                    var c = 0; var s = 0
+                val result = withContext(Dispatchers.IO) {
                     val src = java.io.File(oldPath)
+                    val todo = ArrayList<java.io.File>()
+                    var skipped = 0
                     src.walkTopDown().onEnter { d -> d == src || (!d.name.startsWith(".st") && d.name != ".stversions") }.forEach { f ->
                         if (!f.isFile) return@forEach
                         val n = f.name
                         if (n.startsWith(".syncthing.") || n.startsWith("~syncthing~") || n == ".stfolder" || n == ".stignore") return@forEach
-                        val rel = f.relativeTo(src).path
-                        val dst = java.io.File(dstRoot, rel)
-                        if (dst.exists()) { s++; return@forEach }
+                        if (java.io.File(dstRoot, f.relativeTo(src).path).exists()) skipped++ else todo.add(f)
+                    }
+                    main.post { importState = ImportState(todo.size, 0) }
+                    var copied = 0
+                    for (f in todo) {
+                        val dst = java.io.File(dstRoot, f.relativeTo(src).path)
                         dst.parentFile?.mkdirs()
-                        if (!dst.createNewFile()) { s++; return@forEach }   // 그 사이 동기화가 먼저 만들었다
+                        if (!dst.createNewFile()) { skipped++; continue }   // 그 사이 동기화가 먼저 만들었다
                         f.inputStream().use { i -> dst.outputStream().use { o -> i.copyTo(o) } }
                         dst.setLastModified(f.lastModified())
-                        c++
-                        if (c % 200 == 0) say(trf("예전 폴더에서 가져오는 중… %s개", c))
+                        copied++
+                        if (copied % 50 == 0) { val d = copied; main.post { importState = ImportState(todo.size, d) } }
                     }
-                    c to s
+                    copied to skipped
                 }
-                android.widget.Toast.makeText(getApplication(), trf("예전 폴더에서 %s개를 가져왔습니다(이미 있는 %s개는 건너뜀). 예전 폴더는 지우지 않았습니다.", copied, skipped), android.widget.Toast.LENGTH_LONG).show()
+                importState = ImportState(result.first, result.first, trf("예전 폴더에서 %s개를 가져왔습니다(이미 있는 %s개는 건너뜀). 예전 폴더는 지우지 않았습니다.", result.first, result.second))
                 refresh()
             } catch (e: Exception) {
-                message = e.message ?: e.javaClass.simpleName
-            } finally {
-                importing = false
+                importState = ImportState(0, 0, e.message ?: e.javaClass.simpleName)
             }
         }
     }
