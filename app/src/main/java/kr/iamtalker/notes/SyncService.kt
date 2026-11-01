@@ -91,6 +91,12 @@ class SyncService : Service() {
                 }
                 val tree = prefs.getString("tree", null)?.let(Uri::parse)
                 val pc = prefs.getString("pcId", "").orEmpty()
+                runCatching {
+                    ForkSync.cleanOldExt(ctx, api)?.let { msg ->
+                        EmbeddedSync.note(ctx, msg)
+                        android.os.Handler(android.os.Looper.getMainLooper()).post { android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show() }
+                    }
+                }
                 val tickT = System.nanoTime()
                 EmbeddedSync.report = if (tree == null) ForkSync.Report(error = tr("노트 폴더를 먼저 고르세요"))
                 else ForkSync.tick(ctx, api, pc, tree)   // 단계별 가림은 이제 컴퓨터가 맡는다(폰의 긴 무시 목록이 느렸다)

@@ -65,6 +65,8 @@ fun FolderLines(r: ForkSync.Report) {
                 Text(f.label, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 Text(if (done) s else "$s $pct%", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
             }
+            // 외부 폴더(음악·PDF 등)는 받는 위치가 설정에 따라 달라서 실제 경로를 보인다(파일 관리 앱에서 찾을 때 쓴다)
+            if (f.label.startsWith("외부 폴더") && f.path.isNotEmpty()) Text(trf("받는 위치: %s", f.path), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
             androidx.compose.material3.LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             val small = MaterialTheme.colorScheme.outline
             if (whole) Text(tr("전체 %,d개 중 받음 %,d개 · 남음 %,d개").format(ov!!.all, ov.have, (ov.all - ov.have).coerceAtLeast(0)), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))

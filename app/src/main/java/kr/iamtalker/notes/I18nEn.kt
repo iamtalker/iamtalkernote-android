@@ -504,6 +504,8 @@ object I18nEn {
         "자동(공유 저장소의 iamtalkernote-files)" to "Automatic (iamtalkernote-files in shared storage)",
         "자동으로 되돌리기" to "Reset to automatic",
         "외부 폴더 %s개의 저장 위치가 바뀌어 새 위치로 다시 받습니다" to "Storage location of %s external folder(s) changed; receiving again at the new location",
+        "예전에 앱 내부에 받았던 외부 폴더 사본 %s개를 지웠습니다(새 위치로 다 받아졌고 원본은 컴퓨터에 있습니다)" to "Deleted %s files of the external-folder copy previously received inside the app (it is fully received at the new location and the original is on the computer)",
+        "받는 위치: %s" to "Saved at: %s",
         "웹 클리퍼: 그림은 와이파이에서만" to "Web clipper: download images on Wi-Fi only",
         "공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)" to "When saving from Share, images are not downloaded over mobile data and keep their web address (the page text is always fetched)",
     )

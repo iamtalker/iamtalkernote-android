@@ -328,9 +328,34 @@ object ForkSync {
         return runCatching { api.kick(id); true }.getOrDefault(false)
     }
 
+    private var lastClean = 0L
+
+    /** 1.4.32 이하에서 앱 내부(노트 폴더 옆 iamtalkernote-files)에 받힌 외부 폴더 사본을 지운다(거기는 다른 앱이 못 보는 곳이다).
+     *  지우는 조건: ① 그 안을 쓰는 동기화 폴더 등록이 하나도 없고 ② 외부 폴더가 새 위치로 **다 받아졌을 때**(대기 상태·남은 파일 0). 원본은 컴퓨터에 있다.
+     *  지웠으면 알릴 글, 아니면 null. 1분에 한 번만 확인한다 */
+    fun cleanOldExt(ctx: Context, api: Api): String? {
+        val old = java.io.File(ctx.filesDir, "iamtalkernote-files")
+        if (!old.isDirectory) return null
+        val now = System.currentTimeMillis()
+        if (now - lastClean < 60_000) return null
+        lastClean = now
+        val ext = api.folders().filter { it.getString("id").startsWith(ID_PREFIX) && kindOf(it.getString("id")) == "ext" }
+        if (ext.isEmpty()) return null
+        val oldPath = old.canonicalPath
+        if (ext.any { java.io.File(it.optString("path")).canonicalPath.startsWith(oldPath) }) return null
+        val done = ext.all { f ->
+            val d = api.folderDetail(f.getString("id"))
+            d.state == "idle" && d.needFiles == 0L && d.totalFiles > 0L
+        }
+        if (!done) return null
+        val n = old.walkTopDown().count { it.isFile }
+        if (!old.deleteRecursively()) return null
+        return trf("예전에 앱 내부에 받았던 외부 폴더 사본 %s개를 지웠습니다(새 위치로 다 받아졌고 원본은 컴퓨터에 있습니다)", n)
+    }
+
     data class FolderLine(val label: String, val state: String, val needBytes: Long, val totalBytes: Long,
                           val needFiles: Long = 0, val totalFiles: Long = 0, val rate: Double = 0.0,
-                          val failed: Int = 0, val firstError: String = "")
+                          val failed: Int = 0, val firstError: String = "", val path: String = "")
     data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0,
                       val note: String = "", val error: String? = null)
 
@@ -420,7 +445,7 @@ object ForkSync {
             val conn = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { c -> runCatching { api.connected(c) }.getOrDefault(false) }
             if (kickIfStuck(api, id, d, conn, System.currentTimeMillis())) note = note.ifEmpty { tr("받기에 실패한 파일이 있어 다시 시도했습니다") }
             val errs = if (d.needFiles > 0) api.folderErrors(id) else emptyList()
-            d.copy(label = it.optString("label"), rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
+            d.copy(label = it.optString("label"), path = it.optString("path"), rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
         }
         val connected = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { runCatching { api.connected(it) }.getOrDefault(false) }
         return Report(me, connected, lines, accepted, note)
