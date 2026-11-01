@@ -500,9 +500,10 @@ object I18nEn {
         "이 폴더의 실제 경로를 알 수 없습니다. 내장 메모리나 SD카드의 폴더를 고르세요." to "Cannot determine this folder's real path. Pick a folder on internal storage or the SD card.",
         "외부 폴더 저장 위치" to "External folders location",
         "자동" to "Automatic",
-        "컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)가 이 폴더 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더에는 적용되지 않으니, 바꾼 뒤 컴퓨터에서 그 폴더 공유를 껐다 켜세요." to "External folders shared from the computer (music, PDFs…) are created inside this folder by name. An SD card folder works too. Now: %s. This does not apply to external folders already being received; after changing it, turn that folder's sharing off and on again on the computer.",
+        "컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)가 이 폴더 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더(컴퓨터 → 폰 받기 전용)는 위치를 바꾸면 새 위치로 다시 받습니다. 예전 위치의 파일은 지우지 않습니다." to "External folders shared from the computer (music, PDFs…) are created inside this folder by name. An SD card folder works too. Now: %s. External folders already being received (computer → phone, receive-only) are received again at the new location. Files at the old location are not deleted.",
         "자동(공유 저장소의 iamtalkernote-files)" to "Automatic (iamtalkernote-files in shared storage)",
         "자동으로 되돌리기" to "Reset to automatic",
+        "외부 폴더 %s개의 저장 위치가 바뀌어 새 위치로 다시 받습니다" to "Storage location of %s external folder(s) changed; receiving again at the new location",
         "웹 클리퍼: 그림은 와이파이에서만" to "Web clipper: download images on Wi-Fi only",
         "공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)" to "When saving from Share, images are not downloaded over mobile data and keep their web address (the page text is always fetched)",
     )

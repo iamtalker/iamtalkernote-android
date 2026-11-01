@@ -351,6 +351,20 @@ object ForkSync {
         val known = api.deviceIds().filter { it != me }.toSet()
         if (known.isEmpty()) note = tr("Fork 에 컴퓨터가 아직 등록되지 않았습니다. 3단계에서 ‘컴퓨터 추가’를 누르세요.")
         else try {
+            // 외부 폴더(음악·PDF 등)의 등록 경로가 지금 설정(외부 폴더 저장 위치)과 다르면 등록을 지워 새 경로로 다시 받게 한다.
+            // 받기 전용(컴퓨터 → 폰)일 때만 한다: 폰에서 파일이 사라져도 컴퓨터로 삭제가 가지 않는다. 예전 위치의 파일은 지우지 않는다
+            val extRoot = ctx.getSharedPreferences("settings", 0).getString("extRoot", null)
+            var moved = 0
+            for (f in api.folders()) {
+                val id = f.getString("id")
+                if (!id.startsWith(ID_PREFIX) || kindOf(id) != "ext") continue
+                val want = localPath(vaultPath, id, f.optString("label"), extRoot).trimEnd('/', '\\')
+                if (f.optString("path").trimEnd('/', '\\') != want && f.optString("type") == "receiveonly") { api.removeFolder(id); moved++ }
+            }
+            if (moved > 0) {
+                known.forEach { runCatching { api.reconnect(it) } }   // 컴퓨터가 공유 목록을 다시 보내 새 요청이 오게 한다
+                note = trf("외부 폴더 %s개의 저장 위치가 바뀌어 새 위치로 다시 받습니다", moved)
+            }
             for ((fid, v) in api.pendingFolders()) {
                 if (!fid.startsWith(ID_PREFIX)) continue
                 if (simpleVault.isNotEmpty() && fid in staleFolders(listOf(fid), simpleVault)) continue
