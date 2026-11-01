@@ -379,7 +379,10 @@ object ForkSync {
                 val id = f.getString("id")
                 if (!id.startsWith(ID_PREFIX) || kindOf(id) != "mar" || id in tuned) continue
                 tuned.add(id)
-                if (!f.optBoolean("disableFsync") || f.optInt("maxConcurrentWrites") < 16) { f.put("disableFsync", true).put("maxConcurrentWrites", 16); api.putFolder(f) }
+                // 파일 하나를 처리하는 데 몇 초씩 걸리는데 동시에 2개(기본)만 처리해 분당 10개 안팎이었다 → 동시 처리(copiers)와 요청 중인 양을 키운다
+                if (!f.optBoolean("disableFsync") || f.optInt("maxConcurrentWrites") < 16 || f.optInt("copiers") < 8 || f.optInt("pullerMaxPendingKiB") < 65536) {
+                    f.put("disableFsync", true).put("maxConcurrentWrites", 16).put("copiers", 8).put("pullerMaxPendingKiB", 65536); api.putFolder(f)
+                }
             }
         }
         val lines = api.folders().filter { it.getString("id").startsWith(ID_PREFIX) && kindOf(it.getString("id")) != "cfg" }.map {
