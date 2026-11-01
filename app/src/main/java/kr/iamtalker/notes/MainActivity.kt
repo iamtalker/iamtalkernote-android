@@ -288,6 +288,8 @@ fun suggestions(model: NotesModel): List<Pair<String, String>> {
 @Composable
 fun App(model: NotesModel) {
     var open by remember { mutableStateOf<Note?>(null) }
+    // 노트를 열면 아래 목록 화면이 composition 에서 빠지므로, 보던 위치를 지키려고 여는 분기보다 앞에 둔다
+    val noteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) model.pick(uri) }
     val ctx = LocalContext.current
 
@@ -356,7 +358,6 @@ fun App(model: NotesModel) {
     BackHandler(enabled = inSearch && !drawer.isOpen && !selecting) { searching = false; model.changeQuery(""); focusManager.clearFocus() }
     LaunchedEffect(searching) { if (searching) runCatching { searchFocus.requestFocus() } }
     val fmt = remember { SimpleDateFormat(if (Lang.code == "en") "MMM d, yyyy" else "yyyy년 M월 d일", if (Lang.code == "en") Locale.ENGLISH else Locale.KOREA) }
-    val noteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val fg = MaterialTheme.colorScheme.onSurface
     val accent = MaterialTheme.colorScheme.primary
     val soft = MaterialTheme.colorScheme.surfaceVariant
