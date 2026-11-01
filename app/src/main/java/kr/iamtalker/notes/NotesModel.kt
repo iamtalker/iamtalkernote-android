@@ -131,6 +131,54 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     /** 앱 안(앱 전용 공간)에 노트 폴더를 둔다: 작은 파일이 수만 개인 동기화가 공유 저장소보다 훨씬 빠르다. 앱을 지우면 폰의 사본도 지워진다(원본은 컴퓨터) */
     fun useAppFolder() = pick(NotesProvider.treeUri())
 
+    /** 앱 안 폴더로 옮기기 전 폴더(공유 저장소)가 남아 있으면 그 경로. 없으면 null */
+    fun oldFolderPath(): String? {
+        if (!NotesProvider.isOurs(tree)) return null
+        val old = prefs.getString("oldTree", null)?.let(Uri::parse) ?: return null
+        return ForkSync.treePath(old)?.takeIf { java.io.File(it).isDirectory }
+    }
+
+    var importing by mutableStateOf(false)
+        private set
+
+    /** 예전 폴더에서 새 위치(앱 안)에 **없는** 파일만 복사한다(이미 받은 것은 건너뜀). 폰에서만 만든 노트가 컴퓨터로 올라가지 않았을 수 있어서 옮긴 뒤에도 잃지 않게 한다.
+     *  예전 폴더는 지우지 않는다 */
+    fun importFromOld() {
+        val oldPath = oldFolderPath() ?: return
+        val dstRoot = NotesProvider.root ?: return
+        if (importing) return
+        importing = true
+        viewModelScope.launch {
+            try {
+                val (copied, skipped) = withContext(Dispatchers.IO) {
+                    var c = 0; var s = 0
+                    val src = java.io.File(oldPath)
+                    src.walkTopDown().onEnter { d -> d == src || (!d.name.startsWith(".st") && d.name != ".stversions") }.forEach { f ->
+                        if (!f.isFile) return@forEach
+                        val n = f.name
+                        if (n.startsWith(".syncthing.") || n.startsWith("~syncthing~") || n == ".stfolder" || n == ".stignore") return@forEach
+                        val rel = f.relativeTo(src).path
+                        val dst = java.io.File(dstRoot, rel)
+                        if (dst.exists()) { s++; return@forEach }
+                        dst.parentFile?.mkdirs()
+                        if (!dst.createNewFile()) { s++; return@forEach }   // 그 사이 동기화가 먼저 만들었다
+                        f.inputStream().use { i -> dst.outputStream().use { o -> i.copyTo(o) } }
+                        dst.setLastModified(f.lastModified())
+                        c++
+                        if (c % 200 == 0) say(trf("예전 폴더에서 가져오는 중… %s개", c))
+                    }
+                    c to s
+                }
+                android.widget.Toast.makeText(getApplication(), trf("예전 폴더에서 %s개를 가져왔습니다(이미 있는 %s개는 건너뜀). 예전 폴더는 지우지 않았습니다.", copied, skipped), android.widget.Toast.LENGTH_LONG).show()
+                refresh()
+            } catch (e: Exception) {
+                message = e.message ?: e.javaClass.simpleName
+            } finally {
+                importing = false
+            }
+        }
+    }
+
     fun pick(uri: Uri) {
         val before = tree
         // 기억하지 못해도(일부 기기) 이번 실행에서는 쓸 수 있으니 실패해도 앱을 죽이지 않는다. 앱 안 폴더는 권한이 필요 없다
@@ -139,7 +187,10 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         }
         // 폴더를 바꾸면 동기화 엔진에 등록된 폴더 경로도 새로 잡아야 한다: 등록을 지우면(파일은 그대로) 컴퓨터가 다시 보낸 공유를 새 경로로 받는다
-        if (before != null && before != uri) prefs.edit().putBoolean("resyncFolders", true).apply()
+        if (before != null && before != uri) {
+            prefs.edit().putBoolean("resyncFolders", true).apply()
+            if (!NotesProvider.isOurs(before)) prefs.edit().putString("oldTree", before.toString()).apply()   // 예전 폴더의 노트를 나중에 가져올 수 있게 기억
+        }
         prefs.edit().putString("tree", uri.toString()).apply()
         tree = uri
         idx = null

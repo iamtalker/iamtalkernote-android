@@ -209,6 +209,11 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow(tr("지금 새로고침"), onClick = { model.refresh(); onBack() })
                     TextRow(tr("노트 폴더 다시 고르기"), onClick = onPick)
+                    model.oldFolderPath()?.let { p ->
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        TextRow(if (model.importing) tr("예전 폴더에서 가져오는 중…") else tr("예전 폴더에서 노트 가져오기"), onClick = { if (!model.importing) model.importFromOld() })
+                        Text(trf("새 위치에 없는 파일만 복사합니다. 폰에서만 만든 노트를 지키려면 예전 폴더를 지우기 전에 한 번 하세요. 예전 폴더: %s", p), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    }
                 }
                 "scrap" -> {
                     var dlg by remember { mutableStateOf(false) }

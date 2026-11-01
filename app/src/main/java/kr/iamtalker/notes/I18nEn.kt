@@ -481,6 +481,11 @@ object I18nEn {
         "앱 안에 만들기(빠름, 권장): 동기화로 작은 파일 수만 개를 받을 때 훨씬 빠릅니다. 앱을 지우면 폰의 사본도 지워집니다(원본은 컴퓨터)." to "Create inside the app (fast, recommended): much faster when sync receives tens of thousands of small files. Uninstalling the app also deletes the phone's copy (the original stays on the computer).",
         "기기에서 폴더 고르기: 다른 앱과 같은 폴더를 함께 씁니다. 동기화는 느립니다." to "Pick a folder on the device: shares the folder with other apps. Sync is slow.",
         "앱 안에 만들기" to "Create in app",
+        "예전 폴더에서 가져오는 중… %s개" to "Importing from the old folder… %s",
+        "예전 폴더에서 %s개를 가져왔습니다(이미 있는 %s개는 건너뜀). 예전 폴더는 지우지 않았습니다." to "Imported %s files from the old folder (skipped %s that already exist). The old folder was not deleted.",
+        "예전 폴더에서 가져오는 중…" to "Importing from the old folder…",
+        "예전 폴더에서 노트 가져오기" to "Import notes from the old folder",
+        "새 위치에 없는 파일만 복사합니다. 폰에서만 만든 노트를 지키려면 예전 폴더를 지우기 전에 한 번 하세요. 예전 폴더: %s" to "Copies only files missing from the new location. To keep notes made only on the phone, do this once before deleting the old folder. Old folder: %s",
         "웹 클리퍼: 그림은 와이파이에서만" to "Web clipper: download images on Wi-Fi only",
         "공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)" to "When saving from Share, images are not downloaded over mobile data and keep their web address (the page text is always fetched)",
     )
