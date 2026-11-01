@@ -11,7 +11,7 @@ import java.io.File
 object SyncSettings {
     const val PC_FILE = "pc-config.json"
     const val OWN_FILE = "phone-config.json"
-    val KEYS = listOf("media", "imported", "history", "trash")
+    val KEYS = listOf("media", "history", "trash")
     val DIRECTIONS = listOf("both", "pc2mobile", "mobile2pc", "off")
     const val NOTES = "notes"   // mismatched() 가 돌려주는 값 중 노트 폴더를 가리키는 이름(외부 폴더는 Syncthing 폴더 ID)
 

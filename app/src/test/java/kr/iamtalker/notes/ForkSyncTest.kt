@@ -1,6 +1,8 @@
 package kr.iamtalker.notes
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.json.JSONObject
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -60,13 +62,13 @@ class ForkSyncTest {
     @Test fun ignoreLinesMatchTheComputerPlan() {
         val common = listOf("(?d)Thumbs.db", "(?d)desktop.ini", "(?d).DS_Store", "~*.tmp")
         // 컴퓨터 앱(syncpolicy.plan, 새 방식)이 만든 제외 목록과 같다: 기본(미디어·가져온 요약 보냄, 이력·휴지통 안 보냄)
-        val def = JSONObject("""{"direction":"both","include":{"media":true,"imported":true,"history":false,"trash":false}}""")
-        assertEquals(listOf("/.history", "/.trash", "/.snapshots") + common, ForkSync.ignoreLines(def))
+        val def = JSONObject("""{"direction":"both","include":{"media":true,"history":false,"trash":false}}""")
+        assertEquals(listOf("/.history", "/.trash", "/.snapshots", "/.imported") + common, ForkSync.ignoreLines(def))   // .imported(예전 가져온 문서 요약)는 늘 뺀다
         // 미디어를 빼고 이력을 켠 경우
-        val other = JSONObject("""{"direction":"pc2mobile","include":{"media":false,"imported":true,"history":true,"trash":false}}""")
-        assertEquals(listOf("/.resources", "/.trash", "/.snapshots") + common, ForkSync.ignoreLines(other))
+        val other = JSONObject("""{"direction":"pc2mobile","include":{"media":false,"history":true,"trash":false}}""")
+        assertEquals(listOf("/.resources", "/.trash", "/.snapshots", "/.imported") + common, ForkSync.ignoreLines(other))
         // include 가 비어 있으면 모두 안 보냄으로 본다
-        assertEquals(listOf("/.resources", "/.imported", "/.history", "/.trash", "/.snapshots") + common, ForkSync.ignoreLines(JSONObject("""{"direction":"both"}""")))
+        assertEquals(listOf("/.resources", "/.history", "/.trash", "/.snapshots", "/.imported") + common, ForkSync.ignoreLines(JSONObject("""{"direction":"both"}""")))
     }
 
     @Test fun staleFoldersAreOnlyThisVaultsOldKinds() {
@@ -77,5 +79,15 @@ class ForkSyncTest {
         assertEquals(
             listOf("inn-abcd1234-med-bb362a46", "inn-abcd1234-imp-a671a412", "inn-abcd1234-his-66f79d8a", "inn-abcd1234-tra-6aa46034", "inn-abcd1234-not-ad67a841"),
             ForkSync.staleFolders(ids, "abcd1234"))   // 노트 폴더·외부 폴더·다른 볼트·다른 앱의 폴더는 남긴다
+    }
+
+    @Test fun removeOldImportedOnlyWhenAppMadeFilesRemain() {
+        val v = java.io.File.createTempFile("vault", "").also { it.delete(); it.mkdirs() }
+        assertFalse(ForkSync.removeOldImported(v))                                              // 폴더가 없으면 아무 일도 없다
+        val d = java.io.File(v, ".imported").apply { mkdirs() }
+        java.io.File(d, "docs.jsonl").writeText("{}"); java.io.File(d, "meta.json").writeText("{}"); java.io.File(d, ".stfolder.removed-1").mkdirs()
+        assertTrue(ForkSync.removeOldImported(v) && !d.exists())                                // 앱이 만든 파일만 있으면 지운다
+        d.mkdirs(); java.io.File(d, "docs.jsonl").writeText("{}"); java.io.File(d, "내 파일.txt").writeText("보관")
+        assertFalse(ForkSync.removeOldImported(v)); assertTrue(java.io.File(d, "내 파일.txt").exists())   // 다른 파일이 섞여 있으면 그대로
     }
 }

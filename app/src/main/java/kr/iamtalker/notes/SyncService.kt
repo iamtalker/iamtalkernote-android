@@ -102,6 +102,7 @@ class SyncService : Service() {
         val syncEta = Eta()   // 폰이 센 값이 없을 때 Syncthing 이 알려 주는 남은 파일 수로 속도를 잰다
         var etaSec = -1L
         var lastText = ""
+        var cleanedImported = false   // 예전 '가져온 문서 요약' 폴더를 한 번만 치운다
         var downSince = 0L      // 컴퓨터와 연결이 끊긴 채로 지내기 시작한 때
         var lastRecover = 0L    // 마지막으로 기기를 다시 연결시킨 때
         var lastRestart = 0L    // 마지막으로 엔진을 다시 시작한 때
@@ -119,6 +120,10 @@ class SyncService : Service() {
                 }
                 val tree = prefs.getString("tree", null)?.let(Uri::parse)
                 val pc = prefs.getString("pcId", "").orEmpty()
+                if (!cleanedImported && tree != null) {
+                    cleanedImported = true
+                    runCatching { ForkSync.treePath(tree)?.let { ForkSync.removeOldImported(java.io.File(it)) } }
+                }
                 runCatching { notifyExtDone(EmbeddedSync.report) }
                 runCatching {
                     ForkSync.cleanOldExt(ctx, api)?.let { msg ->

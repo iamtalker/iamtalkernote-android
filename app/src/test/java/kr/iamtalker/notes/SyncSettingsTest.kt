@@ -10,10 +10,10 @@ import java.io.File
 /** 컴퓨터·폰의 동기화 규칙이 같아야 동기화하고 다르면 멈추는 규칙(SyncSettings) */
 class SyncSettingsTest {
     private val pol = JSONObject("""{"vault":"ab12","modules":{"markdown":{"kind":"markdown","direction":"pc2mobile"},
-        "media":{"kind":"media","direction":"pc2mobile"},"imported":{"kind":"imported","direction":"pc2mobile"},
+        "media":{"kind":"media","direction":"pc2mobile"},
         "history":{"kind":"history","direction":"off"},"trash":{"kind":"trash","direction":"off"},
         "ext:aaa":{"kind":"external","label":"외부 폴더 · 음악","direction":"both"}},
-        "simple":{"direction":"pc2mobile","include":{"media":true,"imported":true,"history":false,"trash":false}}}""")
+        "simple":{"direction":"pc2mobile","include":{"media":true,"history":false,"trash":false}}}""")
     private val ida = ForkSync.folderId("ab12", "external", "ext:aaa")
 
     private fun tmp(): String = File.createTempFile("vault", "").also { it.delete(); it.mkdirs() }.absolutePath
@@ -21,7 +21,7 @@ class SyncSettingsTest {
     @Test fun rulesFromPolicy() {
         val r = SyncSettings.fromPolicy(pol)!!
         assertEquals("pc2mobile", r.direction)
-        assertEquals(mapOf("media" to true, "imported" to true, "history" to false, "trash" to false), r.include)
+        assertEquals(mapOf("media" to true, "history" to false, "trash" to false), r.include)
         assertEquals(mapOf(ida to "both"), r.ext)
         assertEquals(mapOf(ida to "ext:aaa"), SyncSettings.extModules(pol))
     }
@@ -30,7 +30,7 @@ class SyncSettingsTest {
         val v = tmp()
         assertEquals(SyncSettings.fromPolicy(pol), SyncSettings.pcRules(v, pol))   // 설정 폴더에 파일이 없으면(옛 컴퓨터 앱) 정책에서
         val d = SyncSettings.dir(v).apply { mkdirs() }
-        File(d, SyncSettings.PC_FILE).writeText("""{"notes":{"direction":"both","include":{"media":false,"imported":true,"history":false,"trash":false}},"ext":{"$ida":"off"}}""")
+        File(d, SyncSettings.PC_FILE).writeText("""{"notes":{"direction":"both","include":{"media":false,"history":false,"trash":false}},"ext":{"$ida":"off"}}""")
         val r = SyncSettings.pcRules(v, pol)!!
         assertEquals("both", r.direction)
         assertEquals(false, r.include["media"])

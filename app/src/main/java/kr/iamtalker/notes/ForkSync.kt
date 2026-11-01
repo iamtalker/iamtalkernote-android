@@ -79,7 +79,7 @@ object ForkSync {
     }
 
     // ---- 새 방식(노트 폴더 하나·방향 하나): 컴퓨터 앱 syncpolicy.py 의 SIMPLE_OPTIONS·plan 과 같은 규칙
-    private val SIMPLE_OPTIONS = listOf("media" to ".resources", "imported" to ".imported", "history" to ".history", "trash" to ".trash")
+    private val SIMPLE_OPTIONS = listOf("media" to ".resources", "history" to ".history", "trash" to ".trash")
     private val COMMON_IGNORE = listOf("(?d)Thumbs.db", "(?d)desktop.ini", "(?d).DS_Store", "~*.tmp")
 
     /** 새 방식에서 노트 폴더 Syncthing 폴더가 가져야 할 제외 목록: 보내지 않기로 한 것 + 복원 지점(컴퓨터 전용) + 공통 */
@@ -88,8 +88,17 @@ object ForkSync {
         val out = ArrayList<String>()
         for ((key, dir) in SIMPLE_OPTIONS) if (inc?.optBoolean(key, false) != true) out.add("/$dir")
         out.add("/.snapshots")
+        out.add("/.imported")   // 예전 '가져온 문서 요약' 폴더: 이제 보내지 않는다
         out.addAll(COMMON_IGNORE)
         return out
+    }
+
+    /** 예전에 컴퓨터가 보내 주던 가져온 문서 요약 폴더(<노트 폴더>/.imported)를 치운다(이제 안 쓴다). 앱이 만든 파일(docs.jsonl·meta.json·임시·동기화 표지)만 있을 때만 지우고, 다른 것이 있으면 그대로 둔다. 지웠으면 true */
+    fun removeOldImported(vault: java.io.File): Boolean {
+        val d = java.io.File(vault, ".imported")
+        val names = d.list() ?: return false
+        if (!names.all { it == "docs.jsonl" || it == "meta.json" || it.endsWith(".tmp") || it.startsWith(".stfolder") }) return false
+        return d.deleteRecursively()
     }
 
     /** 새 방식으로 바뀌면 따로 둘 이유가 없어진 옛 폴더 종류(미디어·가져온 요약·이력·휴지통·노트북) */

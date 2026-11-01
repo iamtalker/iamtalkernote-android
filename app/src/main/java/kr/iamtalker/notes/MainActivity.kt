@@ -348,15 +348,13 @@ fun App(model: NotesModel) {
     var fromSettings by remember { mutableStateOf(false) }
     var settingsPage by remember { mutableStateOf("") }
     fun closeTool() { screen = if (fromSettings) "settings" else ""; fromSettings = false }
-    var openDoc by remember { mutableStateOf<Doc?>(null) }
     LaunchedEffect(Unit) {
         Updater.justUpdated(ctx)?.let { android.widget.Toast.makeText(ctx, trf("iamtalkernote 가 %s 로 업데이트되었습니다", it), android.widget.Toast.LENGTH_LONG).show() }
         Updater.check(ctx)   // 새 버전 자동 확인(6시간에 한 번)
         PlannerAlert.schedule(ctx); kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { PlannerAlert.check(ctx) } }   // 달력·할일 알림
     }
     UpdateDialog()
-    LaunchedEffect(model.openSync) { if (model.openSync) { model.openSync = false; openDoc = null; open = null; fromSettings = false; settingsPage = "sync"; screen = "settings" } }
-    openDoc?.let { dd -> DocScreen(dd, model, onBack = { openDoc = null }); return }
+    LaunchedEffect(model.openSync) { if (model.openSync) { model.openSync = false; open = null; fromSettings = false; settingsPage = "sync"; screen = "settings" } }
     if (screen == "trash") { TrashScreen(model, onBack = { closeTool(); model.refresh() }); return }
     if (screen == "conflicts") { ConflictsScreen(model, onBack = { closeTool() }); return }
     if (screen == "dups") { DuplicatesScreen(model, onBack = { closeTool() }, onOpen = { screen = ""; open = it }); return }
@@ -400,7 +398,6 @@ fun App(model: NotesModel) {
     val vaultName = remember(model.tree) { model.tree?.let { ForkSync.treePath(it) }?.replace('\\', '/')?.trimEnd('/')?.substringAfterLast('/')?.ifEmpty { null } ?: tr("저장 폴더") }
     var rootOpen by remember { mutableStateOf(true) }                // 저장 폴더 아래 노트북 목록 펼침
     var tagsOpen by remember { mutableStateOf(false) }
-    var docsOpen by remember { mutableStateOf(false) }
     var collapsed by remember { mutableStateOf(setOf<String>()) }  // 접어 둔 노트북
     BackHandler(enabled = moreOpen) { moreOpen = false }
     BackHandler(enabled = inSearch && !drawer.isOpen && !selecting) { searching = false; model.changeQuery(""); focusManager.clearFocus() }
@@ -417,7 +414,7 @@ fun App(model: NotesModel) {
         drawerContent = {
             ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface, drawerTonalElevation = 0.dp, drawerShape = androidx.compose.ui.graphics.RectangleShape, modifier = Modifier.fillMaxWidth(0.80f)) {
                 fun go(block: () -> Unit) { block(); scope.launch { drawer.close() } }
-                val allSel = !model.showDocs && model.folder == null && model.tag == null && !model.favOnly
+                val allSel = model.folder == null && model.tag == null && !model.favOnly
                 LazyColumn {
                     item { Spacer(Modifier.height(8.dp)) }
                     item {
@@ -436,7 +433,7 @@ fun App(model: NotesModel) {
                         }
                     }
                     if ("아웃라이너" in model.folders) item {
-                        Row(Modifier.fillMaxWidth().background(if (!model.showDocs && model.folder == "아웃라이너" && model.tag == null) soft else Color.Transparent)
+                        Row(Modifier.fillMaxWidth().background(if (model.folder == "아웃라이너" && model.tag == null) soft else Color.Transparent)
                             .clickable { go { model.changeFolder("아웃라이너"); model.changeTag(null) } }.heightIn(min = 44.dp).padding(start = 40.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(tr("아웃라이너"), fontSize = 16.sp, modifier = Modifier.weight(1f))
                             Text("${model.folderCounts["아웃라이너"] ?: 0}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
@@ -448,7 +445,7 @@ fun App(model: NotesModel) {
                         }
                     }
                     item {
-                        Row(Modifier.fillMaxWidth().background(if (!model.showDocs && model.folder == "" && model.tag == null && !model.favOnly) soft else Color.Transparent)
+                        Row(Modifier.fillMaxWidth().background(if (model.folder == "" && model.tag == null && !model.favOnly) soft else Color.Transparent)
                             .clickable { go { model.changeFolder(""); model.changeTag(null) } }.heightIn(min = 52.dp).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(vaultName, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             BarButton({ rootOpen = !rootOpen }) { ChevronIcon(!rootOpen, MaterialTheme.colorScheme.outline) }
@@ -468,16 +465,6 @@ fun App(model: NotesModel) {
                         if (tagsOpen) items(model.tagCounts, key = { "t:" + it.first }) { (t, n) ->
                             DrawerRow("#$t", selected = model.tag.equals(t, ignoreCase = true), badge = "$n", indent = 8, onLongClick = { tagDialog = t }) {
                                 go { model.changeFolder(null); model.changeTag(t) }
-                            }
-                        }
-                    }
-                    // 데스크톱처럼 노트북(md 폴더)이 위, 가져온 파일(컴퓨터)이 그 아래
-                    if (model.docs.isNotEmpty()) {
-                        item { NavHeading(tr("가져온 파일 (컴퓨터)"), trailing = { ChevronIcon(!docsOpen, MaterialTheme.colorScheme.outline) }) { docsOpen = !docsOpen } }
-                        if (docsOpen) {
-                            item { DrawerRow(tr("모든 가져온 파일"), selected = model.showDocs && model.docFolder == null, badge = "${model.docs.size}", indent = 8) { go { model.selectDocs(null) } } }
-                            items(model.docFolders, key = { "d:" + it.first }) { (name, n) ->
-                                DrawerRow(name, selected = model.showDocs && model.docFolder == name, badge = "$n", indent = 24) { go { model.selectDocs(name) } }
                             }
                         }
                     }
@@ -532,8 +519,7 @@ fun App(model: NotesModel) {
                         } else {
                             if (model.tree != null) Box(Modifier.align(Alignment.CenterStart)) { BarButton({ scope.launch { drawer.open() } }) { HamburgerIcon(MaterialTheme.colorScheme.outline) } }
                             Text(
-                                if (model.showDocs) tr("가져온 파일") + (model.docFolder?.let { " · $it" } ?: "")
-                                else model.tag?.let { "#$it" } ?: model.folder?.let { if (it.isEmpty()) vaultName else it.substringAfterLast('/') } ?: tr("모든 노트"),
+                                model.tag?.let { "#$it" } ?: model.folder?.let { if (it.isEmpty()) vaultName else it.substringAfterLast('/') } ?: tr("모든 노트"),
                                 fontSize = 20.sp, fontWeight = FontWeight.Medium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp)
                             )
@@ -583,7 +569,7 @@ fun App(model: NotesModel) {
                         Checkbox(checked = model.inBody, onCheckedChange = { model.changeInBody(it) })
                         Text(tr("본문까지"), style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.weight(1f))
-                        Text(if (model.showDocs) trf("%s개", model.shownDocs.size) else trf("%s개", model.shown.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                        Text(trf("%s개", model.shown.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                         TextButton(enabled = model.query.isNotBlank(), onClick = { saveDialog = true }) { Text(tr("검색 저장")) }
                     }
                     HorizontalDivider(color = line)
@@ -600,7 +586,7 @@ fun App(model: NotesModel) {
                 val pinnedList = if (inSearch) emptyList() else model.shown.filter { it.uri.toString() in model.pins }
                 val restList = if (pinnedList.isEmpty()) model.shown else model.shown.filter { it.uri.toString() !in model.pins }
                 PullRefresh(model) {
-                if (model.showDocs) DocList(model) { openDoc = it } else LazyColumn(Modifier.fillMaxSize().listScrollbar(noteListState, MaterialTheme.colorScheme.outline), state = noteListState) {
+                LazyColumn(Modifier.fillMaxSize().listScrollbar(noteListState, MaterialTheme.colorScheme.outline), state = noteListState) {
                     if (model.shown.isEmpty() && !model.loading) item {
                         Text(if (inSearch) tr("찾은 노트가 없습니다") else tr("노트가 없습니다. 오른쪽 아래 연필로 만들어 보세요."), color = MaterialTheme.colorScheme.outline, modifier = Modifier.fillMaxWidth().padding(32.dp))
                     }
