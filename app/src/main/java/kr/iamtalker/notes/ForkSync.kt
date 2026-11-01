@@ -105,7 +105,7 @@ object ForkSync {
     fun goneExt(ids: List<String>, vault: String, keep: Set<String>): List<String> =
         ids.filter { it.startsWith("$ID_PREFIX$vault-") && kindOf(it) == "ext" && it !in keep }
 
-    private const val GONE_AFTER_MS = 2 * 60_000L   // 정책 파일이 늦게 도착하는 때를 피하려고 이만큼 계속 빠져 있어야 '없는 폴더'로 본다
+    private const val GONE_AFTER_MS = 30_000L   // 정책 파일이 늦게 도착하는 때를 피하려고 이만큼 계속 빠져 있어야 '없는 폴더'로 본다
     private val goneSince = HashMap<String, Long>()
 
     /** 컴퓨터가 정책에서 뺀 외부 폴더(ID, 이름) — 연결돼 있고 [GONE_AFTER_MS] 넘게 계속 빠져 있을 때만. 지우는 것은 사용자가 확인한 뒤에 한다(화면의 '폴더가 없습니다') */

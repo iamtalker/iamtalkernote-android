@@ -83,6 +83,13 @@ class SyncNoticeCompleteTest {
         assertFalse(SyncNotice.complete(rep(true, null, line(), line(need = 3)), 10, 10)) // 외부 폴더에 받을 파일이 남음
         assertFalse(SyncNotice.complete(rep(true, null, line("syncing")), 10, 10))
     }
+
+    @Test fun foldersTheComputerNoLongerSharesDoNotBlockCompletion() {
+        val stale = ForkSync.FolderLine("외부 폴더 · 이멋세", "idle", 0, 0, needFiles = 16, totalFiles = 17, id = "inn-ab12-ext-1")
+        val withGone = ForkSync.Report(connected = true, folders = listOf(line(), stale), gone = listOf("inn-ab12-ext-1" to "이멋세"))
+        assertTrue(SyncNotice.complete(withGone, 10, 10))                                   // 안 받아지는 폴더는 빼고 판정
+        assertFalse(SyncNotice.complete(withGone.copy(gone = emptyList()), 10, 10))          // 공유 중인 폴더에 받을 것이 남았으면 끝이 아님
+    }
 }
 
 class SyncSettingsExtTest {

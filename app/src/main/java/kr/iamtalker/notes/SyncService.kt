@@ -224,8 +224,12 @@ const val OPEN_SYNC = "openSync"
 /** 작업표시줄 알림에 보일 글: 동기화 상태 N/M (P%) · 남은 시간 */
 object SyncNotice {
     /** 알림을 내려도 되는 '다 받음': 컴퓨터와 연결돼 있고 오류가 없고, 노트 전체를 다 받았고, 모든 폴더(외부 폴더 포함)에 받을 파일이 없다 */
-    fun complete(r: ForkSync.Report?, have: Int, all: Int): Boolean =
-        r != null && r.connected && r.error == null && all > 0 && have >= all && r.folders.all { it.needFiles == 0L && it.state in setOf("idle", "paused") }
+    fun complete(r: ForkSync.Report?, have: Int, all: Int): Boolean {
+        r ?: return false
+        val gone = r.gone.map { it.first }.toSet()   // 컴퓨터가 더는 공유하지 않는 폴더는 앞으로도 받을 수 없으니 판정에서 뺀다
+        return r.connected && r.error == null && all > 0 && have >= all &&
+            r.folders.filter { it.id !in gone }.all { it.needFiles == 0L && it.state in setOf("idle", "paused") }
+    }
 
     fun text(connected: Boolean, error: String?, have: Int, all: Int, etaSec: Long): String {
         if (error != null) return "⚠ $error"
