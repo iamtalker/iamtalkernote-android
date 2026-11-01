@@ -105,19 +105,16 @@ object ForkSync {
     fun goneExt(ids: List<String>, vault: String, keep: Set<String>): List<String> =
         ids.filter { it.startsWith("$ID_PREFIX$vault-") && kindOf(it) == "ext" && it !in keep }
 
-    private const val GONE_AFTER_MS = 10 * 60_000L   // 정책 파일이 늦게 도착하는 때를 피하려고 이만큼 계속 빠져 있어야 지운다
+    private const val GONE_AFTER_MS = 2 * 60_000L   // 정책 파일이 늦게 도착하는 때를 피하려고 이만큼 계속 빠져 있어야 '없는 폴더'로 본다
     private val goneSince = HashMap<String, Long>()
 
-    /** 컴퓨터가 정책에서 뺀 외부 폴더의 Syncthing 등록을 지운다(받은 파일은 그대로). 지운 폴더 ID 목록 */
-    fun dropGoneExt(api: Api, vault: String, keep: Set<String>, connected: Boolean, now: Long): List<String> {
-        val gone = goneExt(api.folders().map { it.getString("id") }, vault, keep)
+    /** 컴퓨터가 정책에서 뺀 외부 폴더(ID, 이름) — 연결돼 있고 [GONE_AFTER_MS] 넘게 계속 빠져 있을 때만. 지우는 것은 사용자가 확인한 뒤에 한다(화면의 '폴더가 없습니다') */
+    fun goneExtFolders(api: Api, vault: String, keep: Set<String>, connected: Boolean, now: Long): List<Pair<String, String>> {
+        val cfg = api.folders().associateBy { it.getString("id") }
+        val gone = goneExt(cfg.keys.toList(), vault, keep)
         goneSince.keys.retainAll(gone.toSet())
-        val out = ArrayList<String>()
-        for (id in gone) {
-            val since = goneSince.getOrPut(id) { now }
-            if (connected && now - since >= GONE_AFTER_MS) { api.removeFolder(id); goneSince.remove(id); out.add(id) }
-        }
-        return out
+        return gone.filter { id -> now - goneSince.getOrPut(id) { now } >= GONE_AFTER_MS && connected }
+            .map { it to cfg.getValue(it).optString("label").substringAfter("외부 폴더 · ").trim().ifEmpty { it } }
     }
 
     /** 컴퓨터 앱의 syncpolicy.folder_id 와 같은 값 */
@@ -375,9 +372,10 @@ object ForkSync {
 
     data class FolderLine(val label: String, val state: String, val needBytes: Long, val totalBytes: Long,
                           val needFiles: Long = 0, val totalFiles: Long = 0, val rate: Double = 0.0,
-                          val failed: Int = 0, val firstError: String = "", val path: String = "")
+                          val failed: Int = 0, val firstError: String = "", val path: String = "", val id: String = "")
     data class Report(val myId: String = "", val connected: Boolean = false, val folders: List<FolderLine> = emptyList(), val accepted: Int = 0,
-                      val note: String = "", val error: String? = null)
+                      val note: String = "", val error: String? = null,
+                      /** 컴퓨터가 더는 공유하지 않는 외부 폴더(폴더 ID, 이름) */ val gone: List<Pair<String, String>> = emptyList())
 
     /** 5초마다 한 번: 컴퓨터가 보낸 공유 요청을 받고, 정책 파일이 생겼으면 방향(폴더 종류)을 맞추고, 상태를 모은다 */
     fun tick(ctx: Context, api: Api, pcId: String, tree: Uri, staged: Boolean = false): Report {
@@ -385,6 +383,7 @@ object ForkSync {
         val me = api.myId()
         var accepted = 0
         var note = ""
+        var gone = emptyList<Pair<String, String>>()
         // 컴퓨터가 준 정책에, 폰이나 컴퓨터가 더 최근에 바꾼 설정(설정 폴더의 settings.json)을 덮어 쓴다
         val policy = runCatching { readPolicy(ctx, tree) }.getOrNull()?.let { pol ->
             val base = SyncSettings.fromPolicy(pol)
@@ -437,11 +436,10 @@ object ForkSync {
                     val f = have[folderId(vault, m.optString("kind"), mid)] ?: continue
                     if (f.optString("type") != want) api.setFolderType(f, want)
                 }
-                // 컴퓨터가 정책에서 뺀 외부 폴더는 등록만 지운다(받은 파일은 그대로): 안 지우면 '대기 중'으로 계속 남는다
+                // 컴퓨터가 정책에서 뺀 외부 폴더: '대기 중'으로 계속 남으니 화면에서 '폴더가 없습니다. 작업 취소할까요?' 로 물어 지운다
                 if (mods.has("markdown")) {
                     val conn = known.any { runCatching { api.connected(it) }.getOrDefault(false) }
-                    val dropped = dropGoneExt(api, vault, SyncSettings.extModules(pol).keys, conn, System.currentTimeMillis())
-                    if (dropped.isNotEmpty()) note = trf("컴퓨터가 뺀 외부 폴더 %s개의 등록을 지웠습니다(받은 파일은 그대로 있습니다)", dropped.size)
+                    gone = goneExtFolders(api, vault, SyncSettings.extModules(pol).keys, conn, System.currentTimeMillis())
                 }
                 // 새 방식(노트 폴더 하나·방향 하나): 제외 목록을 컴퓨터와 같게 하고, 쓸 일 없어진 옛 폴더를 정리한다
                 pol.optJSONObject("simple")?.let { sm -> simpleNote(ctx, api, vault, sm, vaultPath, staged).takeIf { it.isNotEmpty() }?.let { note = it } }
@@ -473,9 +471,9 @@ object ForkSync {
             val conn = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { c -> runCatching { api.connected(c) }.getOrDefault(false) }
             if (kickIfStuck(api, id, d, conn, System.currentTimeMillis())) note = note.ifEmpty { tr("받기에 실패한 파일이 있어 다시 시도했습니다") }
             val errs = if (d.needFiles > 0) api.folderErrors(id) else emptyList()
-            d.copy(label = it.optString("label"), path = it.optString("path"), rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
+            d.copy(label = it.optString("label"), path = it.optString("path"), id = id, rate = rate, failed = errs.size, firstError = errs.firstOrNull()?.let { e -> e.first.substringAfterLast('/') + " — " + e.second } ?: "")
         }
         val connected = (if (pcId.isNotEmpty()) listOf(pcId) else known.toList()).any { runCatching { api.connected(it) }.getOrDefault(false) }
-        return Report(me, connected, lines, accepted, note)
+        return Report(me, connected, lines, accepted, note, gone = gone)
     }
 }

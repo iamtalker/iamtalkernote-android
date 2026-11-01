@@ -21,7 +21,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun UpdateProgress(color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onPrimaryContainer) {
     if (Updater.status.isNotEmpty()) Text(Updater.status, fontSize = 12.sp, color = color, modifier = Modifier.padding(top = 2.dp))
-    if (Updater.busy) {
+    // 설치 확인·설치 중(3·4)에는 이 앱이 일을 다 마친 뒤라 busy 가 꺼져 있다: 그래도 막대는 계속 보여, 되고 있다는 것을 알린다
+    if (Updater.busy || Updater.step in 2..4) {
         if (Updater.progress >= 0f) LinearProgressIndicator(progress = { Updater.progress }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
         else LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
     }
@@ -47,7 +48,7 @@ fun UpdateDialog() {
                     Text(mark + label, fontSize = 14.sp, fontWeight = if (Updater.step == n) FontWeight.Medium else FontWeight.Normal,
                         color = if (Updater.step >= n) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 3.dp))
                 }
-                if (Updater.busy || Updater.step in 1..2) {
+                if (Updater.busy || Updater.step in 1..4) {   // 설치 확인·설치 중에도 막대를 이어 보인다(진행률을 알 수 없는 단계는 도는 막대)
                     if (Updater.progress >= 0f) LinearProgressIndicator(progress = { Updater.progress }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
                     else LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
                 }

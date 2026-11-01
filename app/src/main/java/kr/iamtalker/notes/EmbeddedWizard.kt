@@ -44,6 +44,18 @@ import kotlinx.coroutines.withContext
 @Composable
 fun FolderLines(r: ForkSync.Report) {
     val ov = EmbeddedSync.overall
+    // 컴퓨터가 더는 공유하지 않는 외부 폴더: '대기 중'으로 계속 남으니 묻고, 확인하면 폰의 등록을 지운다(받은 파일은 그대로)
+    val ctx = LocalContext.current
+    val goneScope = rememberCoroutineScope()
+    var askGone by remember { mutableStateOf(true) }   // [나중에] 를 누르면 이 화면에서는 다시 묻지 않는다
+    r.gone.firstOrNull()?.takeIf { askGone }?.let { (gid, name) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { askGone = false }, title = { Text(tr("폴더가 없습니다")) },
+            text = { Text(trf("‘%s’ 폴더를 컴퓨터가 더는 공유하지 않습니다.\n작업을 취소할까요?\n(이미 받은 파일은 지워지지 않습니다)", name)) },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { askGone = false; goneScope.launch(Dispatchers.IO) { runCatching { EmbeddedSync.api(ctx).removeFolder(gid) } } }) { Text(tr("확인")) } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { askGone = false }) { Text(tr("나중에")) } }
+        )
+    }
     for (f in r.folders) {
         // 노트 폴더는 컴퓨터가 지금 열어 준 파일이 아니라 단계 목록 전체(숨긴 단계 포함) 기준으로 센다
         val whole = ov != null && ov.all > 0 && f.label == "iamtalkernote"
@@ -67,6 +79,7 @@ fun FolderLines(r: ForkSync.Report) {
             }
             // 외부 폴더(음악·PDF 등)는 받는 위치가 설정에 따라 달라서 실제 경로를 보인다(파일 관리 앱에서 찾을 때 쓴다)
             if (f.label.startsWith("외부 폴더") && f.path.isNotEmpty()) Text(trf("받는 위치: %s", f.path), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 2.dp))
+            if (f.label.startsWith("외부 폴더") && f.needFiles > 0L) Text(trf("완료 %s / 전체 %s개 · 받는 중인 파일은 파일 관리 앱에서 크기가 다 차 보이거나 .tmp 로 보여도 아직 미완성입니다. 다 받으면 알림이 옵니다.", got, f.totalFiles), fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
             androidx.compose.material3.LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             val small = MaterialTheme.colorScheme.outline
             if (whole) Text(tr("전체 %,d개 중 받음 %,d개 · 남음 %,d개").format(ov!!.all, ov.have, (ov.all - ov.have).coerceAtLeast(0)), fontSize = 12.5.sp, color = small, modifier = Modifier.padding(top = 4.dp))

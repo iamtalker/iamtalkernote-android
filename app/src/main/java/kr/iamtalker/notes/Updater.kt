@@ -211,7 +211,25 @@ object Updater {
         }
         pi.registerSessionCallback(cb, main)
         pi.openSession(id).use { s ->
-            apk.inputStream().use { i -> s.openWrite("app.apk", 0, apk.length()).use { o -> i.copyTo(o); s.fsync(o) } }
+            // 설치 준비: APK 를 설치 세션에 쓰는 만큼 진행 막대를 채운다(받기 때처럼 퍼센트)
+            apk.inputStream().use { i -> s.openWrite("app.apk", 0, apk.length()).use { o ->
+                val total = apk.length().coerceAtLeast(1L)
+                val buf = ByteArray(256 * 1024)
+                var done = 0L; var lastPct = -1
+                while (true) {
+                    val n = i.read(buf); if (n < 0) break
+                    o.write(buf, 0, n); done += n
+                    val pct = (done * 100 / total).toInt()
+                    if (pct != lastPct) {
+                        lastPct = pct
+                        progress = done.toFloat() / total
+                        status = trf("설치를 준비하는 중… %s%%", pct)
+                        notify(ctx, trf("설치를 준비하는 중… %s%%", pct), pct)
+                    }
+                }
+                s.fsync(o)
+            } }
+            progress = -1f   // 이제 안드로이드 설치 화면이 이어받는다: 진행률을 알려 주지 않으니 도는 막대
             val intent = Intent(ctx, UpdateReceiver::class.java).setAction(RESULT_ACTION).setPackage(ctx.packageName)
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
             s.commit(PendingIntent.getBroadcast(ctx, id, intent, flags).intentSender)
