@@ -342,7 +342,7 @@ private fun SyncControls(model: NotesModel) {
         val r = withContext(Dispatchers.IO) {
             val p = runCatching { ForkSync.readPolicy(ctx, tree) }.getOrNull()
             val c = SyncSettings.pcRules(vault, p)
-            Triple(p, c, c?.let { SyncSettings.effective(it, SyncSettings.overrides(vault)) })
+            Triple(p, c, c?.let { SyncSettings.effective(it, SyncSettings.seed(vault, it)) })
         }
         pol = r.first; pc = r.second; eff = r.third
     }

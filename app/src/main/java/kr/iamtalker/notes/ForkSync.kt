@@ -404,7 +404,7 @@ object ForkSync {
         val policy = runCatching { readPolicy(ctx, tree) }.getOrNull()?.let { pol ->
             val pc = SyncSettings.pcRules(vaultPath, pol)
             if (pc == null) pol else {
-                val eff = SyncSettings.effective(pc, SyncSettings.overrides(vaultPath))
+                val eff = SyncSettings.effective(pc, SyncSettings.seed(vaultPath, pc))   // 폰의 규칙은 처음 한 번만 컴퓨터 값으로 채우고 그 뒤로는 독립
                 blocked = SyncSettings.blockedFolderIds(pol.optString("vault"), SyncSettings.mismatched(pc, eff))
                 SyncSettings.overlay(pol, eff)
             }

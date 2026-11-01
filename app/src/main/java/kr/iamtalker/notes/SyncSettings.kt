@@ -6,7 +6,8 @@ import java.io.File
 /** 컴퓨터와 폰의 동기화 규칙(방향·함께 보낼 것)이 같은지 맞춰 본다(컴퓨터 앱 syncsettings.py 와 같은 규칙): 같아야 동기화하고, 다르면 그 폴더는 멈춘다.
  *  설정만 담는 작은 폴더(종류 cfg, 항상 양방향)로 각자 자기 파일만 쓴다(서로 덮어쓰지 않으니 '누가 더 나중에 바꿨나' 를 가릴 일이 없다).
  *   · pc-config.json    (컴퓨터가 씀) 컴퓨터의 지금 규칙
- *   · phone-config.json (폰이 씀)   폰이 컴퓨터와 다르게 정한 것만(없는 항목은 컴퓨터를 따른다) */
+ *   · phone-config.json (폰이 씀)   폰의 규칙. 폰은 처음 한 번만 컴퓨터 값으로 채워 두고([seed]), 그 뒤로는 독립이다 — 컴퓨터가 바뀌어도 따라가지 않는다
+ *                                   (따라가면 한쪽만 바꿔도 반대쪽이 따라와서 '같아야 동기화' 가 지켜지지 않는다) */
 object SyncSettings {
     const val PC_FILE = "pc-config.json"
     const val OWN_FILE = "phone-config.json"
@@ -83,7 +84,19 @@ object SyncSettings {
         tmp.renameTo(File(d, OWN_FILE)).also { if (!it) { File(d, OWN_FILE).writeText(toJson(o)); tmp.delete() } }
     }
 
-    /** 폰의 지금 규칙: 폰이 따로 정한 것이 있으면 그것, 없으면 컴퓨터를 따른다 */
+    /** 폰의 규칙을 처음 한 번 컴퓨터 값으로 채워 둔다(없는 항목만. 이미 정한 값은 그대로). 이 뒤로 폰은 컴퓨터를 따라가지 않는다.
+     *  컴퓨터가 설정 폴더를 아직 보내 주지 않았으면(폴더가 없으면) 아무것도 쓰지 않는다 → 그동안은 컴퓨터를 그대로 따른다. 지금의 폰 규칙을 돌려준다 */
+    fun seed(vaultPath: String, pc: Rules): Over {
+        val o = overrides(vaultPath)
+        if (!dir(vaultPath).isDirectory) return o
+        val next = o.copy(direction = o.direction ?: pc.direction,
+            include = pc.include.mapValues { (k, v) -> o.include[k] ?: v },
+            ext = pc.ext.mapValues { (id, v) -> o.ext[id] ?: v })
+        if (next != o) writeOver(vaultPath, next)
+        return next
+    }
+
+    /** 폰의 지금 규칙: 폰이 정해 둔 값(seed 가 채운다). 아직 없는 항목은 컴퓨터 값 */
     fun effective(pc: Rules, o: Over): Rules = Rules(
         o.direction ?: pc.direction,
         pc.include.mapValues { (k, v) -> o.include[k] ?: v },
@@ -115,26 +128,26 @@ object SyncSettings {
         return c
     }
 
-    /** 이 폰에서 노트 폴더의 방향·함께 보낼 것을 고친다. 컴퓨터와 같게 하면 따로 적어 둘 필요가 없어 지운다. 바뀐 것이 있으면 적고 true */
+    /** 이 폰에서 노트 폴더의 방향·함께 보낼 것을 고친다(컴퓨터는 바뀌지 않는다: 다르면 그 폴더가 멈춘다). 바뀐 것이 있으면 적고 true */
     fun change(vaultPath: String, pc: Rules, direction: String? = null, key: String? = null, on: Boolean? = null): Boolean {
-        val o = overrides(vaultPath)
+        val o = seed(vaultPath, pc)
         val cur = effective(pc, o)
         var dir = o.direction
         val inc = o.include.toMutableMap()
-        if (direction != null && direction in DIRECTIONS) dir = direction.takeIf { it != pc.direction }
-        if (key != null && on != null) { if (on == pc.include[key]) inc.remove(key) else inc[key] = on }
+        if (direction != null && direction in DIRECTIONS) dir = direction
+        if (key != null && on != null) inc[key] = on
         val next = o.copy(direction = dir, include = inc)
         if (effective(pc, next) == cur) return false
         writeOver(vaultPath, next)
         return true
     }
 
-    /** 이 폰에서 외부 폴더 하나의 방향을 고친다. 컴퓨터와 같게 하면 따로 적어 둘 필요가 없어 지운다 */
+    /** 이 폰에서 외부 폴더 하나의 방향을 고친다(컴퓨터는 바뀌지 않는다: 다르면 그 폴더가 멈춘다) */
     fun changeExt(vaultPath: String, pc: Rules, folderId: String, direction: String): Boolean {
         if (direction !in DIRECTIONS || folderId !in pc.ext) return false
-        val o = overrides(vaultPath)
+        val o = seed(vaultPath, pc)
         val ext = o.ext.toMutableMap()
-        if (direction == pc.ext[folderId]) ext.remove(folderId) else ext[folderId] = direction
+        ext[folderId] = direction
         val next = o.copy(ext = ext)
         if (effective(pc, next) == effective(pc, o)) return false
         writeOver(vaultPath, next)

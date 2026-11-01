@@ -78,33 +78,57 @@ class SyncSettingsTest {
         assertTrue("/.resources" in ig && "/.history" !in ig)   // 가림 목록도 폰의 규칙을 따른다
     }
 
-    @Test fun changeWritesOnlyTheDifferencesFromTheComputer() {
+    @Test fun phoneIsIndependentAfterTheFirstSeed() {
         val v = tmp()
         val pc = SyncSettings.fromPolicy(pol)!!
-        assertFalse(SyncSettings.change(v, pc, direction = "pc2mobile"))              // 컴퓨터와 같은 값: 적을 것이 없다
-        assertEquals(SyncSettings.Over(), SyncSettings.overrides(v))
+        // 컴퓨터가 설정 폴더를 아직 보내지 않았으면 아무것도 쓰지 않고 컴퓨터를 그대로 따른다
+        assertEquals(SyncSettings.Over(), SyncSettings.seed(v, pc))
+        assertFalse(File(SyncSettings.dir(v), SyncSettings.OWN_FILE).exists())
+        // 설정 폴더가 생기면 처음 한 번 컴퓨터 값으로 채운다
+        SyncSettings.dir(v).mkdirs()
+        val s = SyncSettings.seed(v, pc)
+        assertEquals("pc2mobile", s.direction)
+        assertEquals(pc.include, s.include)
+        assertEquals(pc.ext, s.ext)
+        assertTrue(SyncSettings.mismatched(pc, SyncSettings.effective(pc, s)).isEmpty())
+        // 그 뒤 컴퓨터가 바뀌어도 폰은 따라가지 않는다 → 달라져서 그 폴더가 멈춘다
+        val pc2 = pc.copy(direction = "both", ext = mapOf(ida to "off"))
+        val eff = SyncSettings.effective(pc2, SyncSettings.seed(v, pc2))
+        assertEquals("pc2mobile", eff.direction)
+        assertEquals("both", eff.ext[ida])
+        assertEquals(setOf(SyncSettings.NOTES, ida), SyncSettings.mismatched(pc2, eff))
+        // 폰을 컴퓨터에 맞추면 풀린다
+        assertTrue(SyncSettings.change(v, pc2, direction = "both"))
+        assertTrue(SyncSettings.changeExt(v, pc2, ida, "off"))
+        assertTrue(SyncSettings.mismatched(pc2, SyncSettings.effective(pc2, SyncSettings.seed(v, pc2))).isEmpty())
+    }
+
+    @Test fun changeStoresThePhonesOwnValue() {
+        val v = tmp()
+        SyncSettings.dir(v).mkdirs()
+        val pc = SyncSettings.fromPolicy(pol)!!
+        assertFalse(SyncSettings.change(v, pc, direction = "pc2mobile"))              // 이미 같은 값
         assertTrue(SyncSettings.change(v, pc, direction = "both"))
         assertEquals("both", SyncSettings.overrides(v).direction)
         assertTrue(SyncSettings.change(v, pc, key = "history", on = true))
-        assertEquals(mapOf("history" to true), SyncSettings.overrides(v).include)
+        assertEquals(true, SyncSettings.overrides(v).include["history"])
         assertEquals("both", SyncSettings.overrides(v).direction)                       // 앞서 정한 방향이 유지됨
-        assertFalse(SyncSettings.change(v, pc, key = "media", on = true))              // 컴퓨터도 켜져 있다
-        assertTrue(SyncSettings.change(v, pc, key = "history", on = false))            // 컴퓨터와 같아지면 지운다
-        assertTrue(SyncSettings.overrides(v).include.isEmpty())
-        assertTrue(SyncSettings.change(v, pc, direction = "pc2mobile"))                // 컴퓨터와 같아지면 지운다
-        assertEquals(SyncSettings.Over(), SyncSettings.overrides(v))
+        assertTrue(SyncSettings.change(v, pc, key = "history", on = false))
+        assertEquals(false, SyncSettings.overrides(v).include["history"])
+        assertEquals(pc.include["media"], SyncSettings.overrides(v).include["media"])  // 건드리지 않은 것은 컴퓨터 값으로 채워져 있다
     }
 
     @Test fun changeExtOnlyForKnownFolders() {
         val v = tmp()
+        SyncSettings.dir(v).mkdirs()
         val pc = SyncSettings.fromPolicy(pol)!!
         assertFalse(SyncSettings.changeExt(v, pc, ida, "both"))                          // 같은 값
         assertFalse(SyncSettings.changeExt(v, pc, "inn-ab12-ext-ffffffff", "off"))       // 모르는 폴더
         assertFalse(SyncSettings.changeExt(v, pc, ida, "zzz"))
         assertTrue(SyncSettings.changeExt(v, pc, ida, "off"))
-        assertEquals(mapOf(ida to "off"), SyncSettings.overrides(v).ext)
-        assertTrue(SyncSettings.changeExt(v, pc, ida, "both"))                           // 컴퓨터와 같아지면 지운다
-        assertTrue(SyncSettings.overrides(v).ext.isEmpty())
+        assertEquals("off", SyncSettings.overrides(v).ext[ida])
+        assertTrue(SyncSettings.changeExt(v, pc, ida, "both"))
+        assertEquals("both", SyncSettings.overrides(v).ext[ida])
     }
 
     @Test fun overridesFileRoundTrip() {
