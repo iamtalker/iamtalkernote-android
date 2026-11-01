@@ -33,6 +33,15 @@
         <receiver android:name=".ReplacedReceiver" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
         </receiver>
+        <!-- 앱 안의 노트 폴더(앱 전용 공간): 작은 파일 수만 개를 받는 동기화가 공유 저장소보다 훨씬 빠르다. 시스템 파일 앱에서도 보인다 -->
+        <provider
+            android:name=".NotesProvider"
+            android:authorities="kr.iamtalker.notes.docs"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter><action android:name="android.content.action.DOCUMENTS_PROVIDER" /></intent-filter>
+        </provider>
         <service
             android:name=".SyncService"
             android:exported="false"

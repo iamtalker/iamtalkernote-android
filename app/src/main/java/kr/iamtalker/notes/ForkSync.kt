@@ -42,7 +42,9 @@ object ForkSync {
         return if (rel.isEmpty()) base else "$base/$rel"
     }
 
-    fun treePath(tree: Uri): String? = runCatching { treeIdToPath(DocumentsContract.getTreeDocumentId(tree)) }.getOrNull()
+    fun treePath(tree: Uri): String? =
+        if (NotesProvider.isOurs(tree)) NotesProvider.root?.path   // 앱 안 노트 폴더
+        else runCatching { treeIdToPath(DocumentsContract.getTreeDocumentId(tree)) }.getOrNull()
 
     /** 폴더 ID 의 종류 부분(inn-<볼트>-<종류>-<해시>): mar 노트 전체 · med 미디어 · imp 가져온 요약 · his 이력 · tra 휴지통 · not 노트북 · ext 외부 폴더 */
     fun kindOf(folderId: String): String = folderId.split('-').getOrElse(2) { "" }
@@ -154,6 +156,13 @@ object ForkSync {
         fun putDevice(id: String, name: String) {
             call("/rest/config/devices/$id", "PUT", JSONObject().put("deviceID", id).put("name", name)
                 .put("addresses", JSONArray().put("dynamic")).put("autoAcceptFolders", false).put("paused", false))
+        }
+
+        /** 상대 기기와의 연결을 한 번 끊었다 다시 잇는다(잠깐 멈췄다 푼다). 상대가 폴더 공유 목록을 다시 보내, 지운 폴더가 새 공유 요청으로 다시 온다 */
+        fun reconnect(id: String) {
+            val d = config().getJSONArray("devices").let { a -> (0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.getString("deviceID") == id } } ?: return
+            call("/rest/config/devices/$id", "PUT", d.put("paused", true))
+            call("/rest/config/devices/$id", "PUT", d.put("paused", false))
         }
 
         fun deviceIds(): List<String> {

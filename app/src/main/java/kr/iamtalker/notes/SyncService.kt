@@ -80,6 +80,15 @@ class SyncService : Service() {
         while (scope.isActive) {
             try {
                 if (!EmbeddedSync.alive()) EmbeddedSync.start(ctx)
+                if (prefs.getBoolean("resyncFolders", false)) {
+                    // 노트 폴더 위치를 바꿨다: 엔진에 등록된 폴더(파일은 지워지지 않음)를 지워, 컴퓨터가 다시 보내는 공유를 새 경로로 받게 한다
+                    val ok = runCatching {
+                        api.folders().map { it.getString("id") }.filter { it.startsWith(ForkSync.ID_PREFIX) }.forEach { api.removeFolder(it) }
+                        val me = api.myId()
+                        api.deviceIds().filter { it != me }.forEach { api.reconnect(it) }   // 컴퓨터가 공유 목록을 다시 보내 새 요청이 오게 한다
+                    }.isSuccess
+                    if (ok) { prefs.edit().remove("resyncFolders").apply(); EmbeddedSync.note(ctx, "노트 폴더 위치가 바뀌어 동기화 폴더 등록을 지우고 새 경로로 다시 받습니다") }
+                }
                 val tree = prefs.getString("tree", null)?.let(Uri::parse)
                 val pc = prefs.getString("pcId", "").orEmpty()
                 val tickT = System.nanoTime()

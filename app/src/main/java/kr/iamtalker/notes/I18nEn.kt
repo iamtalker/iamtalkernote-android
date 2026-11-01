@@ -477,6 +477,10 @@ object I18nEn {
         "다른 앱에서 공유(보내기)로 저장할 때 들어갈 노트북입니다. 공유 창에서 그때그때 바꿀 수도 있습니다." to "The notebook used when saving from another app via Share. You can still change it in the share dialog each time.",
         "새 노트북 이름(없으면 만듭니다)" to "New notebook name (created if missing)",
         "이 이름으로" to "Use this name",
+        "노트 폴더" to "Notes folder",
+        "앱 안에 만들기(빠름, 권장): 동기화로 작은 파일 수만 개를 받을 때 훨씬 빠릅니다. 앱을 지우면 폰의 사본도 지워집니다(원본은 컴퓨터)." to "Create inside the app (fast, recommended): much faster when sync receives tens of thousands of small files. Uninstalling the app also deletes the phone's copy (the original stays on the computer).",
+        "기기에서 폴더 고르기: 다른 앱과 같은 폴더를 함께 씁니다. 동기화는 느립니다." to "Pick a folder on the device: shares the folder with other apps. Sync is slow.",
+        "앱 안에 만들기" to "Create in app",
         "웹 클리퍼: 그림은 와이파이에서만" to "Web clipper: download images on Wi-Fi only",
         "공유로 저장할 때 그림을 모바일 데이터로는 내려받지 않고 주소 그대로 둡니다(본문 글은 항상 가져옵니다)" to "When saving from Share, images are not downloaded over mobile data and keep their web address (the page text is always fetched)",
     )

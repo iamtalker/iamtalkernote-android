@@ -128,12 +128,18 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
 
     fun index(): Index = idx ?: Index(getApplication(), tree!!).also { idx = it }
 
+    /** 앱 안(앱 전용 공간)에 노트 폴더를 둔다: 작은 파일이 수만 개인 동기화가 공유 저장소보다 훨씬 빠르다. 앱을 지우면 폰의 사본도 지워진다(원본은 컴퓨터) */
+    fun useAppFolder() = pick(NotesProvider.treeUri())
+
     fun pick(uri: Uri) {
-        // 기억하지 못해도(일부 기기) 이번 실행에서는 쓸 수 있으니 실패해도 앱을 죽이지 않는다
-        runCatching {
+        val before = tree
+        // 기억하지 못해도(일부 기기) 이번 실행에서는 쓸 수 있으니 실패해도 앱을 죽이지 않는다. 앱 안 폴더는 권한이 필요 없다
+        if (!NotesProvider.isOurs(uri)) runCatching {
             getApplication<Application>().contentResolver.takePersistableUriPermission(
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         }
+        // 폴더를 바꾸면 동기화 엔진에 등록된 폴더 경로도 새로 잡아야 한다: 등록을 지우면(파일은 그대로) 컴퓨터가 다시 보낸 공유를 새 경로로 받는다
+        if (before != null && before != uri) prefs.edit().putBoolean("resyncFolders", true).apply()
         prefs.edit().putString("tree", uri.toString()).apply()
         tree = uri
         idx = null

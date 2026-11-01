@@ -32,7 +32,7 @@ object NoteRepo {
     /** 모든 파일 접근이 허용돼 있고 트리의 실제 경로를 알면 그 폴더(파일을 직접 읽는 빠른 길), 아니면 null.
      *  안드로이드 저장소 API(SAF)는 파일마다 프로세스 간 호출이라 노트 수천 개에서 훑기·읽기가 수십 배 느리다 */
     fun fastBase(tree: Uri): java.io.File? {
-        if (!android.os.Environment.isExternalStorageManager()) return null
+        if (!NotesProvider.isOurs(tree) && !android.os.Environment.isExternalStorageManager()) return null   // 앱 안 폴더는 권한 없이 바로 읽는다
         val p = ForkSync.treePath(tree) ?: return null
         return java.io.File(p).takeIf { it.isDirectory && it.canRead() }
     }

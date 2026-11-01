@@ -291,6 +291,19 @@ fun App(model: NotesModel) {
     // 노트를 열면 아래 목록 화면이 composition 에서 빠지므로, 보던 위치를 지키려고 여는 분기보다 앞에 둔다
     val noteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) model.pick(uri) }
+    var folderChoice by remember { mutableStateOf(false) }
+    if (folderChoice) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { folderChoice = false }, title = { Text(tr("노트 폴더")) },
+        text = {
+            Column {
+                Text(tr("앱 안에 만들기(빠름, 권장): 동기화로 작은 파일 수만 개를 받을 때 훨씬 빠릅니다. 앱을 지우면 폰의 사본도 지워집니다(원본은 컴퓨터)."), fontSize = 13.sp)
+                Spacer(Modifier.height(10.dp))
+                Text(tr("기기에서 폴더 고르기: 다른 앱과 같은 폴더를 함께 씁니다. 동기화는 느립니다."), fontSize = 13.sp)
+            }
+        },
+        confirmButton = { TextButton(onClick = { folderChoice = false; model.useAppFolder() }) { Text(tr("앱 안에 만들기")) } },
+        dismissButton = { TextButton(onClick = { folderChoice = false; picker.launch(null) }) { Text(tr("폴더 고르기")) } }
+    )
     val ctx = LocalContext.current
 
     var crash by remember { mutableStateOf(CrashLog.take(ctx)) }
@@ -315,7 +328,7 @@ fun App(model: NotesModel) {
     if (screen == "media") { UnusedMediaScreen(model, onBack = { closeTool(); model.refresh() }); return }
     if (screen == "planner") { PlannerScreen(model, onBack = { closeTool() }); return }
     if (screen == "journal") { JournalScreen(model, onBack = { closeTool() }, onOpen = { screen = ""; open = it }); return }
-    if (screen == "settings") { SettingsScreen(model, settingsPage, { settingsPage = it }, onBack = { screen = ""; settingsPage = "" }, onTool = { fromSettings = true; screen = it }, onPick = { picker.launch(null) }); return }
+    if (screen == "settings") { SettingsScreen(model, settingsPage, { settingsPage = it }, onBack = { screen = ""; settingsPage = "" }, onTool = { fromSettings = true; screen = it }, onPick = { folderChoice = true }); return }
     val cur = open
     if (cur != null) {
         androidx.compose.runtime.key(cur.uri) {
@@ -516,7 +529,7 @@ fun App(model: NotesModel) {
                         Spacer(Modifier.height(8.dp))
                         Text(tr("컴퓨터의 iamtalkernote 와 같은 폴더(동기화 도구로 폰에 받은 폴더)를 고르면 됩니다."), style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(16.dp))
-                        Button(onClick = { picker.launch(null) }) { Text(tr("폴더 고르기")) }
+                        Button(onClick = { folderChoice = true }) { Text(tr("폴더 고르기")) }
                     }
                     return@Column
                 }
