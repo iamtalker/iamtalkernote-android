@@ -10,15 +10,28 @@ object SyncSettings {
     val KEYS = listOf("media", "imported", "history", "trash")
     val DIRECTIONS = listOf("both", "pc2mobile", "mobile2pc", "off")
 
-    data class S(val updated: Long, val direction: String, val include: Map<String, Boolean>)
+    /** 외부 폴더(음악·PDF 등) 하나의 방향과 바꾼 시각. 노트 폴더와 따로 '더 최근에 바꾼 쪽'이 이긴다 */
+    data class ExtDir(val direction: String, val updated: Long)
+
+    /** ext: Syncthing 폴더 ID → 외부 폴더 방향(컴퓨터 syncsettings.py 의 ext_snapshot 과 같은 키) */
+    data class S(val updated: Long, val direction: String, val include: Map<String, Boolean>, val ext: Map<String, ExtDir> = emptyMap())
 
     /** 폰의 설정 폴더 위치(노트 폴더 옆). ForkSync.localPath 의 cfg 와 같다 */
     fun dir(vaultPath: String) = File(vaultPath.trimEnd('/') + "-settings")
 
+    /** 정책 모듈 중 외부 폴더(ext:…)의 Syncthing 폴더 ID → 모듈 이름 */
+    fun extModules(pol: JSONObject): Map<String, String> {
+        val vault = pol.optString("vault")
+        val mods = pol.optJSONObject("modules") ?: return emptyMap()
+        return mods.keys().asSequence().filter { mods.getJSONObject(it).optString("kind") == "external" }.associateBy { ForkSync.folderId(vault, "external", it) }
+    }
+
     fun fromPolicy(pol: JSONObject): S? {
         val sm = pol.optJSONObject("simple") ?: return null
         val inc = sm.optJSONObject("include")
-        return S(sm.optLong("updated", 0L), sm.optString("direction", "both"), KEYS.associateWith { inc?.optBoolean(it, false) == true })
+        val mods = pol.optJSONObject("modules")
+        val ext = extModules(pol).mapValues { (_, mid) -> mods!!.getJSONObject(mid).let { ExtDir(it.optString("direction", "off"), it.optLong("updated", 0L)) } }
+        return S(sm.optLong("updated", 0L), sm.optString("direction", "both"), KEYS.associateWith { inc?.optBoolean(it, false) == true }, ext)
     }
 
     fun parse(text: String): S? = runCatching {
@@ -26,11 +39,15 @@ object SyncSettings {
         val dir = o.getString("direction")
         if (dir !in DIRECTIONS) return null
         val inc = o.optJSONObject("include")
-        S(o.getLong("updated"), dir, KEYS.associateWith { inc?.optBoolean(it, false) == true })
+        val e = o.optJSONObject("ext")
+        val ext = HashMap<String, ExtDir>()
+        e?.keys()?.forEach { id -> e.optJSONObject(id)?.let { j -> j.optString("direction").takeIf { it in DIRECTIONS }?.let { ext[id] = ExtDir(it, j.optLong("updated", 0L)) } } }
+        S(o.getLong("updated"), dir, KEYS.associateWith { inc?.optBoolean(it, false) == true }, ext)
     }.getOrNull()
 
     fun toJson(s: S): String = JSONObject().put("updated", s.updated).put("direction", s.direction)
-        .put("include", JSONObject().also { j -> KEYS.forEach { j.put(it, s.include[it] == true) } }).toString()
+        .put("include", JSONObject().also { j -> KEYS.forEach { j.put(it, s.include[it] == true) } })
+        .put("ext", JSONObject().also { j -> s.ext.forEach { (id, d) -> j.put(id, JSONObject().put("direction", d.direction).put("updated", d.updated)) } }).toString()
 
     fun read(vaultPath: String): S? = runCatching { parse(File(dir(vaultPath), FILE).readText()) }.getOrNull()
 
@@ -42,9 +59,15 @@ object SyncSettings {
     }
 
     /** 컴퓨터가 준 정책과 설정 파일 중 더 최근 것(같으면 정책) */
-    fun effective(policy: S, file: S?): S = if (file != null && file.updated > policy.updated) file else policy
+    fun effective(policy: S, file: S?): S {
+        // 외부 폴더는 폴더마다 따로 가린다(같은 시각이면 정책). 노트 폴더 방향·함께 보낼 것은 이전처럼 한 덩어리
+        val ext = HashMap(policy.ext)
+        file?.ext?.forEach { (id, d) -> if (d.updated > (ext[id]?.updated ?: -1L)) ext[id] = d }
+        val base = if (file != null && file.updated > policy.updated) file else policy
+        return base.copy(ext = ext)
+    }
 
-    /** 정책 JSON 에 설정을 덮어쓴 복사본(방향·함께 보낼 것·옛 형식 modules 까지) */
+    /** 정책 JSON 에 설정을 덮어쓴 복사본(방향·함께 보낼 것·외부 폴더 방향·옛 형식 modules 까지) */
     fun overlay(pol: JSONObject, s: S): JSONObject {
         val c = JSONObject(pol.toString())
         val sm = c.optJSONObject("simple") ?: return c
@@ -53,6 +76,7 @@ object SyncSettings {
         c.optJSONObject("modules")?.let { mods ->
             mods.optJSONObject("markdown")?.put("direction", s.direction)
             for (k in KEYS) mods.optJSONObject(k)?.put("direction", if (s.include[k] == true) s.direction else "off")
+            for ((id, mid) in extModules(c)) s.ext[id]?.let { mods.getJSONObject(mid).put("direction", it.direction).put("updated", it.updated) }
         }
         return c
     }
@@ -65,6 +89,15 @@ object SyncSettings {
         val next = cur.copy(direction = direction ?: cur.direction, include = inc, updated = now)
         if (next.direction == cur.direction && next.include == cur.include) return false
         write(vaultPath, next)
+        return true
+    }
+
+    /** 이 폰에서 외부 폴더 하나의 방향을 고친다(노트 폴더 설정과 그 시각은 그대로). 바뀐 것이 있으면 적고 true */
+    fun changeExt(vaultPath: String, policy: JSONObject, folderId: String, direction: String, now: Long = System.currentTimeMillis()): Boolean {
+        if (direction !in DIRECTIONS || folderId !in extModules(policy)) return false
+        val cur = effective(fromPolicy(policy) ?: return false, read(vaultPath))
+        if (cur.ext[folderId]?.direction == direction) return false
+        write(vaultPath, cur.copy(ext = cur.ext + (folderId to ExtDir(direction, now))))
         return true
     }
 }

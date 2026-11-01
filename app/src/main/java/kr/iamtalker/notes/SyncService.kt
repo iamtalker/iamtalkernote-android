@@ -48,6 +48,8 @@ class SyncService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private val busyExt = HashSet<String>()   // 받을 것이 남아 있던 외부 폴더(끝났을 때 알리려고 기억)
+    @Volatile private var foreground = false   // 지금 상시 알림(포그라운드)으로 떠 있는가
+    private var doneTicks = 0                  // 연달아 '다 받음'으로 확인된 횟수
 
     /** 외부 폴더(음악·PDF 등)가 다 받아지면 한 번 알린다. 파일 관리 앱에서는 받는 중인 파일도 크기가 다 차 보여 끝난 줄 착각하기 쉬워서, 앱이 끝났다고 직접 알려 준다 */
     private fun notifyExtDone(r: ForkSync.Report?) {
@@ -73,6 +75,8 @@ class SyncService : Service() {
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, tr("동기화"), NotificationManager.IMPORTANCE_LOW))
         val n = notice(tr("컴퓨터와 노트를 맞추는 중입니다"), 0, 0)
         ServiceCompat.startForeground(this, 1, n, if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
+        foreground = true
+        doneTicks = 0
         if (job?.isActive != true) job = scope.launch { loop() }
         return START_STICKY
     }
@@ -159,7 +163,21 @@ class SyncService : Service() {
                 } else { have = 0; all = 0; eta = -1L }
                 hold(r?.connected == true && all > 0 && have < all)
                 val txt = SyncNotice.text(r?.connected == true, r?.error, have, all, eta)
-                if (txt != lastText) {
+                // 다 받았으면(몇 번 연달아 확인한 뒤) 알림을 내리고, 받을 것이 다시 생기면 올린다
+                val complete = SyncNotice.complete(r, have, all)
+                doneTicks = if (complete) doneTicks + 1 else 0
+                if (foreground && doneTicks >= DONE_TICKS) {
+                    foreground = false
+                    ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                    EmbeddedSync.note(ctx, "동기화가 끝나 알림을 내렸습니다")
+                } else if (!foreground && !complete && doneTicks == 0) {
+                    // 백그라운드에서 다시 앞으로 올리는 것은 시스템이 막을 수 있다: 막히면 알림 없이 계속 받는다(앱을 열면 다시 올라온다)
+                    foreground = runCatching {
+                        ServiceCompat.startForeground(this, 1, notice(txt, have, all), if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
+                    }.isSuccess
+                    lastText = txt
+                }
+                if (foreground && txt != lastText) {
                     lastText = txt
                     runCatching { getSystemService(NotificationManager::class.java).notify(1, notice(txt, have, all)) }
                 }
@@ -187,6 +205,7 @@ class SyncService : Service() {
     companion object {
         private const val CHANNEL = "sync"
         private const val CHANNEL_DONE = "done"
+        private const val DONE_TICKS = 3   // 5초 간격으로 3번(약 15초) 연달아 다 받음이면 알림을 내린다
         fun start(ctx: Context) {
             EmbeddedSync.setWanted(ctx, true)
             val i = Intent(ctx, SyncService::class.java)
@@ -204,6 +223,10 @@ const val OPEN_SYNC = "openSync"
 
 /** 작업표시줄 알림에 보일 글: 동기화 상태 N/M (P%) · 남은 시간 */
 object SyncNotice {
+    /** 알림을 내려도 되는 '다 받음': 컴퓨터와 연결돼 있고 오류가 없고, 노트 전체를 다 받았고, 모든 폴더(외부 폴더 포함)에 받을 파일이 없다 */
+    fun complete(r: ForkSync.Report?, have: Int, all: Int): Boolean =
+        r != null && r.connected && r.error == null && all > 0 && have >= all && r.folders.all { it.needFiles == 0L && it.state in setOf("idle", "paused") }
+
     fun text(connected: Boolean, error: String?, have: Int, all: Int, etaSec: Long): String {
         if (error != null) return "⚠ $error"
         val head = when {

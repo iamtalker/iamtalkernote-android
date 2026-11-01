@@ -134,7 +134,7 @@ private fun readPolicy(ctx: android.content.Context, tree: android.net.Uri): Lis
     val file = History.list(ctx, tree, dir.id).firstOrNull { !it.isDir && it.name == "policy.json" } ?: return null
     val mods = JSONObject(NoteRepo.read(ctx, History.docUri(tree, file.id))).optJSONObject("modules") ?: return null
     val names = mapOf("both" to tr("양방향"), "pc2mobile" to tr("PC → 모바일"), "mobile2pc" to tr("모바일 → PC"), "off" to tr("동기화 안 함"))
-    return mods.keys().asSequence().map { k -> mods.getJSONObject(k).let { it.optString("label", k) to (names[it.optString("direction")] ?: "?") } }.toList()
+    return mods.keys().asSequence().filter { mods.getJSONObject(it).optString("kind") != "external" }.map { k -> mods.getJSONObject(k).let { it.optString("label", k) to (names[it.optString("direction")] ?: "?") } }.toList()
 }
 
 @Composable
@@ -209,10 +209,6 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     TextRow(tr("지금 새로고침"), onClick = { model.refresh(); onBack() })
                     TextRow(tr("노트 폴더 다시 고르기"), onClick = onPick)
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    TextRow(tr("외부 폴더 저장 위치"), model.extRoot?.substringAfterLast('/') ?: tr("자동"), onClick = onPickExt)
-                    Text(trf("컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)가 이 폴더 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더(컴퓨터 → 폰 받기 전용)는 위치를 바꾸면 새 위치로 다시 받습니다. 예전 위치의 파일은 지우지 않습니다.", model.extRoot ?: tr("자동(공유 저장소의 iamtalkernote-files)")), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    if (model.extRoot != null) TextRow(tr("자동으로 되돌리기"), onClick = { model.changeExtRoot(null) })
                     model.oldFolderPath()?.let { p ->
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         TextRow(if (model.importing) tr("예전 폴더에서 가져오는 중…") else tr("예전 폴더에서 노트 가져오기"), onClick = { if (!model.importing) model.importFromOld() })
@@ -261,6 +257,10 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     SyncWizard(model)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SyncControls(model)
+                    TextRow(tr("외부 폴더 저장 위치"), model.extRoot?.substringAfterLast('/') ?: tr("자동"), onClick = onPickExt)
+                    Text(trf("컴퓨터에서 따로 공유한 외부 폴더(음악·PDF 등)가 이 폴더 안에 이름별로 만들어집니다. SD카드의 폴더도 고를 수 있습니다. 지금: %s. 이미 받기 시작한 외부 폴더(컴퓨터 → 폰 받기 전용)는 위치를 바꾸면 새 위치로 다시 받습니다. 예전 위치의 파일은 지우지 않습니다.", model.extRoot ?: tr("자동(공유 저장소의 iamtalkernote-files)")), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    if (model.extRoot != null) TextRow(tr("자동으로 되돌리기"), onClick = { model.changeExtRoot(null) })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     var policy by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
                     var loaded by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
@@ -339,14 +339,16 @@ private fun SyncControls(model: NotesModel) {
     val e = eff
     if (p == null || e == null) return   // 컴퓨터의 새 방식 정책(.sync/policy.json)이 아직 없다
     val scope = rememberCoroutineScope()
-    fun change(direction: String? = null, key: String? = null, on: Boolean? = null) {
+    fun change(direction: String? = null, key: String? = null, on: Boolean? = null, extId: String? = null) {
         scope.launch {
             withContext(Dispatchers.IO) {
-                if (SyncSettings.change(vault, p, direction, key, on)) EmbeddedSync.api(ctx).scanSettingsFolder()   // 컴퓨터에 바로 가게 설정 폴더를 즉시 검사
+                val wrote = if (extId != null && direction != null) SyncSettings.changeExt(vault, p, extId, direction) else SyncSettings.change(vault, p, direction, key, on)
+                if (wrote) EmbeddedSync.api(ctx).scanSettingsFolder()   // 컴퓨터에 바로 가게 설정 폴더를 즉시 검사
             }
             again++
         }
     }
+    var extPick by remember { mutableStateOf<String?>(null) }   // 방향을 고르는 중인 외부 폴더(Syncthing 폴더 ID)
     Text(tr("동기화 방향"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
     for ((d, label) in listOf("both" to tr("양방향"), "pc2mobile" to tr("컴퓨터 → 폰 (받기만)"), "mobile2pc" to tr("폰 → 컴퓨터 (보내기만)"), "off" to tr("동기화 안 함")))
         ChoiceRow(label, e.direction == d) { change(direction = d) }
@@ -354,6 +356,22 @@ private fun SyncControls(model: NotesModel) {
     for ((k, label, hint) in listOf(Triple("media", tr("미디어(그림·첨부)"), tr("끄면 그림은 폰으로 오지 않습니다")), Triple("imported", tr("가져온 문서 요약"), tr("폰 앱이 읽는 가져온 문서 파일")),
         Triple("history", tr("변경 이력 (고급)"), tr("파일이 아주 많습니다")), Triple("trash", tr("휴지통 (고급)"), tr("지운 노트 보관본"))))
         SwitchRow(label, hint, e.include[k] == true) { change(key = k, on = it) }
+    val exts = SyncSettings.extModules(p)
+    if (exts.isNotEmpty()) {
+        val dirLabels = listOf("both" to tr("양방향"), "pc2mobile" to tr("컴퓨터 → 폰 (받기만)"), "mobile2pc" to tr("폰 → 컴퓨터 (보내기만)"), "off" to tr("동기화 안 함"))
+        Text(tr("외부 폴더 (음악·PDF 등)"), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+        for ((id, mid) in exts) {
+            val name = p.getJSONObject("modules").getJSONObject(mid).optString("label", mid).substringAfter("외부 폴더 · ").trim()
+            TextRow(name, dirLabels.firstOrNull { it.first == (e.ext[id]?.direction ?: "off") }?.second ?: "?", onClick = { extPick = id })
+        }
+        extPick?.let { id ->
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { extPick = null }, title = { Text(p.getJSONObject("modules").getJSONObject(exts.getValue(id)).optString("label", "").substringAfter("외부 폴더 · ").trim()) },
+                text = { Column { for ((d, label) in dirLabels) ChoiceRow(label, e.ext[id]?.direction == d) { change(direction = d, extId = id); extPick = null } } },
+                confirmButton = {}, dismissButton = { TextButton(onClick = { extPick = null }) { Text(tr("취소")) } }
+            )
+        }
+    }
     Text(tr("여기서 바꾸면 몇 초 안에 적용되고, 컴퓨터(0.6.3 이상)에도 반영됩니다. 양쪽에서 바꾸면 가장 최근에 바꾼 쪽이 이깁니다."),
         fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
