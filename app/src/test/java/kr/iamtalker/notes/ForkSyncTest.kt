@@ -34,6 +34,10 @@ class ForkSyncTest {
         assertEquals("$v/.trash", ForkSync.localPath(v, "inn-abcd1234-tra-6aa46034", "휴지통"))
         assertEquals("$v/업무/회의", ForkSync.localPath(v, "inn-abcd1234-not-ad67a841", "노트북 · 업무/회의"))
         assertEquals("$v-files/자료", ForkSync.localPath(v, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · 자료"))
+        // 노트 폴더가 앱 안이면 외부 폴더는 다른 앱이 볼 수 있게 공유 저장소에 둔다
+        val app = "/data/user/0/kr.iamtalker.notes/files/iamtalkernote"
+        assertEquals("/storage/emulated/0/iamtalkernote-files/Music", ForkSync.localPath(app, "inn-abcd1234-ext-b39f0a7c", "외부 폴더 · Music"))
+        assertEquals("$app/.resources", ForkSync.localPath(app, "inn-abcd1234-med-bb362a46", "미디어"))
     }
 
     @Test fun directionsBecomePhoneFolderTypes() {

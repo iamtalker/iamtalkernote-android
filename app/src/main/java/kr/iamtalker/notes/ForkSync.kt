@@ -52,6 +52,8 @@ object ForkSync {
     /** 컴퓨터가 알려 준 폴더 이름표와 ID 로 폰의 저장 경로를 정한다. 외부 폴더는 노트 폴더 옆 '<노트폴더>-files/<이름>' */
     fun localPath(vaultPath: String, folderId: String, label: String): String {
         fun sub(rel: String) = if (rel.isEmpty()) vaultPath else "$vaultPath/$rel"
+        // 노트 폴더가 앱 안(/data/…)이면 그 옆(-files)도 앱 안이라 다른 앱(음악 앱·파일 관리 앱)이 못 본다 → 외부 폴더는 공유 저장소에 둔다
+        val files = if (vaultPath.startsWith("/data/")) "/storage/emulated/0/iamtalkernote-files" else "$vaultPath-files"
         return when (kindOf(folderId)) {
             "mar" -> sub("")
             "med" -> sub(".resources")
@@ -60,8 +62,8 @@ object ForkSync {
             "tra" -> sub(".trash")
             "not" -> sub(label.substringAfter("노트북 · ", "").trim().ifEmpty { "notebook" })
             "cfg" -> vaultPath.trimEnd('/') + "-settings"
-            "ext" -> "$vaultPath-files/" + label.substringAfter("외부 폴더 · ", "").trim().ifEmpty { "external" }
-            else -> "$vaultPath-files/" + label.ifEmpty { folderId }
+            "ext" -> "$files/" + label.substringAfter("외부 폴더 · ", "").trim().ifEmpty { "external" }
+            else -> "$files/" + label.ifEmpty { folderId }
         }
     }
 
@@ -386,7 +388,7 @@ object ForkSync {
         runCatching {
             for (f in api.folders()) {
                 val id = f.getString("id")
-                if (!id.startsWith(ID_PREFIX) || kindOf(id) != "mar" || id in tuned) continue
+                if (!id.startsWith(ID_PREFIX) || kindOf(id) !in setOf("mar", "ext") || id in tuned) continue
                 tuned.add(id)
                 // 파일 하나를 처리하는 데 몇 초씩 걸리는데 동시에 2개(기본)만 처리해 분당 10개 안팎이었다 → 동시 처리(copiers)와 요청 중인 양을 키운다
                 // 받는 순서: 최근 수정 순. 노트(.md)는 전부 가장 최근 시각이고 그림은 대부분 오래돼서, 노트가 그림보다 먼저 온다(임의 순서에서는 노트가 분당 33개로 그림의 1/20 이었음)
