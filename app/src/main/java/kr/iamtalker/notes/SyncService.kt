@@ -82,8 +82,10 @@ class SyncService : Service() {
                 if (!EmbeddedSync.alive()) EmbeddedSync.start(ctx)
                 val tree = prefs.getString("tree", null)?.let(Uri::parse)
                 val pc = prefs.getString("pcId", "").orEmpty()
+                val tickT = System.nanoTime()
                 EmbeddedSync.report = if (tree == null) ForkSync.Report(error = tr("노트 폴더를 먼저 고르세요"))
                 else ForkSync.tick(ctx, api, pc, tree)   // 단계별 가림은 이제 컴퓨터가 맡는다(폰의 긴 무시 목록이 느렸다)
+                SyncDiag.sample(ctx, api, pc, (System.nanoTime() - tickT) / 1_000_000)
                 fails = 0
                 // 2분에 한 번: 폰에 실제로 있는 글·그림 수를 세어 컴퓨터에 알린다(컴퓨터 화면의 진행 표시용)
                 if (tree != null && System.currentTimeMillis() - lastProgress > 120_000) {
