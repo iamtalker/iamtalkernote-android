@@ -45,11 +45,17 @@ object Stages {
 
 /** 전체 진행: 컴퓨터의 단계 목록(.sync/stages.json)에 있는 모든 글(.md)과 그림 중 폰에 실제로 있는 수 */
 data class Overall(val notesHave: Int, val notesAll: Int, val mediaHave: Int, val mediaAll: Int) {
-    val have get() = notesHave + mediaHave
+    /** 컴퓨터 목록에 있는 것 중 폰에 있는 수. 폰에서만 만든 노트·그림은 컴퓨터 목록에 없어 세지 않는다(세면 100% 를 넘는다) */
+    val notesGot get() = minOf(notesHave, notesAll)
+    val mediaGot get() = minOf(mediaHave, mediaAll)
+    val have get() = notesGot + mediaGot
     val all get() = notesAll + mediaAll
+    /** 폰에만 있는 파일 수(컴퓨터에는 없음) */
+    val onlyHere get() = (notesHave - notesAll).coerceAtLeast(0) + (mediaHave - mediaAll).coerceAtLeast(0)
     private fun pct(a: Int, b: Int) = if (b > 0) a * 100 / b else 100
     fun text(): String = tr("전체 %,d / %,d개 (%d%%)\n글 %,d / %,d개 (%d%%) · 그림 %,d / %,d개 (%d%%)").format(
-        have, all, pct(have, all), notesHave, notesAll, pct(notesHave, notesAll), mediaHave, mediaAll, pct(mediaHave, mediaAll))
+        have, all, pct(have, all), notesGot, notesAll, pct(notesGot, notesAll), mediaGot, mediaAll, pct(mediaGot, mediaAll)) +
+        (if (onlyHere > 0) "\n" + trf("폰에만 있는 파일 %s개(컴퓨터에는 없음)", onlyHere) else "")
 
     companion object {
         /** 컴퓨터가 설정 폴더에 적어 준 글·그림 총수(없으면 단계 목록에서 센다) */

@@ -98,6 +98,7 @@ object Updater {
         step = 1
         progress = 0f
         status = trf("새 버전 %s 받는 중 0%%", info.version)
+        var installed = false
         try {
             val file = withContext(Dispatchers.IO) { download(ctx, info) }
             progress = -1f
@@ -105,13 +106,16 @@ object Updater {
             status = tr("내려받기 완료 · 설치를 준비하는 중…")
             notify(ctx, tr("설치를 준비하는 중…"), -1)
             withContext(Dispatchers.IO) { install(ctx, file) }
+            installed = true
+            // 설치 확인 화면에서 '설치'를 누르면 이 앱이 교체되어 꺼진다: 그동안 되는 건지 불안하지 않게 알림을 남겨 둔다(새 버전이 켜지면 notifyDone 이 같은 알림을 '업데이트 완료'로 바꾼다)
+            notify(ctx, tr("설치 확인 화면에서 ‘설치/업데이트’를 누르세요 — 누르면 앱이 잠깐 꺼졌다가 다시 켜집니다"), -1)
         } catch (e: Exception) {
             step = 0
             status = trf("업데이트하지 못했습니다: %s", e.message)
         } finally {
             busy = false
             progress = -1f
-            cancelNotice(ctx)
+            if (!installed) cancelNotice(ctx)
         }
     }
 
@@ -184,6 +188,28 @@ object Updater {
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         val id = pi.createSession(params)
+        // 사용자가 시스템의 '설치'를 누른 뒤 앱이 교체되어 꺼지기까지는 아무 표시가 없어 되는 건지 불안했다: 설치가 실제로 시작되면 '설치 중' 단계로 넘기고,
+        // 앱이 교체되는 동안에도 남도록 작업표시줄에 '설치하는 중…'(도는 막대)을 올려 둔다(새 버전이 켜지면 notifyDone 이 같은 알림을 '업데이트 완료'로 바꾼다)
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        val cb = object : PackageInstaller.SessionCallback() {
+            private fun installing() {
+                if (step in 2..3) {
+                    step = 4
+                    status = tr("설치하는 중… 앱이 곧 꺼졌다가 새 버전으로 다시 켜집니다(약 10~30초). 꺼져도 정상입니다")
+                    notify(ctx, tr("설치하는 중… 앱이 곧 다시 켜집니다"), -1)
+                }
+            }
+            override fun onCreated(sessionId: Int) {}
+            override fun onBadgingChanged(sessionId: Int) {}
+            override fun onActiveChanged(sessionId: Int, active: Boolean) { if (sessionId == id && active) installing() }
+            override fun onProgressChanged(sessionId: Int, progress: Float) { if (sessionId == id && progress > 0.95f) installing() }
+            override fun onFinished(sessionId: Int, success: Boolean) {
+                if (sessionId != id) return
+                runCatching { pi.unregisterSessionCallback(this) }
+                if (!success) { step = 0; status = tr("설치하지 못했거나 취소했습니다"); cancelNotice(ctx) }
+            }
+        }
+        pi.registerSessionCallback(cb, main)
         pi.openSession(id).use { s ->
             apk.inputStream().use { i -> s.openWrite("app.apk", 0, apk.length()).use { o -> i.copyTo(o); s.fsync(o) } }
             val intent = Intent(ctx, UpdateReceiver::class.java).setAction(RESULT_ACTION).setPackage(ctx.packageName)

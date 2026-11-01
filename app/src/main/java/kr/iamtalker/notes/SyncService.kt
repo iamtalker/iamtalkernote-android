@@ -47,6 +47,27 @@ class SyncService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private val busyExt = HashSet<String>()   // 받을 것이 남아 있던 외부 폴더(끝났을 때 알리려고 기억)
+
+    /** 외부 폴더(음악·PDF 등)가 다 받아지면 한 번 알린다. 파일 관리 앱에서는 받는 중인 파일도 크기가 다 차 보여 끝난 줄 착각하기 쉬워서, 앱이 끝났다고 직접 알려 준다 */
+    private fun notifyExtDone(r: ForkSync.Report?) {
+        r ?: return
+        for (f in r.folders) {
+            if (!f.label.startsWith("외부 폴더")) continue
+            if (f.needFiles > 0L) { busyExt.add(f.label); continue }
+            if (f.state == "idle" && f.totalFiles > 0L && f.failed == 0 && busyExt.remove(f.label)) {
+                val nm = getSystemService(NotificationManager::class.java)
+                if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL_DONE, tr("받기 끝남"), NotificationManager.IMPORTANCE_DEFAULT))
+                val name = f.label.removePrefix("외부 폴더 · ")
+                val text = trf("%s: 파일 %s개를 모두 받았습니다", name, f.totalFiles) + (if (f.path.isNotEmpty()) "\n" + trf("받은 위치: %s", f.path) else "")
+                val b = Notification.Builder(this, CHANNEL_DONE).setSmallIcon(R.mipmap.ic_launcher).setContentTitle(tr("받기 끝남"))
+                    .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text)).setAutoCancel(true)
+                runCatching { nm.notify(2000 + (f.label.hashCode() and 0xFFF), b.build()) }
+                EmbeddedSync.note(this, "외부 폴더 받기 끝남: " + text.replace("\n", " · "))
+            }
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, tr("동기화"), NotificationManager.IMPORTANCE_LOW))
@@ -91,6 +112,7 @@ class SyncService : Service() {
                 }
                 val tree = prefs.getString("tree", null)?.let(Uri::parse)
                 val pc = prefs.getString("pcId", "").orEmpty()
+                runCatching { notifyExtDone(EmbeddedSync.report) }
                 runCatching {
                     ForkSync.cleanOldExt(ctx, api)?.let { msg ->
                         EmbeddedSync.note(ctx, msg)
@@ -164,6 +186,7 @@ class SyncService : Service() {
 
     companion object {
         private const val CHANNEL = "sync"
+        private const val CHANNEL_DONE = "done"
         fun start(ctx: Context) {
             EmbeddedSync.setWanted(ctx, true)
             val i = Intent(ctx, SyncService::class.java)
