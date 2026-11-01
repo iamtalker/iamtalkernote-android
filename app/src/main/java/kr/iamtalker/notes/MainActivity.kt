@@ -631,8 +631,8 @@ fun App(model: NotesModel) {
             }
         }
         if (moreOpen) MoreMenu(
-            onDismiss = { moreOpen = false }, dividerBefore = 3,
-            items = listOf(tr("새 노트북") to { notebookDialog = true }, tr("노트 필터") to { listDialog = "filter" },
+            onDismiss = { moreOpen = false }, dividerBefore = 4,
+            items = listOf(tr("새로고침") to { model.refresh() }, tr("새 노트북") to { notebookDialog = true }, tr("노트 필터") to { listDialog = "filter" },
                 tr("노트 선택") to { selectMode = true }, tr("설정") to { screen = "settings" })
         )
         }
