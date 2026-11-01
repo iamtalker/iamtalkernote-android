@@ -399,6 +399,7 @@ object ForkSync {
             // 받기 전용(컴퓨터 → 폰)이거나 아직 받은 파일이 없을 때만 한다: 폰에서 파일이 사라져도 컴퓨터로 삭제가 가지 않는다. 예전 위치의 파일은 지우지 않는다
             val extRoot = ctx.getSharedPreferences("settings", 0).getString("extRoot", null)
             val singleExt = policy?.let { SyncSettings.extModules(it).size == 1 } == true
+            val extOff = policy?.let { pol -> SyncSettings.extModules(pol).filter { (_, mid) -> pol.getJSONObject("modules").getJSONObject(mid).optString("direction") == "off" }.keys } ?: emptySet()
             var moved = 0
             for (f in api.folders()) {
                 val id = f.getString("id")
@@ -413,6 +414,7 @@ object ForkSync {
             }
             for ((fid, v) in api.pendingFolders()) {
                 if (!fid.startsWith(ID_PREFIX)) continue
+                if (fid in extOff) continue   // '동기화 안 함' 인 외부 폴더는 컴퓨터가 아직 공유 중이어도 받지 않는다
                 if (simpleVault.isNotEmpty() && fid in staleFolders(listOf(fid), simpleVault)) continue
                 val from = v.second.filter { it in known }
                 if (from.isEmpty()) continue
@@ -432,6 +434,11 @@ object ForkSync {
                 val have = api.folders().associateBy { it.getString("id") }
                 for (mid in mods.keys()) {
                     val m = mods.getJSONObject(mid)
+                    // 외부 폴더를 '동기화 안 함' 으로 했으면 폰의 Syncthing 등록도 지운다(받은 파일은 그대로). 안 지우면 '대기 중' 으로 계속 남는다
+                    if (m.optString("kind") == "external" && m.optString("direction") == "off") {
+                        have[folderId(vault, "external", mid)]?.let { runCatching { api.removeFolder(it.getString("id")) } }
+                        continue
+                    }
                     val want = typeFor(m.optString("direction")) ?: continue
                     val f = have[folderId(vault, m.optString("kind"), mid)] ?: continue
                     if (f.optString("type") != want) api.setFolderType(f, want)

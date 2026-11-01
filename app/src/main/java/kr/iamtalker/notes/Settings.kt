@@ -329,6 +329,8 @@ private fun SyncControls(model: NotesModel) {
     var pol by remember { mutableStateOf<JSONObject?>(null) }
     var eff by remember { mutableStateOf<SyncSettings.S?>(null) }
     var again by remember { mutableStateOf(0) }
+    // 컴퓨터가 바꾼 방향(정책 파일)과 폰의 설정 파일을 몇 초마다 다시 읽어, 이 화면을 연 채로도 상대가 바꾼 값이 보이게 한다
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(3000); again++ } }
     LaunchedEffect(again) {
         val p = withContext(Dispatchers.IO) { runCatching { ForkSync.readPolicy(ctx, tree) }.getOrNull() }
         pol = p
