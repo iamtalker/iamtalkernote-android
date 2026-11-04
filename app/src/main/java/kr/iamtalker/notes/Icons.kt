@@ -352,3 +352,19 @@ fun TodoBox(done: Boolean, accent: Color, line: Color) {
             drawLine(Color.White, Offset(s * .44f, s * .66f), Offset(s * .72f, s * .36f), strokeWidth = w, cap = StrokeCap.Round)
         } else drawRoundRect(line, Offset(s * .12f, s * .12f), Size(s * .76f, s * .76f), CornerRadius(s * .18f), style = Stroke(w)) }
 }
+
+/** 목록 전체를 다시 읽는 버튼. */
+@Composable
+fun RefreshIcon(c: Color = Gray) {
+    Canvas(Modifier.size(24.dp)) {
+        val w = 2.dp.toPx()
+        drawArc(c, 45f, 290f, false, Offset(size.width * .18f, size.height * .18f),
+            Size(size.width * .64f, size.height * .64f), style = Stroke(w, cap = StrokeCap.Round))
+        val arrow = Path().apply {
+            moveTo(size.width * .58f, size.height * .12f)
+            lineTo(size.width * .84f, size.height * .20f)
+            lineTo(size.width * .78f, size.height * .45f)
+        }
+        drawPath(arrow, c, style = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}

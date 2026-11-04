@@ -19,6 +19,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 enum class Sort(val label: String) {
@@ -32,6 +34,8 @@ data class Saved(val name: String, val query: String)
 
 class NotesModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("settings", 0)
+    /** 빠르게 연속 공유해도 같은 경로의 노트북 생성이 겹치지 않게 한다. */
+    private val sharedSaveMutex = Mutex()
 
     var tree by mutableStateOf<Uri?>(prefs.getString("tree", null)?.let(Uri::parse))
         private set
@@ -685,13 +689,12 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
 
     /** 노트북 경로(a/b/c)를 없는 것만 만들어 가며 맞추고 마지막 폴더의 문서 id 를 돌려준다 */
     private fun ensureFolder(t: Uri, path: String): String {
-        var pid = rootDocId()
-        var cur = ""
-        for (seg in path.split('/').filter { it.isNotEmpty() }) {
-            cur = if (cur.isEmpty()) seg else "$cur/$seg"
-            pid = folderIds[cur] ?: NoteRepo.createFolder(getApplication(), t, pid, seg)
-        }
-        return pid
+        val ctx = getApplication<Application>()
+        return NoteRepo.ensureFolderPath(
+            rootDocId(), path,
+            find = { parentId, name -> NoteRepo.findFolder(ctx, t, parentId, name) },
+            create = { parentId, name -> NoteRepo.createFolder(ctx, t, parentId, name) }
+        )
     }
 
     /** 공유받은 글을 새 노트로 저장한다. 주소가 있으면 데스크톱 클리퍼처럼 머리말 source 에 적는다 */
@@ -702,8 +705,8 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         shared = null
         viewModelScope.launch {
             try {
-                val note = withContext(Dispatchers.IO) {
-                    val parent = if (folder.isEmpty()) null else folderIds[folder] ?: ensureFolder(t, folder)
+                val note = withContext(Dispatchers.IO) { sharedSaveMutex.withLock {
+                    val parent = if (folder.isEmpty()) null else ensureFolder(t, folder)
                     val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else folder, title) ?: throw IllegalStateException(tr("노트를 만들 수 없습니다"))
                     val url = Regex("https?://\\S+").find(text)?.value
                     val content = if (body != null) ClipImages.localize(getApplication(), t, body, if (parent == null) "" else folder, wifiOnly = clipWifiOnly) else text.trim()
@@ -711,7 +714,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     if (url != null && body != null) getApplication<Application>().getSharedPreferences("settings", 0).edit().putString("clip:$url", n.title).apply()
                     History.journal(getApplication(), t, "create", History.relOf(n), detail = "공유로 받음")
                     n
-                }
+                } }
                 android.widget.Toast.makeText(getApplication(), trf("저장했습니다: %s", note.title), android.widget.Toast.LENGTH_SHORT).show()
                 refresh()
             } catch (e: Exception) {
@@ -815,11 +818,17 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     NoteRepo.trashFolder(getApplication(), t, path, id, pid)
                     History.journal(getApplication(), t, "delete", path, detail = "노트북 휴지통")
                 }
+                // 지운 항목은 큰 볼트의 재검색이 끝날 때까지 목록에 남겨 두지 않는다.
+                job?.cancel()
+                NoteRepo.dirs = NoteRepo.dirs.filterKeys { it != path && !it.startsWith("$path/") }
+                val remaining = (notes + conflicts.map { it.conflict }).filter { it.folder != path && !it.folder.startsWith("$path/") }
                 if (folder == path || folder?.startsWith("$path/") == true) folder = null
+                publish(remaining)
                 message = trf("‘%s’ 노트북을 휴지통으로 보냈습니다", path.substringAfterLast('/'))
                 refresh()
             } catch (e: Exception) {
                 message = e.message ?: e.javaClass.simpleName
+                refresh() // 동기화·외부 삭제로 없어진 폴더의 낡은 목록도 다시 확인한다.
             }
         }
     }

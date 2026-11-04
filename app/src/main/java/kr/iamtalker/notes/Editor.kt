@@ -132,14 +132,14 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
     fun commitTitle() {
         var t = titleText.trim()
         var fromBody = false
-        if (t.isEmpty() && start.size == 0L && note.title.startsWith("제목 없음")) { t = NoteText.titleFromBody(tfv?.text ?: ""); fromBody = t.isNotEmpty() }   // 제목 없이 본문만 썼다 → 첫 줄이 제목
-        if (t.isEmpty() || t == note.title) return
+        if (t.isEmpty()) { t = NoteText.titleFromBody(tfv?.text ?: ""); fromBody = t.isNotEmpty() }   // 제목 없이 본문만 썼다 → 첫 줄이 제목
+        if (t.isEmpty() || (t == note.title && !fromBody)) return
         // 첫 줄이 제목이 됐으면 본문에서는 뺀다(제목과 본문 첫 줄이 똑같이 두 번 나오지 않게). 제목은 나중에 마음대로 바꿀 수 있다
-        if (fromBody) tfv?.let { v -> val nt = NoteText.dropTitleLine(v.text); if (nt != v.text) { tfv = TextFieldValue(nt); persist(nt) } }
         val old = note
         runCatching {
             note = model.renameNote(note, t)
             titleText = t
+            if (fromBody) tfv?.let { v -> val nt = NoteText.dropTitleLine(v.text); if (nt != v.text) { tfv = TextFieldValue(nt); persist(nt) } }
             // 이름을 바꾼 뒤 옛 이름의 파일이 남아 있으면 지운다(같은 노트가 두 개로 보이던 것을 막는다). 이미 없으면 아무 일도 없다
             if (note.uri != old.uri) runCatching { android.provider.DocumentsContract.deleteDocument(ctx.contentResolver, old.uri) }
         }.onFailure { error = it.message ?: it.javaClass.simpleName }

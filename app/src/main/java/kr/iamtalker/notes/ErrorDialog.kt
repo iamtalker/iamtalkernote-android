@@ -25,7 +25,6 @@ fun ErrorDialog(text: String, title: String? = null, onClose: () -> Unit) {
         dismissButton = {
             TextButton(onClick = {
                 (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(tr("오류"), text))
-                android.widget.Toast.makeText(ctx, tr("복사했습니다"), android.widget.Toast.LENGTH_SHORT).show()
             }) { Text(tr("복사")) }
         }
     )

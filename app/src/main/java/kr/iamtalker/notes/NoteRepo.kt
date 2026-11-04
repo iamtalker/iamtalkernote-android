@@ -127,6 +127,38 @@ object NoteRepo {
         return m
     }
 
+    /** 부모 폴더의 실제 하위 디렉터리 중 이름이 같은 폴더가 있으면 문서 id 를 돌려준다. */
+    fun findFolder(ctx: Context, tree: Uri, parentId: String, name: String): String? {
+        val found = ArrayList<String>()
+        ctx.contentResolver.query(
+            DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId),
+            arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE),
+            null, null, null
+        )?.use { c ->
+            while (c.moveToNext()) {
+                if (c.getString(1) == name && c.getString(2) == Document.MIME_TYPE_DIR) {
+                    found.add(c.getString(0))
+                }
+            }
+        }
+        // 이미 중복 폴더가 있으면 문서 id 정렬로 매번 같은 폴더를 선택한다.
+        return found.minOrNull()
+    }
+
+    /** 저장 경로의 각 폴더를 찾아서 재사용하고, 실제로 없는 항목만 만든다. */
+    internal fun ensureFolderPath(
+        rootId: String,
+        path: String,
+        find: (parentId: String, name: String) -> String?,
+        create: (parentId: String, name: String) -> String
+    ): String {
+        var parentId = rootId
+        for (segment in path.split('/').filter { it.isNotEmpty() }) {
+            parentId = find(parentId, segment) ?: create(parentId, segment)
+        }
+        return parentId
+    }
+
     /** 노트가 있는 폴더(folder) 기준의 상대 경로 → 파일 uri (없으면 null) */
     fun resolve(ctx: Context, tree: Uri, folder: String, rel: String): Uri? {
         val segs = ArrayList(folder.split('/').filter { it.isNotEmpty() })
@@ -160,6 +192,7 @@ object NoteRepo {
     // ---- 노트 하나에 하는 일: 이름 바꾸기·이동·휴지통(데스크톱과 같은 .trash 형식)
     fun rename(ctx: Context, note: Note, title: String): Note {
         val name = safeName(title) + ".md"
+        if (name == note.name) return note
         val uri = DocumentsContract.renameDocument(ctx.contentResolver, note.uri, name) ?: throw IllegalStateException(tr("이름을 바꾸지 못했습니다"))
         return note.copy(uri = uri, name = name)
     }
@@ -202,18 +235,23 @@ object NoteRepo {
         val tidId = DocumentsContract.createDocument(r, docUri(trashId), Document.MIME_TYPE_DIR, tid)?.let { DocumentsContract.getDocumentId(it) }
             ?: throw IllegalStateException(tr("휴지통 항목을 만들 수 없습니다"))
         try {
-            val meta = DocumentsContract.createDocument(r, docUri(tidId), "application/json", "meta.json")
-                ?: throw IllegalStateException(tr("휴지통 정보를 만들 수 없습니다"))
-            write(ctx, meta, "{\"rel\": " + org.json.JSONObject.quote(path) + ", \"deleted\": " + (System.currentTimeMillis() / 1000.0) + ", \"dir\": true}")
-            val moved = DocumentsContract.moveDocument(r, docUri(folderId), docUri(parentId), docUri(tidId))
-                ?: throw IllegalStateException(tr("이 폴더에서는 노트북을 옮길 수 없습니다"))
-            if (DocumentsContract.renameDocument(r, moved, "item") == null) {
-                runCatching { DocumentsContract.moveDocument(r, moved, docUri(tidId), docUri(parentId)) }
-                throw IllegalStateException(tr("휴지통 항목 이름을 정하지 못해 되돌렸습니다"))
-            }
-        } catch (e: Exception) {
-            runCatching { DocumentsContract.deleteDocument(r, docUri(tidId)) }
-            throw e
+            TrashTransfer.run(
+                prepare = {
+                    val meta = DocumentsContract.createDocument(r, docUri(tidId), "application/json", "meta.json")
+                        ?: throw IllegalStateException(tr("휴지통 정보를 만들 수 없습니다"))
+                    write(ctx, meta, "{\"rel\": " + org.json.JSONObject.quote(path) + ", \"deleted\": " + (System.currentTimeMillis() / 1000.0) + ", \"dir\": true}")
+                },
+                move = {
+                    DocumentsContract.moveDocument(r, docUri(folderId), docUri(parentId), docUri(tidId))
+                        ?: throw IllegalStateException(tr("이 폴더에서는 노트북을 옮길 수 없습니다"))
+                },
+                rename = { moved ->
+                    if (DocumentsContract.renameDocument(r, moved, "item") == null)
+                        throw IllegalStateException(tr("휴지통 항목 이름을 정하지 못했습니다"))
+                },
+                rollback = { moved -> DocumentsContract.moveDocument(r, moved, docUri(tidId), docUri(parentId)) != null },
+                cleanup = { DocumentsContract.deleteDocument(r, docUri(tidId)); Unit }
+            )
         } finally {
             clearCache()
         }
@@ -231,20 +269,25 @@ object NoteRepo {
         val tidId = DocumentsContract.createDocument(r, docUri(trashId), Document.MIME_TYPE_DIR, tid)?.let { DocumentsContract.getDocumentId(it) }
             ?: throw IllegalStateException(tr("휴지통 항목을 만들 수 없습니다"))
         try {
-            val rel = if (note.folder.isEmpty()) note.name else note.folder + "/" + note.name
-            val meta = DocumentsContract.createDocument(r, docUri(tidId), "application/json", "meta.json")
-                ?: throw IllegalStateException(tr("휴지통 정보를 만들 수 없습니다"))
-            val json = "{\"rel\": " + org.json.JSONObject.quote(rel) + ", \"deleted\": " + (System.currentTimeMillis() / 1000.0) + ", \"dir\": false}"
-            write(ctx, meta, json)
-            val moved = DocumentsContract.moveDocument(r, note.uri, docUri(note.parentId), docUri(tidId))
-                ?: throw IllegalStateException(tr("이 폴더에서는 휴지통으로 옮길 수 없습니다"))
-            if (DocumentsContract.renameDocument(r, moved, "item") == null) {
-                runCatching { DocumentsContract.moveDocument(r, moved, docUri(tidId), docUri(note.parentId)) }   // 되돌리기
-                throw IllegalStateException(tr("휴지통 항목 이름을 정하지 못해 되돌렸습니다"))
-            }
-        } catch (e: Exception) {
-            runCatching { DocumentsContract.deleteDocument(r, docUri(tidId)) }   // 빈 휴지통 항목만 치운다(노트는 그대로)
-            throw e
+            TrashTransfer.run(
+                prepare = {
+                    val rel = if (note.folder.isEmpty()) note.name else note.folder + "/" + note.name
+                    val meta = DocumentsContract.createDocument(r, docUri(tidId), "application/json", "meta.json")
+                        ?: throw IllegalStateException(tr("휴지통 정보를 만들 수 없습니다"))
+                    val json = "{\"rel\": " + org.json.JSONObject.quote(rel) + ", \"deleted\": " + (System.currentTimeMillis() / 1000.0) + ", \"dir\": false}"
+                    write(ctx, meta, json)
+                },
+                move = {
+                    DocumentsContract.moveDocument(r, note.uri, docUri(note.parentId), docUri(tidId))
+                        ?: throw IllegalStateException(tr("이 폴더에서는 휴지통으로 옮길 수 없습니다"))
+                },
+                rename = { moved ->
+                    if (DocumentsContract.renameDocument(r, moved, "item") == null)
+                        throw IllegalStateException(tr("휴지통 항목 이름을 정하지 못했습니다"))
+                },
+                rollback = { moved -> DocumentsContract.moveDocument(r, moved, docUri(tidId), docUri(note.parentId)) != null },
+                cleanup = { DocumentsContract.deleteDocument(r, docUri(tidId)); Unit }
+            )
         } finally {
             clearCache()
         }

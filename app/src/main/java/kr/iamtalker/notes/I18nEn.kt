@@ -154,6 +154,7 @@ object I18nEn {
         "휴지통 정보를 만들 수 없습니다" to "Could not create the trash info",
         "이 폴더에서는 노트북을 옮길 수 없습니다" to "Notebooks cannot be moved in this folder",
         "휴지통 항목 이름을 정하지 못해 되돌렸습니다" to "Could not choose a name for the trash item, so it was reverted",
+        "휴지통 항목 이름을 정하지 못했습니다" to "Could not name the item in the trash",
         "이 폴더에서는 휴지통으로 옮길 수 없습니다" to "Cannot move to the trash in this folder",
         "관련도순" to "Relevance",
         "수정 최근 순" to "Modified (newest)",

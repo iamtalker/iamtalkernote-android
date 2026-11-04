@@ -223,7 +223,6 @@ fun EmbeddedWizard(model: NotesModel) {
             val clip = androidx.compose.ui.platform.LocalClipboardManager.current
             OutlinedButton(onClick = {
                 clip.setText(androidx.compose.ui.text.AnnotatedString(EmbeddedSync.logTail(ctx, 200)))
-                android.widget.Toast.makeText(ctx, tr("로그를 복사했습니다"), android.widget.Toast.LENGTH_SHORT).show()
             }, modifier = Modifier.padding(top = 6.dp)) { Text(tr("로그 복사 (최근 200줄)")) }
             androidx.compose.foundation.text.selection.SelectionContainer {
                 Text(logText.ifEmpty { tr("(로그가 아직 없습니다)") }, fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.outline,

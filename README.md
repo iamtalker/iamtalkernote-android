@@ -4,7 +4,19 @@
 
 > **짝이 되는 저장소 — 개발할 때는 둘 다 읽으세요.** 데스크톱 앱 [iamtalkernote](https://github.com/iamtalker/iamtalkernote)의 README 에 있는 "이어서 작업하기"와 로드맵을 함께 보세요. 두 앱은 같은 노트 폴더의 파일 형식(머리말, `태그:` 줄, `.history/`, `.trash/`, `.resources/`, `.imported/docs.jsonl`)을 공유하므로 한쪽을 바꾸면 다른 쪽도 확인해야 합니다.
 
-[iamtalkernote](https://github.com/iamtalker/iamtalkernote)(윈도 노트·문서 앱)의 안드로이드 짝입니다. 컴퓨터의 iamtalkernote 와 **같은 노트 폴더(마크다운 파일)** 를 폰에서 읽고 고치는 앱입니다. 현재 **1.3.4** 입니다. 개발 PC 의 에뮬레이터(안드로이드 14)와 사용자의 폰에서 확인하며 고칩니다.
+[iamtalkernote](https://github.com/iamtalker/iamtalkernote)(윈도 노트·문서 앱)의 안드로이드 짝입니다. 컴퓨터의 iamtalkernote 와 **같은 노트 폴더(마크다운 파일)** 를 폰에서 읽고 고치는 앱입니다. 현재 **1.4.47** 입니다. 개발 PC 의 에뮬레이터(안드로이드 14)와 사용자의 폰에서 확인하며 고칩니다.
+
+## 1.4.47 (2026-11-04)
+- 기존 미커밋 폴더 재사용 수정(`findFolder`·`ensureFolderPath`·공유 저장 Mutex)을 보존했습니다. 공유 저장은 색인 목록 대신 실제 폴더를 찾아 재사용합니다.
+- 목록 하단 검색·정렬 옆에 **전체 새로고침 아이콘**을 꺼냈습니다. 더보기 메뉴의 중복 새로고침은 제거했습니다.
+- **기존 노트도 제목칸을 비우면 본문 첫 줄을 제목으로** 사용합니다. 이름 변경 성공 후 첫 줄을 본문에서 제거합니다(실패할 때 본문을 먼저 잘라 내지 않음). 같은 이름으로의 변경은 아무 작업도 하지 않습니다.
+- 오류 창·엔진 로그의 **복사 후 토스트**를 제거했습니다(복사 기능은 유지).
+- 노트북을 휴지통으로 보낸 뒤 목록에서 바로 제외하고 다시 스캔합니다. 삭제 실패 때도 재검색해 동기화·외부 삭제 후의 낡은 목록을 정리합니다.
+- **휴지통 이동 실패 시 보존**: 이동 후 이름 변경이 실패하면 원래 위치로 되돌립니다. 되돌리기까지 실패하면 이동된 내용이 든 휴지통 컨테이너를 삭제하지 않습니다(`TrashTransfer`, 실패 주입 단위 시험).
+- **에뮬레이터**: `pixel34`(Android 14, `emulator-5554`) 부팅. 실제 저장소 제공자와 임시 볼트를 쓰는 `RepoInstrumentation`으로 기존 폴더 재사용·중첩 노트북 휴지통·스캔에서 제거·노트 휴지통/복원을 확인했습니다. 사용자 실제 데이터는 시험하지 않았습니다. 폴더 잔여 증상은 정상 삭제 경로에서 재현되지 않았습니다.
+- 최종 확인: 단위 시험 **113개(실패 0)**, 앱·시험 APK 빌드 통과. 수정 APK를 에뮬레이터에 다시 설치한 뒤 저장소 회귀 시험도 재통과했습니다.
+- 시험: 영문 경로 사본에서 `gradlew.bat --offline testDebugUnitTest assembleDebug assembleDebugAndroidTest`. 에뮬레이터에 앱·시험 APK 설치 후 `adb -s emulator-5554 shell am instrument -w kr.iamtalker.notes.test/kr.iamtalker.notes.RepoInstrumentation`.
+- PC 최신 릴리스는 **v0.6.51**(자동 태그·색인 3일 보관은 0.6.50, 태그 이름순은 0.6.51). 폰 v1.4.47 릴리스에 위 수정을 포함합니다. 실제 폰의 재현 조건 및 화면 확인은 남아 있습니다.
 
 ## 설치
 [Releases](https://github.com/iamtalker/iamtalkernote-android/releases) 의 `iamtalkernote-android.apk` 를 폰에 받아 설치합니다(출처를 알 수 없는 앱 설치 허용 필요). 디버그 서명이라 스토어 업데이트는 없고, 새 버전은 같은 방법으로 덮어 설치합니다.
