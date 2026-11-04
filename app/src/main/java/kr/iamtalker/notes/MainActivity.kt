@@ -232,7 +232,7 @@ fun NoteRow(n: Note, pinned: Boolean, chosen: Boolean, fmt: SimpleDateFormat, on
             if (n.snip.isNotEmpty()) Text(n.snip, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f), modifier = Modifier.padding(top = 6.dp))
             Text(
-                (if (n.created > 0) fmt.format(Date(n.created)) else tr("생성일 정보 없음")) + (if (n.folder.isEmpty()) "" else "  ·  " + n.folder.substringAfterLast('/')) +
+                (if (n.created > 0) "" else tr("기준일: ")) + fmt.format(Date(n.creationDate)) + (if (n.folder.isEmpty()) "" else "  ·  " + n.folder.substringAfterLast('/')) +
                     (if (n.tags.isEmpty()) "" else "  " + n.tags.take(3).joinToString(" ") { "#$it" }),
                 fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)
             )

@@ -31,6 +31,26 @@ object NoteText {
         return text.substring(0, at) + formatLike(nowMs, v.value) + text.substring(fm.range.first + v.range.last + 1)
     }
 
+    /** 기존 본문·머리말은 보존하고 없는 날짜만 UTC로 기록한다. */
+    fun ensureDates(text: String, createdMs: Long, updatedMs: Long): String {
+        var result = text
+        val info = Meta.parse(text)
+        for ((key, value, existing) in listOf(Triple("created", createdMs, info.created), Triple("updated", updatedMs, info.updated))) {
+            if (existing > 0) continue
+            val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneId.of("UTC")).format(Instant.ofEpochMilli(value))
+            val match = front.find(result)
+            if (match == null) result = "---\n$key: $stamp\n---\n\n$result"
+            else {
+                val fm = match.groups[1]!!
+                val pattern = Regex("(?m)^$key:[^\\r\\n]*")
+                val replacement = if (pattern.containsMatchIn(fm.value)) pattern.replace(fm.value, "$key: $stamp")
+                    else fm.value.trimEnd('\r', '\n') + "\n$key: $stamp"
+                result = result.substring(0, fm.range.first) + replacement + result.substring(fm.range.last + 1)
+            }
+        }
+        return result
+    }
+
     data class Edit(val text: String, val start: Int, val end: Int)
 
     /** 선택한 글을 pre/suf 로 감싼다. 이미 감싸져 있으면 푼다. 선택이 없으면 pre+suf 를 넣고 커서를 가운데에 둔다 */

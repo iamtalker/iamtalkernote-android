@@ -118,7 +118,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
         val old = saved
         val force = firstSave
         val n = note
-        NoteRepo.write(ctx, n.uri, NoteText.touchUpdated(t, System.currentTimeMillis()))
+        NoteRepo.write(ctx, n.uri, NoteText.touchUpdated(NoteText.ensureDates(t, n.creationDate, n.date), System.currentTimeMillis()))
         saved = t
         firstSave = false
         val tree = model.tree ?: return
@@ -185,7 +185,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
 
     /** 나가기: 저장하고, 새로 만든 뒤 제목도 본문도 쓰지 않았으면 그 빈 노트를 지운다(실수로 연필을 눌러도 '제목 없음' 이 쌓이지 않게) */
     fun leave() {
-        val empty = start.size == 0L && titleText.isBlank() && (tfv?.text ?: "").isBlank() && (saved).isBlank()
+        val empty = start.size == 0L && titleText.isBlank() && Meta.split(tfv?.text ?: "").second.isBlank() && Meta.split(saved).second.isBlank()
         if (empty) {
             runCatching { android.provider.DocumentsContract.deleteDocument(ctx.contentResolver, note.uri) }.onFailure { android.util.Log.w("iat", "빈 노트 지우기 실패", it) }
             model.forget(note)                  // 목록에서도 바로 뺀다(남아 있으면 눌렀을 때 없는 파일을 열게 된다)

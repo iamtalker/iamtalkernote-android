@@ -34,6 +34,7 @@ object I18nEn {
         "위치: " to "Location: ",
         "(맨 위)" to "(top)",
         "갱신: " to "Updated: ",
+        "기준일: " to "Reference date: ",
         "생성일 정보 없음" to "Creation date unavailable",
         "생성: " to "Created: ",
         "크기: %,d자" to "Size: %,d chars",

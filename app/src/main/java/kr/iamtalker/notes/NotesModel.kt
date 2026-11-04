@@ -284,7 +284,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         val text = NoteRepo.read(ctx, n.uri)
         val out = NoteText.setTagLine(text, NoteText.tagLineTags(text) + tags)
         if (out == text) return
-        NoteRepo.write(ctx, n.uri, out)
+        NoteRepo.write(ctx, n.uri, NoteText.ensureDates(out, n.creationDate, n.date))
         runCatching {
             History.snapshot(ctx, tree!!, History.relOf(n), text, out, true)
             History.journal(ctx, tree!!, "tags", History.relOf(n), detail = tags.joinToString(" ") { "#$it" })
@@ -548,7 +548,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                 if (dq.from != null || dq.to != null) {
                     val byCreated = sorter == Sort.CREATED_DESC
                     list = list.filter { n ->
-                        val t = if (byCreated && n.created > 0) n.created else n.date
+                        val t = if (byCreated) n.creationDate else n.date
                         (dq.from == null || t >= dq.from) && (dq.to == null || t <= dq.to)
                     }
                 }
@@ -578,7 +578,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                         }.thenByDescending { it.date })
                     Sort.DATE_DESC -> list.sortedByDescending { it.date }
                     Sort.DATE_ASC -> list.sortedBy { it.date }
-                    Sort.CREATED_DESC -> list.sortedByDescending { if (it.created > 0) it.created else it.modified }
+                    Sort.CREATED_DESC -> list.sortedWith(compareByDescending<Note> { it.creationDate }.thenBy { it.title.lowercase() }.thenBy { History.relOf(it).lowercase() })
                     Sort.TITLE -> list.sortedBy { it.title.lowercase() }
                 }
                 if (pinned.isEmpty()) ordered else ordered.filter { it.uri.toString() in pinned } + ordered.filter { it.uri.toString() !in pinned }
@@ -710,7 +710,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     val n = NoteRepo.create(getApplication(), t, parent, if (parent == null) "" else folder, title) ?: throw IllegalStateException(tr("노트를 만들 수 없습니다"))
                     val url = Regex("https?://\\S+").find(text)?.value
                     val content = if (body != null) ClipImages.localize(getApplication(), t, body, if (parent == null) "" else folder, wifiOnly = clipWifiOnly) else text.trim()
-                    NoteRepo.write(getApplication(), n.uri, (if (url != null) "---\nsource: $url\n---\n\n" else "") + content + "\n")
+                    NoteRepo.write(getApplication(), n.uri, NoteText.ensureDates((if (url != null) "---\nsource: $url\n---\n\n" else "") + content + "\n", n.creationDate, n.date))
                     if (url != null && body != null) getApplication<Application>().getSharedPreferences("settings", 0).edit().putString("clip:$url", n.title).apply()
                     History.journal(getApplication(), t, "create", History.relOf(n), detail = "공유로 받음")
                     n
@@ -756,7 +756,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
             val out = NoteText.retag(text, old, new)
             if (out != text) {
                 runCatching { History.snapshot(ctx, tree!!, History.relOf(n), text, out, true) }
-                NoteRepo.write(ctx, n.uri, out)   // 수정 시각은 바꾸지 않는다(데스크톱과 같게)
+                NoteRepo.write(ctx, n.uri, NoteText.ensureDates(out, n.creationDate, n.date))   // 수정 시각은 바꾸지 않는다(데스크톱과 같게)
                 History.journal(ctx, tree!!, "tags", History.relOf(n), detail = if (new == null) "#$old 삭제" else "#$old → #$new")
             }
         }

@@ -5,6 +5,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NoteTextTest {
+    @Test fun datesArePortableAndDoNotOverwriteExistingDates() {
+        val created = 1609502400000L
+        val updated = 1609588800000L
+        val text = "---\nsource: https://example.com\ntags: [보존]\n---\n본문"
+        val result = NoteText.ensureDates(text, created, updated)
+        assertEquals(created, Meta.parse(result).created)
+        assertEquals(updated, Meta.parse(result).updated)
+        assertEquals(listOf("보존"), Meta.parse(result).tags)
+        assertEquals(result, NoteText.ensureDates(result, 1, 2))
+        assertTrue(result.endsWith("본문"))
+        val blank = NoteText.ensureDates("", created, updated)
+        assertTrue(Meta.split(blank).second.isBlank()) // 날짜만 든 새 노트는 여전히 빈 노트다.
+        assertEquals(created, Meta.parse(NoteText.touchUpdated(blank, updated + 100000)).created)
+    }
+
     private val ms = 1682944200000L   // 2023-05-01T12:30:00Z
 
     @Test fun touchUpdatedKeepsFormat() {

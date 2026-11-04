@@ -17,6 +17,8 @@ data class Note(
 
     /** 정렬·표시에 쓰는 시각: 머리말 updated, 없으면 파일 수정 시각 */
     val date: Long get() = if (updated > 0) updated else modified
+    /** PC와 동일: 명시된 생성일, 없으면 갱신일, 없으면 파일 수정일을 공통 기준일로 쓴다. */
+    val creationDate: Long get() = if (created > 0) created else date
 }
 
 object NoteRepo {
@@ -309,6 +311,8 @@ object NoteRepo {
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, pid)
         val name = title.trim().ifEmpty { "제목 없음" }.replace(Regex("[\\\\/:*?\"<>|]"), "_") + ".md"   // 같은 이름이 있으면 안드로이드가 번호를 붙인다
         val uri = DocumentsContract.createDocument(ctx.contentResolver, parent, "text/markdown", name) ?: return null
-        return Note(uri, name, folder, pid, System.currentTimeMillis(), 0)
+        val now = System.currentTimeMillis()
+        write(ctx, uri, NoteText.ensureDates("", now, now))
+        return Note(uri, name, folder, pid, now, 0, updated = now, created = now)
     }
 }
