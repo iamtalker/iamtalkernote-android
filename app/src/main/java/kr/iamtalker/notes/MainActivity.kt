@@ -232,7 +232,7 @@ fun NoteRow(n: Note, pinned: Boolean, chosen: Boolean, fmt: SimpleDateFormat, on
             if (n.snip.isNotEmpty()) Text(n.snip, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f), modifier = Modifier.padding(top = 6.dp))
             Text(
-                fmt.format(Date(n.date)) + (if (n.folder.isEmpty()) "" else "  ·  " + n.folder.substringAfterLast('/')) +
+                (if (n.created > 0) fmt.format(Date(n.created)) else tr("생성일 정보 없음")) + (if (n.folder.isEmpty()) "" else "  ·  " + n.folder.substringAfterLast('/')) +
                     (if (n.tags.isEmpty()) "" else "  " + n.tags.take(3).joinToString(" ") { "#$it" }),
                 fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)
             )
@@ -429,7 +429,7 @@ fun App(model: NotesModel) {
                         Row(Modifier.fillMaxWidth().background(if (model.favOnly) soft else Color.Transparent).clickable { go { model.changeFav(true) } }
                             .heightIn(min = 44.dp).padding(start = 40.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(tr("즐겨찾기"), fontSize = 16.sp, modifier = Modifier.weight(1f))
-                            Text("${model.favs.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
+                            Text("${model.notes.count { Favorites.relOf(it) in model.favs }}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                         }
                     }
                     if ("아웃라이너" in model.folders) item {
