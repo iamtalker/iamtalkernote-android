@@ -108,7 +108,8 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
             model.forget(start); model.refresh(); onClose()
             return@LaunchedEffect
         }
-        tfv = TextFieldValue(t); saved = t
+        val initial = if (start.size == 0L && Meta.split(t).second.isBlank()) "" else t
+        tfv = TextFieldValue(initial); saved = initial
     }
 
     /** 바뀐 글이 있으면 파일에 쓴다(머리말에 updated 가 있으면 지금 시각으로, 데스크톱과 같게) */
