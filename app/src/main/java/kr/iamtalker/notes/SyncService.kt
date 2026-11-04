@@ -21,7 +21,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** 내장 Syncthing 을 살려 두는 포그라운드 서비스(알림이 떠야 시스템이 앱을 정리해도 같이 죽지 않는다).
- *  5초마다 컴퓨터가 보낸 폴더를 받아 정해진 위치에 두는 일(ForkSync.tick)도 여기서 한다 — 앱 화면이 꺼져 있어도 돈다. */
+ *  전송 중 5초·대기 중 30초마다 컴퓨터가 보낸 폴더를 받아 정해진 위치에 두는 일(ForkSync.tick)도 여기서 한다 — 앱 화면이 꺼져 있어도 돈다. */
 class SyncService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
@@ -29,14 +29,14 @@ class SyncService : Service() {
     private var wifi: android.net.wifi.WifiManager.WifiLock? = null
 
     /** 받을 것이 남은 동안만 CPU 와 와이파이를 깨워 둔다. 화면이 꺼진 채 몇 시간 두면 CPU 가 잠들어 작은 파일 수만 개가 거의 안 받아지던 문제(read timeout)를 막는다.
-     *  15분짜리로 잡고 매번 새로 잡으므로, 어떤 일이 있어도 15분 넘게 새지 않는다 */
+     *  CPU 잠금은 1분 제한으로 갱신하고 오류·정체·완료 시 해제한다 */
     private fun hold(on: Boolean) {
         runCatching {
             if (on) {
                 if (cpu == null) cpu = getSystemService(android.os.PowerManager::class.java).newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "iamtalkernote:sync").also { it.setReferenceCounted(false) }
                 if (wifi == null) wifi = getApplicationContext().getSystemService(android.net.wifi.WifiManager::class.java)
-                    .createWifiLock(if (Build.VERSION.SDK_INT >= 29) android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY else android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "iamtalkernote:sync").also { it.setReferenceCounted(false) }
-                cpu?.acquire(15 * 60_000L)
+                    .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "iamtalkernote:sync").also { it.setReferenceCounted(false) }
+                cpu?.acquire(60_000L)
                 if (wifi?.isHeld != true) wifi?.acquire()
             } else {
                 if (cpu?.isHeld == true) cpu?.release()
@@ -95,7 +95,9 @@ class SyncService : Service() {
         val ctx = applicationContext
         val prefs = ctx.getSharedPreferences("settings", 0)
         val api = EmbeddedSync.api(ctx)
-        var fails = 0
+        val power = SyncPower()
+        var activeTransfer = false
+        var failureSince: Long? = null
         var lastProgress = 0L
         var overall: Overall? = null
         val fileEta = Eta(300_000, 60_000)   // 합친 파일 개수가 줄어드는 속도: 최근 5분(폰이 센 값은 2분마다 갱신)
@@ -134,10 +136,12 @@ class SyncService : Service() {
                 val tickT = System.nanoTime()
                 EmbeddedSync.report = if (tree == null) ForkSync.Report(error = tr("노트 폴더를 먼저 고르세요"))
                 else ForkSync.tick(ctx, api, pc, tree)   // 단계별 가림은 이제 컴퓨터가 맡는다(폰의 긴 무시 목록이 느렸다)
-                SyncDiag.sample(ctx, api, pc, (System.nanoTime() - tickT) / 1_000_000)
-                fails = 0
-                // 2분에 한 번: 폰에 실제로 있는 글·그림 수를 세어 컴퓨터에 알린다(컴퓨터 화면의 진행 표시용)
-                if (tree != null && System.currentTimeMillis() - lastProgress > 120_000) {
+                activeTransfer = power.active(EmbeddedSync.report, android.os.SystemClock.elapsedRealtime())
+                hold(activeTransfer)
+                if (activeTransfer) SyncDiag.sample(ctx, api, pc, (System.nanoTime() - tickT) / 1_000_000)
+                failureSince = null
+                // 전송 중 2분·대기 중 15분에 한 번: 폰에 실제로 있는 글·그림 수를 세어 컴퓨터에 알린다(컴퓨터 화면의 진행 표시용)
+                if (tree != null && System.currentTimeMillis() - lastProgress > (if (activeTransfer) 120_000L else 900_000L)) {
                     lastProgress = System.currentTimeMillis()
                     runCatching {
                         ForkSync.treePath(tree)?.let { vp ->
@@ -187,7 +191,7 @@ class SyncService : Service() {
                     val rate = syncEta.update(System.currentTimeMillis(), f.needFiles)
                     eta = Eta.seconds(f.needFiles, rate)
                 } else { have = 0; all = 0; eta = -1L }
-                hold(r?.connected == true && all > 0 && have < all)
+                // Power follows live engine progress, not the cached whole-vault count.
                 val txt = SyncNotice.text(r?.connected == true, r?.error ?: r?.blocked?.takeIf { it.isNotEmpty() }?.let { tr("컴퓨터와 규칙이 달라 멈춘 폴더가 있습니다 — 설정 → 동기화에서 확인하세요") }, have, all, eta)
                 // 다 받았으면(몇 번 연달아 확인한 뒤) 알림을 내리고, 받을 것이 다시 생기면 올린다
                 val complete = SyncNotice.complete(r, have, all)
@@ -208,16 +212,20 @@ class SyncService : Service() {
                     runCatching { getSystemService(NotificationManager::class.java).notify(1, notice(txt, have, all)) }
                 }
             } catch (e: Exception) {
-                // 시작 직후에는 아직 응답하지 않는 게 정상이다. 1분(12번) 넘게 응답이 없으면 엔진이 멈춘 것이니 새로 시작한다
-                fails++
+                // 확인 주기와 무관하게 1분 넘게 응답이 없으면 엔진을 다시 시작한다
+                hold(false)
+                activeTransfer = false
+                power.active(null, android.os.SystemClock.elapsedRealtime())
+                val failureNow = android.os.SystemClock.elapsedRealtime()
+                if (failureSince == null) failureSince = failureNow
                 val why = ForkSync.friendly(e)
-                if (EmbeddedSync.alive() && fails >= 12) {
+                if (EmbeddedSync.alive() && failureNow - (failureSince ?: failureNow) >= 60_000L) {
                     EmbeddedSync.note(ctx, "엔진이 1분 넘게 응답하지 않아 다시 시작합니다 (마지막 오류: $why)")
-                    EmbeddedSync.stop(); fails = 0
+                    EmbeddedSync.stop(); failureSince = null
                 }
                 EmbeddedSync.report = ForkSync.Report(error = if (EmbeddedSync.alive()) trf("동기화 엔진을 시작하는 중… (%s)", why) else why)
             }
-            delay(5000)
+            delay(power.pollMs(activeTransfer, foreground && doneTicks in 1 until DONE_TICKS))
         }
     }
 
