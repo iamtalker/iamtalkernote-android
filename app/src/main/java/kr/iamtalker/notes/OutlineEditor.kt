@@ -156,8 +156,12 @@ fun OutlineEditor(text: String, fontSize: Int, onChange: (String) -> Unit, modif
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Surface(tonalElevation = 3.dp) {
                 Row(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { safe { if (canOut) OutlineEdit.outdent(cur(), i)?.let { put(it) } } }) { Text(tr("내어쓰기")) }
-                    TextButton(onClick = { safe { OutlineEdit.indent(cur(), i)?.let { put(it) } } }) { Text(tr("들여쓰기")) }
+                    TextButton(onClick = { safe { if (canOut) OutlineEdit.outdent(cur(), i)?.let { put(it) } } }) {
+                        IndentIcon(out = true, c = MaterialTheme.colorScheme.onSurface)
+                    }
+                    TextButton(onClick = { safe { OutlineEdit.indent(cur(), i)?.let { put(it) } } }) {
+                        IndentIcon(out = false, c = MaterialTheme.colorScheme.onSurface)
+                    }
                     if (i != zoom) TextButton(onClick = { safe { val (n, f) = OutlineEdit.delete(cur(), i); put(n); focusIdx = -1; if (f >= 0) pending = f } }) { Text(tr("삭제")) }
                 }
             }
