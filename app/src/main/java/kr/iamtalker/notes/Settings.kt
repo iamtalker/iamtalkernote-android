@@ -337,7 +337,7 @@ private fun SyncControls(model: NotesModel) {
     var eff by remember { mutableStateOf<SyncSettings.Rules?>(null) }
     var again by remember { mutableStateOf(0) }
     // 컴퓨터가 바꾼 규칙(설정 폴더의 pc-config.json)을 몇 초마다 다시 읽어, 이 화면을 연 채로도 보이게 한다
-    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(3000); again++ } }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(5000); again++ } }
     LaunchedEffect(again) {
         val r = withContext(Dispatchers.IO) {
             val p = runCatching { ForkSync.readPolicy(ctx, tree) }.getOrNull()

@@ -115,11 +115,11 @@ fun EmbeddedWizard(model: NotesModel) {
     var note by remember { mutableStateOf("") }
     val report = EmbeddedSync.report
     LaunchedEffect(Unit) {
-        while (true) {   // 설정 화면에서 돌아왔을 때 바로 반영되게 2초마다 다시 본다
+        while (true) {   // 설정 화면에서 돌아왔을 때 반영하되, 유휴 화면의 배터리 사용은 줄인다
             allFiles = Environment.isExternalStorageManager()
             notifOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
             battery = ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)
-            delay(2000)
+            delay(5000)
         }
     }
     // 거절하면 다시 묻는 창이 안 뜨므로, 거절 직후 앱 알림 설정 화면을 열어 준다

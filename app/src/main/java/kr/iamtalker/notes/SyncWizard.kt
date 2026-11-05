@@ -72,7 +72,7 @@ fun SyncWizard(model: NotesModel) {
     val report = model.forkReport            // 앱 전체에서 5초마다 도는 확인(NotesModel.watchFork)의 결과
     val err = report?.error ?: ""
     val api = remember(key) { key.trim().takeIf { it.length >= 20 }?.let { ForkSync.Api(it) } }
-    LaunchedEffect(Unit) { while (true) { forkOn = ForkSync.installed(ctx); delay(3000) } }
+    LaunchedEffect(Unit) { while (true) { forkOn = ForkSync.installed(ctx); delay(5000) } }
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         Text(tr("연결 마법사"), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
