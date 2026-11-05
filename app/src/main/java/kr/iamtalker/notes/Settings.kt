@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -246,6 +247,7 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                 "sync" -> {
                     // 가장 중요한 규칙을 맨 위에 둔다
                     Text(tr("컴퓨터와 폰의 동기화 규칙(방향·함께 맞출 것)이 같아야 동기화됩니다. 다르면 그 폴더는 멈춥니다."), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(16.dp))
+                    SyncIdlePollSetting(ctx)
                     SyncWizard(model)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SyncControls(model)
@@ -295,6 +297,32 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                 }
             }
         }
+    }
+}
+
+/** 동기화가 완료된 뒤 상태를 다시 확인하는 간격. 전송 중 감시는 항상 5초로 유지한다. */
+@Composable
+private fun SyncIdlePollSetting(ctx: android.content.Context) {
+    val prefs = remember { ctx.getSharedPreferences("settings", 0) }
+    var text by remember { mutableStateOf(prefs.getLong(SyncPower.PREF_IDLE_SEC, SyncPower.DEFAULT_IDLE_MS / 1000L).toString()) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(tr("완료 후 동기화 감시 간격(초)"), fontSize = 15.sp)
+        Text(tr("전송 중에는 5초마다 확인하고, 완료 후에는 여기에 입력한 간격으로 확인합니다. 30초~86400초(24시간)."), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+        OutlinedTextField(
+            value = text,
+            onValueChange = { value ->
+                val digits = value.filter(Char::isDigit).take(6)
+                text = digits
+                digits.toLongOrNull()?.let { sec ->
+                    val normalized = sec.coerceIn(30L, 86_400L)
+                    text = normalized.toString()
+                    prefs.edit().putLong(SyncPower.PREF_IDLE_SEC, normalized).apply()
+                }
+            },
+            singleLine = true,
+            label = { Text(tr("초")) },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+        )
     }
 }
 

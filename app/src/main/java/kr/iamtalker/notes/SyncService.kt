@@ -225,7 +225,8 @@ class SyncService : Service() {
                 }
                 EmbeddedSync.report = ForkSync.Report(error = if (EmbeddedSync.alive()) trf("동기화 엔진을 시작하는 중… (%s)", why) else why)
             }
-            delay(power.pollMs(activeTransfer, foreground && doneTicks in 1 until DONE_TICKS))
+            val idleMs = prefs.getLong(SyncPower.PREF_IDLE_SEC, SyncPower.DEFAULT_IDLE_MS / 1000L) * 1000L
+            delay(power.pollMs(activeTransfer, foreground && doneTicks in 1 until DONE_TICKS, idleMs))
         }
     }
 

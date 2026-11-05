@@ -22,6 +22,13 @@ class SyncPower {
         return now - changedAt < 180_000L
     }
 
-    fun pollMs(active: Boolean, settling: Boolean): Long =
-        if (active || settling) 5_000L else 30_000L
+    fun pollMs(active: Boolean, settling: Boolean, idleMs: Long = DEFAULT_IDLE_MS): Long =
+        if (active || settling) 5_000L else idleMs.coerceIn(MIN_IDLE_MS, MAX_IDLE_MS)
+
+    companion object {
+        const val DEFAULT_IDLE_MS = 30_000L
+        const val MIN_IDLE_MS = 30_000L
+        const val MAX_IDLE_MS = 86_400_000L
+        const val PREF_IDLE_SEC = "syncIdlePollSec"
+    }
 }
