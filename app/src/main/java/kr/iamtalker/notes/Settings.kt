@@ -304,25 +304,27 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
 @Composable
 private fun SyncIdlePollSetting(ctx: android.content.Context) {
     val prefs = remember { ctx.getSharedPreferences("settings", 0) }
-    var text by remember { mutableStateOf(prefs.getLong(SyncPower.PREF_IDLE_SEC, SyncPower.DEFAULT_IDLE_MS / 1000L).toString()) }
+    val initial = prefs.getLong(SyncPower.PREF_IDLE_SEC, SyncPower.DEFAULT_IDLE_MS / 1000L)
+    var hours by remember { mutableStateOf((initial / 3600L).toString()) }
+    var minutes by remember { mutableStateOf(((initial % 3600L) / 60L).toString()) }
+    var seconds by remember { mutableStateOf((initial % 60L).toString()) }
+    fun save(h: String, m: String, s: String) {
+        val total = h.toLongOrNull()?.times(3600L)?.plus(m.toLongOrNull()?.times(60L) ?: 0L)?.plus(s.toLongOrNull() ?: 0L) ?: return
+        if (total in 30L..86_400L) prefs.edit().putLong(SyncPower.PREF_IDLE_SEC, total).apply()
+    }
+    @Composable
+    fun Part(value: String, label: String, onValue: (String) -> Unit, modifier: Modifier = Modifier) {
+        OutlinedTextField(value = value, onValueChange = { onValue(it.filter(Char::isDigit).take(5)) }, singleLine = true,
+            label = { Text(label) }, modifier = modifier)
+    }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(tr("완료 후 동기화 감시 간격(초)"), fontSize = 15.sp)
-        Text(tr("전송 중에는 5초마다 확인하고, 완료 후에는 여기에 입력한 간격으로 확인합니다. 30초~86400초(24시간)."), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-        OutlinedTextField(
-            value = text,
-            onValueChange = { value ->
-                val digits = value.filter(Char::isDigit).take(6)
-                text = digits
-                digits.toLongOrNull()?.let { sec ->
-                    // 입력 중인 3·빈 문자열을 즉시 30으로 되돌리면 30을 지울 수 없다.
-                    // 유효 범위에 들어왔을 때만 저장하고, 중간 입력은 그대로 둔다.
-                    if (sec in 30L..86_400L) prefs.edit().putLong(SyncPower.PREF_IDLE_SEC, sec).apply()
-                }
-            },
-            singleLine = true,
-            label = { Text(tr("초")) },
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-        )
+        Text(tr("완료 후 동기화 감시 간격"), fontSize = 15.sp)
+        Text(tr("전송 중에는 5초마다 확인하고, 완료 후에는 입력한 시간으로 확인합니다. 최소 30초, 최대 24시간."), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Part(hours, tr("시간"), { hours = it; save(it, minutes, seconds) }, Modifier.weight(1f))
+            Part(minutes, tr("분"), { minutes = it; save(hours, it, seconds) }, Modifier.weight(1f))
+            Part(seconds, tr("초"), { seconds = it; save(hours, minutes, it) }, Modifier.weight(1f))
+        }
     }
 }
 
