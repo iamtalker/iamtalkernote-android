@@ -314,9 +314,9 @@ private fun SyncIdlePollSetting(ctx: android.content.Context) {
                 val digits = value.filter(Char::isDigit).take(6)
                 text = digits
                 digits.toLongOrNull()?.let { sec ->
-                    val normalized = sec.coerceIn(30L, 86_400L)
-                    text = normalized.toString()
-                    prefs.edit().putLong(SyncPower.PREF_IDLE_SEC, normalized).apply()
+                    // 입력 중인 3·빈 문자열을 즉시 30으로 되돌리면 30을 지울 수 없다.
+                    // 유효 범위에 들어왔을 때만 저장하고, 중간 입력은 그대로 둔다.
+                    if (sec in 30L..86_400L) prefs.edit().putLong(SyncPower.PREF_IDLE_SEC, sec).apply()
                 }
             },
             singleLine = true,
