@@ -1,4 +1,15 @@
 {
+ "alias": {
+  "m.clien.net": "www.clien.net",
+  "m.fmkorea.com": "www.fmkorea.com",
+  "m.humoruniv.com": "web.humoruniv.com",
+  "m.inven.co.kr": "www.inven.co.kr",
+  "m.mt.co.kr": "www.mt.co.kr",
+  "m.ohmynews.com": "www.ohmynews.com",
+  "m.ppomppu.co.kr": "www.ppomppu.co.kr",
+  "m.ruliweb.com": "bbs.ruliweb.com",
+  "m.slrclub.com": "www.slrclub.com"
+ },
  "cleanup": {
   "aagag.com": [
    ".s_opt",
@@ -18,6 +29,11 @@
    ".adsbygoogle",
    "ins.adsbygoogle",
    ".writer_nikcon img"
+  ],
+  "m.clien.net": [
+   "a.post_reply",
+   ".post_contact",
+   "a[href='javascript:;']:empty"
   ],
   "n.news.naver.com": [
    ".vod_player_wrap",
@@ -46,7 +62,10 @@
   "etoland.co.kr": "article h1, .view-content",
   "gall.dcinside.com": ".view_content_wrap",
   "ggoorr.net": ".slatc-header-title, .slatc-body",
+  "m.blog.naver.com": ".post_ct",
   "m.dcinside.com": ".thum-txt, .view_content_wrap",
+  "m.humoruniv.com": ".wrap_body",
+  "m.ppomppu.co.kr": "#KH_Content",
   "n.news.naver.com": "#title_area, .media_end_head_journalist_name, .media_end_head_info_datestamp_time, #dic_area",
   "qquing.net": "#bo_v_con",
   "theqoo.net": ".rd_hd .title, .rd_body",

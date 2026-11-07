@@ -5,9 +5,12 @@
   try {
     var base = location.href;
     var rules = (typeof __siteRules !== "undefined" && __siteRules) || {};
-    // 모바일 주소(m.example.com)는 같은 사이트의 www 규칙을 쓴다
+    // 모바일 주소는 PC 짝 호스트의 규칙을 쓴다: 연결 표(alias, MOBILE_HOST_ALIAS)가 먼저, 없으면 m. 을 뗀 주소
     var host = location.hostname;
-    var hosts = [host, host.replace(/^m\./, "www."), host.replace(/^m\./, "")];
+    var aliases = rules.alias || {};
+    var hosts = [host];
+    if (aliases[host]) hosts.push(aliases[host]);
+    hosts.push(host.replace(/^m\./, "www."), host.replace(/^m\./, ""));
     function rule(kind) {
       var t = rules[kind] || {};
       for (var i = 0; i < hosts.length; i++) if (t[hosts[i]]) return t[hosts[i]];
@@ -19,6 +22,28 @@
       try { var fr = document.querySelector(frameSel); if (fr && fr.contentDocument && fr.contentDocument.body) { srcDoc = fr.contentDocument; base = fr.contentWindow.location.href; } } catch (e) {}
     }
     function abs(v) { try { return new URL(v, base).href; } catch (e) { return v; } }
+    // 제목은 노트 이름으로 이미 저장되므로, 본문 맨 앞 세 줄 안의 같은 제목 줄(헤딩 또는 한 줄)은 뺀다.
+    // 글자·숫자만 비교(\p 는 구형 웹뷰에서 문법 오류가 나므로 쓰지 않는다). content.js 의 jcpDropLeadingTitle 과 같은 규칙.
+    function key(s) { return String(s || "").replace(/[\s!-\/:-@\[-`{-~ -⁯　-〿！-／：-＠［-｀｛-･]+/g, "").toLowerCase(); }
+    function dropLeadingTitle(md, title) {
+      var full = key(title);
+      var core = key(String(title || "").split(/\s[-|｜–]\s/)[0]);
+      if (full.length < 2) return md;
+      var lines = md.split("\n"), drop = {}, checked = 0;
+      for (var i = 0; i < lines.length && checked < 3; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        checked++;
+        var isH = /^#{1,6}\s/.test(line);
+        var h = key(isH ? line.replace(/^#{1,6}\s+/, "").replace(/\s+#+\s*$/, "") : line);
+        if (!h) continue;
+        var same = h === full || h === core ||
+          (isH && h.length >= 4 && (core.indexOf(h) >= 0 || (core.length >= 4 && h.indexOf(core) >= 0)));
+        if (same) drop[i] = true;
+      }
+      if (!Object.keys(drop).length) return md;
+      return lines.filter(function (_, i) { return !drop[i]; }).join("\n").replace(/^\s*\n/, "");
+    }
     var doc = srcDoc.cloneNode(true);
     doc.querySelectorAll("img").forEach(function (im) {
       var lazy = im.getAttribute("data-src") || im.getAttribute("data-original") || im.getAttribute("data-lazy-src");
@@ -60,7 +85,7 @@
     var td = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
     if (typeof turndownPluginGfm !== "undefined") td.use(turndownPluginGfm.gfm);
     td.remove(["script", "style", "noscript", "template"]);
-    var md = td.turndown(html).trim();
+    var md = dropLeadingTitle(td.turndown(html).trim(), title).trim();
     if (!md) return JSON.stringify({ error: "nocontent" });
     return JSON.stringify({ title: title, markdown: md });
   } catch (e) {
