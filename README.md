@@ -28,7 +28,7 @@
 
 > **짝이 되는 저장소 — 개발할 때는 둘 다 읽으세요.** 데스크톱 앱 [iamtalkernote](https://github.com/iamtalker/iamtalkernote)의 README 에 있는 "이어서 작업하기"와 로드맵을 함께 보세요. 두 앱은 같은 노트 폴더의 파일 형식(머리말, `태그:` 줄, `.history/`, `.trash/`, `.resources/`, `.imported/docs.jsonl`)을 공유하므로 한쪽을 바꾸면 다른 쪽도 확인해야 합니다.
 
-[iamtalkernote](https://github.com/iamtalker/iamtalkernote)(윈도 노트·문서 앱)의 안드로이드 짝입니다. 컴퓨터의 iamtalkernote 와 **같은 노트 폴더(마크다운 파일)** 를 폰에서 읽고 고치는 앱입니다. 현재 **1.4.57** 입니다. 개발 PC 의 에뮬레이터(안드로이드 14)와 사용자의 폰에서 확인하며 고칩니다.
+[iamtalkernote](https://github.com/iamtalker/iamtalkernote)(윈도 노트·문서 앱)의 안드로이드 짝입니다. 컴퓨터의 iamtalkernote 와 **같은 노트 폴더(마크다운 파일)** 를 폰에서 읽고 고치는 앱입니다. 현재 **1.4.58** 입니다. 개발 PC 의 에뮬레이터(안드로이드 14)와 사용자의 폰에서 확인하며 고칩니다.
 
 ## 1.4.50 (2026-11-04)
 - 새 노트 파일의 날짜 머리말은 보존하면서, 처음 글을 쓸 때는 빈 입력칸으로 시작합니다. 새 글을 날짜 머리말 앞에 입력해 머리말이 깨지는 일을 막습니다.
