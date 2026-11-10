@@ -19,6 +19,15 @@ class MarkdownTest {
         assertEquals("../.resources/a%20b.png", img.src)
     }
 
+    @Test fun imageLineWithTrailingTextStillShowsImage() {
+        // 웹 스크랩 노트 형식: 그림 문법 뒤에 '이미지 크게 보기' 글자가 붙어 있다
+        val blocks = parseBlocks("본문\n\n![LG 제공 사진 (LG 제공)](../.resources/41dd.jpg)이미지 크게 보기\n\n끝")
+        val img = blocks.filterIsInstance<Block.Img>().single()
+        assertEquals("../.resources/41dd.jpg", img.src)
+        assertEquals("LG 제공 사진 (LG 제공)", img.alt)
+        assertTrue(blocks.any { it is Block.P && it.text == "이미지 크게 보기" })
+    }
+
     @Test fun toggleCheckboxFlips() {
         val t = "---\nx: 1\n---\n- [ ] a\n- [x] b\n"
         assertEquals("---\nx: 1\n---\n- [x] a\n- [x] b\n", toggleCheckbox(t, 3))

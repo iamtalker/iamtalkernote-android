@@ -96,7 +96,8 @@ private val heading = Regex("^(#{1,6})\\s+(.*)$")
 private val rule = Regex("^\\s*(-{3,}|\\*{3,}|_{3,})\\s*$")
 private val item = Regex("^(\\s*)([-*+]|\\d+[.)])\\s+(.*)$")
 private val check = Regex("^\\[([ xX])\\]\\s+(.*)$")
-private val imageLine = Regex("^!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)\\s*$")
+// 줄 끝에 글자가 더 붙은 그림(웹 스크랩의 '이미지 크게 보기' 등)도 그림으로 보고, 붙은 글은 문단으로 남긴다.
+private val imageLine = Regex("^!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)(.*)$")
 private val inline = Regex("!\\[([^\\]]*)\\]\\(([^)]*)\\)|\\[([^\\]]+)\\]\\(([^)\\s]*)[^)]*\\)|\\*\\*(.+?)\\*\\*|__(.+?)__|`([^`]+)`|~~(.+?)~~|\\*([^*\\n]+?)\\*|\\[\\[([^\\]]+)\\]\\]")
 
 /** 목록 앞 공백의 깊이: 탭은 4칸, 두 칸이 한 단계 */
@@ -126,7 +127,12 @@ fun parseBlocks(body: String): List<Block> {
         when {
             h != null -> { flushPara(); out.add(Block.H(h.groupValues[1].length, h.groupValues[2])) }
             rule.matches(line) -> { flushPara(); out.add(Block.Rule) }
-            img != null -> { flushPara(); out.add(Block.Img(img.groupValues[1], img.groupValues[2])) }
+            img != null -> {
+                flushPara()
+                out.add(Block.Img(img.groupValues[1], img.groupValues[2]))
+                val rest = img.groupValues[3].trim()
+                if (rest.isNotEmpty()) out.add(Block.P(rest))
+            }
             li != null -> {
                 flushPara()
                 val c = check.find(li.groupValues[3])
