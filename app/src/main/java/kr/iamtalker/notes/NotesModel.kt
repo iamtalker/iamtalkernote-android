@@ -77,6 +77,10 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     var folderCounts by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
 
+    /** 저장 폴더(루트) 아래 전체 노트 수(바로 있는 노트 + 하위 노트북 노트). 루트 줄에 표시한다 */
+    var rootCount by mutableStateOf(0)
+        private set
+
     /** 노트북 이름 → 문서 id (노트가 있는 폴더만). 맨 위 폴더는 "" */
     var folderIds by mutableStateOf<Map<String, String>>(emptyMap())
         private set
@@ -452,6 +456,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
         }
         for ((k, v) in NoteRepo.dirs) ids.putIfAbsent(k, v)
         folderCounts = fc
+        rootCount = list.size
         folderIds = ids
         val counts = LinkedHashMap<String, Pair<String, Int>>()
         for (n in list) for (t in n.tags) {

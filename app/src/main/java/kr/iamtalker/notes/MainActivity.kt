@@ -448,6 +448,7 @@ fun App(model: NotesModel) {
                         Row(Modifier.fillMaxWidth().background(if (model.folder == "" && model.tag == null && !model.favOnly) soft else Color.Transparent)
                             .clickable { go { model.changeFolder(""); model.changeTag(null) } }.heightIn(min = 52.dp).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(vaultName, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text("${model.rootCount}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(end = 4.dp))
                             BarButton({ rootOpen = !rootOpen }) { ChevronIcon(!rootOpen, MaterialTheme.colorScheme.outline) }
                             BarButton({ go { notebookDialog = true } }) { Text("+", fontSize = 26.sp, color = accent) }
                         }

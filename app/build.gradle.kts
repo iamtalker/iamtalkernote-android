@@ -11,8 +11,8 @@ android {
         applicationId = "kr.iamtalker.notes"
         minSdk = 26
         targetSdk = 34
-        versionCode = 79
-        versionName = "1.4.57"
+        versionCode = 80
+        versionName = "1.4.58"
         testInstrumentationRunner = "kr.iamtalker.notes.RepoInstrumentation"
     }
     buildTypes {

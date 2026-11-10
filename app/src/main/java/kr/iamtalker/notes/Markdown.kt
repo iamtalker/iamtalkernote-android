@@ -98,6 +98,29 @@ private val item = Regex("^(\\s*)([-*+]|\\d+[.)])\\s+(.*)$")
 private val check = Regex("^\\[([ xX])\\]\\s+(.*)$")
 // 줄 끝에 글자가 더 붙은 그림(웹 스크랩의 '이미지 크게 보기' 등)도 그림으로 보고, 붙은 글은 문단으로 남긴다.
 private val imageLine = Regex("^!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)(.*)$")
+// 링크로 감싼 그림 [![그림](src)](원본 주소) — 웹 스크랩이 이 형식으로 만든다. 바깥 링크는 버리고 그림만 보인다.
+private val linkedImageLine = Regex("^\\[!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)\\]\\([^)]*\\)(.*)$")
+// 줄 안의 로컬 그림(.resources)과, 그 그림을 감싼 링크 [![그림](src)글](주소) — 웹 스크랩 프로필 아이콘·카드 등
+private val localImage = Regex("!\\[([^\\]]*)\\]\\(((?:\\.\\./)?\\.resources/[^)\\s]+)(?:\\s+\"[^\"]*\")?\\)")
+private val wrappedLocalImage = Regex("\\[(!\\[[^\\]]*\\]\\((?:\\.\\./)?\\.resources/[^)\\s]+\\))([^\\]]*)\\]\\([^)]*\\)")
+
+/** 줄에 로컬 그림이 있으면 그림 블록과 글 블록으로 나눈다. 없으면 null. */
+private fun splitLocalImages(text: String): List<Block>? {
+    if (!localImage.containsMatchIn(text)) return null
+    val s = wrappedLocalImage.replace(text) { it.groupValues[1] + it.groupValues[2] }
+    val out = ArrayList<Block>()
+    var pos = 0
+    for (m in localImage.findAll(s)) {
+        val before = s.substring(pos, m.range.first).trim()
+        if (before.isNotEmpty()) out.add(Block.P(before))
+        out.add(Block.Img(m.groupValues[1], m.groupValues[2]))
+        pos = m.range.last + 1
+    }
+    val rest = s.substring(pos).trim()
+    if (rest.isNotEmpty()) out.add(Block.P(rest))
+    return out
+}
+
 private val inline = Regex("!\\[([^\\]]*)\\]\\(([^)]*)\\)|\\[([^\\]]+)\\]\\(([^)\\s]*)[^)]*\\)|\\*\\*(.+?)\\*\\*|__(.+?)__|`([^`]+)`|~~(.+?)~~|\\*([^*\\n]+?)\\*|\\[\\[([^\\]]+)\\]\\]")
 
 /** 목록 앞 공백의 깊이: 탭은 4칸, 두 칸이 한 단계 */
@@ -123,10 +146,12 @@ fun parseBlocks(body: String): List<Block> {
         if (line.isBlank()) { flushPara(); continue }
         val h = heading.find(line)
         val li = item.find(line)
-        val img = imageLine.find(line.trim())
+        val img = imageLine.find(line.trim()) ?: linkedImageLine.find(line.trim())
+        val locals = if (h == null && li == null && !line.trimStart().startsWith(">")) splitLocalImages(line.trim()) else null
         when {
             h != null -> { flushPara(); out.add(Block.H(h.groupValues[1].length, h.groupValues[2])) }
             rule.matches(line) -> { flushPara(); out.add(Block.Rule) }
+            locals != null -> { flushPara(); out.addAll(locals) }
             img != null -> {
                 flushPara()
                 out.add(Block.Img(img.groupValues[1], img.groupValues[2]))

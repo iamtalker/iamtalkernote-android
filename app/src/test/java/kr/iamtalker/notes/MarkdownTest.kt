@@ -28,6 +28,29 @@ class MarkdownTest {
         assertTrue(blocks.any { it is Block.P && it.text == "이미지 크게 보기" })
     }
 
+    @Test fun linkedImageShowsImageAndDropsOuterLink() {
+        // 웹 스크랩 형식: 그림을 원본 주소 링크로 감싸고, 그림 이름의 \_ 이스케이프가 들어 있다
+        val blocks = parseBlocks("[![퇴사 글.jpg\\_1.webp](../.resources/69a4326e755eaefa.jpg)](https://i2.ruliweb.com/img/a.webp)\n\n  \n\n[![퇴사 글.jpg\\_2.webp](../.resources/d7476043018c3fba.jpg)](https://i3.ruliweb.com/img/b.webp)")
+        val imgs = blocks.filterIsInstance<Block.Img>()
+        assertEquals(listOf("../.resources/69a4326e755eaefa.jpg", "../.resources/d7476043018c3fba.jpg"), imgs.map { it.src })
+        assertEquals(2, blocks.size)
+    }
+
+    @Test fun lineWithSeveralLocalImagesAndTextShowsEachImage() {
+        // 카페 댓글 형식: 프로필 그림 + 이름, 다음 링크, 그리고 본문 중간의 그림
+        val blocks = parseBlocks("[![p.png](../.resources/a1.png)**붉은 갈까마귀**](https://m.cafe.naver.com/x)[채팅](https://m.cafe.naver.com/y)\n가운데 ![그림](../.resources/b2.jpg) 끝")
+        val imgs = blocks.filterIsInstance<Block.Img>()
+        assertEquals(listOf("../.resources/a1.png", "../.resources/b2.jpg"), imgs.map { it.src })
+        assertTrue(blocks.any { it is Block.P && it.text.contains("붉은 갈까마귀") })
+        assertTrue(blocks.any { it is Block.P && it.text == "가운데" })
+        assertTrue(blocks.any { it is Block.P && it.text == "끝" })
+    }
+
+    @Test fun remoteImagesAreNotSplitByLocalRule() {
+        val blocks = parseBlocks("[![](https://static.example.com/a.jpg)<br>쿠우](https://www.twitch.tv/x)")
+        assertEquals(0, blocks.filterIsInstance<Block.Img>().size)
+    }
+
     @Test fun toggleCheckboxFlips() {
         val t = "---\nx: 1\n---\n- [ ] a\n- [x] b\n"
         assertEquals("---\nx: 1\n---\n- [x] a\n- [x] b\n", toggleCheckbox(t, 3))
