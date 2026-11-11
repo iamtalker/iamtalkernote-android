@@ -34,9 +34,20 @@ object WebClip {
         return java.io.File(ctx.filesDir, "site-rules-$code.json")
     }
 
-    private fun rules(ctx: Context): String =
-        runCatching { rulesCache(ctx).takeIf { it.isFile }?.readText(Charsets.UTF_8)?.also { JSONObject(it) } }.getOrNull()
-            ?: runCatching { asset(ctx, "site-rules.json") }.getOrDefault("{}")
+    /** 캐시(GitHub 에서 받은 사본)와 앱에 든 규칙 중 날짜표("updated")가 더 새 것을 쓴다. 옛 캐시가 새 규칙(예: 모바일 주소 연결)을 가리지 않도록 */
+    private fun rules(ctx: Context): String {
+        val bundled = runCatching { asset(ctx, "site-rules.json") }.getOrDefault("{}")
+        val cached = runCatching { rulesCache(ctx).takeIf { it.isFile }?.readText(Charsets.UTF_8)?.also { JSONObject(it) } }.getOrNull()
+        return pickRules(cached, bundled)
+    }
+
+    /** 캐시가 앱에 든 규칙과 같거나 더 새면 캐시, 아니면 앱에 든 규칙. 시험할 수 있게 따로 뺐다 */
+    internal fun pickRules(cached: String?, bundled: String): String =
+        if (cached != null && rulesStamp(cached) >= rulesStamp(bundled)) cached else bundled
+
+    /** 날짜표("updated": "YYYY-MM-DD")를 읽는다. YYYY-MM-DD 는 글자 순서가 곧 날짜 순서. 없으면 빈 글(가장 오래된 것) */
+    internal fun rulesStamp(json: String): String =
+        Regex("\"updated\"\\s*:\\s*\"([0-9-]*)\"").find(json)?.groupValues?.get(1) ?: ""
 
     /** 최신 규칙을 받아 둔다(일주일에 한 번, 실패하면 조용히 넘어감). 내려받은 글이 JSON 이 아니면 버린다. 보내는 정보는 없다(공개 파일 하나 읽기) */
     fun refreshRules(ctx: Context) {
