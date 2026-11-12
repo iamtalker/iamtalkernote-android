@@ -51,9 +51,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
@@ -368,6 +370,7 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
             val url = Regex("(?m)^source:[ \\t]*(\\S+)").find(fm)?.groupValues?.get(1)
                 ?: Regex("(?m)^원본:\\s*<?(https?://[^\\s>]+)").find(t.take(2000))?.groupValues?.get(1) ?: ""
             fun d(ms: Long) = if (ms > 0) fmt.format(Date(ms)) else "-"
+            val uriHandler = LocalUriHandler.current
             AlertDialog(
                 onDismissRequest = { dialog = "" }, title = { Text(tr("속성")) },
                 text = {
@@ -376,7 +379,15 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                         Text(trf("파일: %s", note.name))
                         Text(tr("갱신: ") + d(if (info.updated > 0) info.updated else note.modified))
                         Text(tr("생성: ") + d(created))
-                        if (url.isNotEmpty()) Text(trf("주소: %s", url))
+                        if (url.isNotEmpty()) {
+                            val web = url.startsWith("http://") || url.startsWith("https://")
+                            Text(
+                                trf("주소: %s", url),
+                                color = if (web) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                                textDecoration = if (web) TextDecoration.Underline else null,
+                                modifier = if (web) Modifier.clickable { runCatching { uriHandler.openUri(url) } } else Modifier
+                            )
+                        }
                         Text(tr("태그: ") + (if (info.tags.isEmpty()) "-" else info.tags.joinToString(" ") { "#$it" }))
                         Text(tr("크기: %,d자").format(t.length))
                     }

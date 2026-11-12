@@ -723,7 +723,7 @@ fun App(model: NotesModel) {
         )
     }
     model.message?.let { m ->
-        ErrorDialog(m) { model.message = null }
+        ErrorDialog(m, copy = model.messageCopy) { model.message = null; model.messageCopy = true }
     }
     deleteSaved?.let { sv ->
         AlertDialog(

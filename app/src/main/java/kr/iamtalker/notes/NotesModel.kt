@@ -260,6 +260,8 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
     var selected by mutableStateOf<Set<String>>(emptySet())
         private set
     var message by mutableStateOf<String?>(null)
+    /** 메시지 창에 [복사] 를 보일지: 전부 성공한 작업 결과에는 복사가 필요 없다 */
+    var messageCopy by mutableStateOf(true)
 
     fun toggleSelect(n: Note) { val u = n.uri.toString(); selected = if (u in selected) selected - u else selected + u }
     fun clearSelect() { selected = emptySet() }
@@ -277,6 +279,7 @@ class NotesModel(app: Application) : AndroidViewModel(app) {
                     say("$label ${i + 1}/${targets.size}")
                 }
             }
+            messageCopy = fail > 0   // 실패가 있을 때만 오류 글을 복사할 수 있게 한다
             message = trf("%s: %s개 완료", label, ok) + if (fail > 0) trf(", %s개 실패 (%s)", fail, lastErr) else ""
             refresh()
         }

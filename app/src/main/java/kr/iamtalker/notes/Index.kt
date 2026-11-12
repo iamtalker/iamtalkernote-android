@@ -8,7 +8,7 @@ import android.net.Uri
 
 /** 색인 DB: 노트별 수정 시각·태그와 검색용 본문 사본. 파일이 원본이고 이 DB 는 언제든 지우고 다시 만들 수 있는 캐시다. 폴더(트리)마다 따로 둔다. */
 class Index(ctx: Context, tree: Uri) :
-    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 7) {
+    SQLiteOpenHelper(ctx, "index-" + Integer.toHexString(tree.toString().hashCode()) + ".db", null, 8) {
 
     init {
         setWriteAheadLoggingEnabled(true)   // 색인하는 동안에도 검색이 막히지 않게
@@ -17,16 +17,34 @@ class Index(ctx: Context, tree: Uri) :
     data class Row(val size: Long, val mtime: Long, val updated: Long, val tags: List<String>, val snip: String = "", val created: Long = 0)
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT, snip TEXT, created INTEGER)")
+        db.execSQL(createSql("notes"))
     }
 
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
         if (old < 6) {   // 5: 미리보기에서 ‘태그:’ 줄 제외 · 6: 본문 #태그 규칙을 데스크톱과 같게 — 노트 색인을 다시 만든다
             db.execSQL("DROP TABLE IF EXISTS notes")
-            db.execSQL("CREATE TABLE notes (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, hay TEXT, snip TEXT, created INTEGER)")
+            db.execSQL(createSql("notes"))
+        } else if (old < 8) {
+            // 8: 본문 사본(hay)을 맨 끝 열로 옮긴다. hay 가 snip·created 앞에 있으면 목록을 읽을 때(load) 줄마다 본문 사본을 건너가며 읽어 느리다.
+            // 노트 파일을 다시 읽지 않고 DB 안에서 옮긴다. 옮기지 못하면(저장 공간 부족 등) 색인을 비우고 다음 새로 고침 때 다시 만든다
+            try {
+                db.execSQL("DROP TABLE IF EXISTS notes_new")
+                db.execSQL(createSql("notes_new"))
+                db.execSQL("INSERT INTO notes_new (uri, size, mtime, updated, tags, snip, created, hay) SELECT uri, size, mtime, updated, tags, snip, created, hay FROM notes")
+                db.execSQL("DROP TABLE notes")
+                db.execSQL("ALTER TABLE notes_new RENAME TO notes")
+            } catch (e: android.database.SQLException) {
+                db.execSQL("DROP TABLE IF EXISTS notes_new")
+                db.execSQL("DROP TABLE IF EXISTS notes")
+                db.execSQL(createSql("notes"))
+            }
         }
         if (old < 7) db.execSQL("DROP TABLE IF EXISTS docs")   // 7: 가져온 파일 요약(데스크톱이 내보내던 것)은 없어졌다
     }
+
+    /** 색인 표. 크기가 큰 hay(본문 사본)는 맨 끝에 둔다: 요약 열만 읽을 때 본문 사본을 건드리지 않게 */
+    private fun createSql(table: String) =
+        "CREATE TABLE $table (uri TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, updated INTEGER, tags TEXT, snip TEXT, created INTEGER, hay TEXT)"
 
     /** 색인에 있는 모든 노트의 요약(본문은 읽지 않는다) */
     fun load(): Map<String, Row> {
