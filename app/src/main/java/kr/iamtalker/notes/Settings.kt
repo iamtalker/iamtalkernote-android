@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -273,6 +274,8 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                     TextRow(tr("버전"), ver)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     val upScope = rememberCoroutineScope()
+                    var manualChecking by remember { mutableStateOf(false) }
+                    var clipRulesMsg by remember { mutableStateOf("") }
                     var autoUp by remember { mutableStateOf(Updater.autoCheck(ctx)) }
                     LaunchedEffect(Unit) { Updater.check(ctx) }
                     Updater.available?.let { u ->
@@ -280,7 +283,19 @@ fun SettingsScreen(model: NotesModel, page: String, onPage: (String) -> Unit, on
                         Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp)) { UpdateProgress(MaterialTheme.colorScheme.outline) }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
-                    TextRow(tr("업데이트 확인"), Updater.checkedMsg.ifEmpty { tr("누르세요") }, onClick = { upScope.launch { Updater.check(ctx, force = true) } })
+                    TextRow(tr("업데이트 확인"), Updater.checkedMsg.ifEmpty { tr("누르세요") }, onClick = {
+                        if (!manualChecking) upScope.launch {
+                            manualChecking = true
+                            clipRulesMsg = tr("확인 중…")
+                            val apk = async { Updater.check(ctx, force = true) }
+                            val rules = async { WebClip.checkUpstreamRules(ctx) }
+                            try {
+                                runCatching { apk.await() }
+                                clipRulesMsg = runCatching { rules.await() }.getOrElse { tr("웹 클리퍼 규칙 확인 실패") }
+                            } finally { manualChecking = false }
+                        }
+                    })
+                    TextRow(tr("웹 클리퍼 규칙 확인"), clipRulesMsg.ifEmpty { tr("누르세요") })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SwitchRow(tr("새 버전 자동 확인"), tr("앱을 열 때 6시간마다 새 버전이 있는지 보고, 있으면 노트 목록 위에 알립니다"), autoUp) { autoUp = it; Updater.setAutoCheck(ctx, it) }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

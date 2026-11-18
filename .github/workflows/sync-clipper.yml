@@ -1,0 +1,46 @@
+name: Sync Android clipper assets
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-clipper-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Android main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+
+      - name: Check out upstream default branch
+        run: git clone --depth 1 https://github.com/iamtalker/joplin-clipper-plus.git "$RUNNER_TEMP/joplin-clipper-plus"
+
+      - name: Generate and sync Android-compatible assets
+        run: python3 tools/sync_clipper_android.py "$RUNNER_TEMP/joplin-clipper-plus"
+
+      - name: Commit changed Android assets
+        shell: bash
+        run: |
+          git add -- \
+            app/src/main/assets/clip/site-rules.json \
+            app/src/main/assets/clip/Readability.js \
+            app/src/main/assets/clip/turndown.js \
+            app/src/main/assets/clip/turndown-plugin-gfm.js
+          if git diff --cached --quiet; then
+            echo "No Android clipper asset changes."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Sync Android clipper assets"
+          git push origin HEAD:main

@@ -22,6 +22,59 @@
       try { var fr = document.querySelector(frameSel); if (fr && fr.contentDocument && fr.contentDocument.body) { srcDoc = fr.contentDocument; base = fr.contentWindow.location.href; } } catch (e) {}
     }
     function abs(v) { try { return new URL(v, base).href; } catch (e) { return v; } }
+    var embedLinks = [];
+    function canonicalEmbedUrl(src) {
+      try {
+        var u = new URL(src, base);
+        if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+        var host = u.hostname.toLowerCase().replace(/^www\./, "");
+        var m;
+        if (host === "youtube.com" || host === "youtube-nocookie.com") {
+          m = u.pathname.match(/^\/embed\/([a-zA-Z0-9_-]{11})\/?$/);
+          if (m) return "https://www.youtube.com/watch?v=" + m[1];
+        }
+        if (host === "youtu.be") {
+          m = u.pathname.match(/^\/([a-zA-Z0-9_-]{11})\/?$/);
+          if (m) return "https://www.youtube.com/watch?v=" + m[1];
+        }
+        if (u.hostname.toLowerCase() === "platform.twitter.com" && u.pathname === "/embed/Tweet.html") {
+          var id = u.searchParams.get("id");
+          if (id && /^\d+$/.test(id)) return "https://twitter.com/i/status/" + id;
+        }
+      } catch (e) {}
+      return null;
+    }
+    function preserveEmbeds(root) {
+      root.querySelectorAll("iframe[src]").forEach(function (frame, i) {
+        var url = canonicalEmbedUrl(frame.getAttribute("src"));
+        if (!url) { frame.remove(); return; }
+        var token = "CLIPVIDEOLINKTOKEN" + i + "END";
+        var placeholder = root.ownerDocument.createElement("p");
+        placeholder.textContent = token;
+        frame.replaceWith(placeholder);
+        embedLinks.push({ token: token, url: url });
+      });
+    }
+    // Preserve self-hosted videos only after selecting the article. Rebuild each
+    // player as a minimal controls/src element so page player attributes and
+    // event handlers never enter the saved note.
+    function normalizeVideos(root) {
+      root.querySelectorAll("video").forEach(function (video) {
+        var src = video.getAttribute("src") || video.getAttribute("data-src");
+        if (!src) {
+          var source = video.querySelector("source[src], source[data-src]");
+          if (source) src = source.getAttribute("src") || source.getAttribute("data-src");
+        }
+        if (!src) { video.remove(); return; }
+        var url;
+        try { url = new URL(src, base); } catch (e) { video.remove(); return; }
+        if (url.protocol !== "http:" && url.protocol !== "https:") { video.remove(); return; }
+        var clean = root.ownerDocument.createElement("video");
+        clean.setAttribute("controls", "");
+        clean.setAttribute("src", url.href);
+        video.replaceWith(clean);
+      });
+    }
     // 제목은 노트 이름으로 이미 저장되므로, 본문 맨 앞 세 줄 안의 같은 제목 줄(헤딩 또는 한 줄)은 뺀다.
     // 글자·숫자만 비교(\p 는 구형 웹뷰에서 문법 오류가 나므로 쓰지 않는다). content.js 의 jcpDropLeadingTitle 과 같은 규칙.
     function key(s) { return String(s || "").replace(/[\s!-\/:-@\[-`{-~ -⁯　-〿！-／：-＠［-｀｛-･]+/g, "").toLowerCase(); }
@@ -46,9 +99,9 @@
     }
     var doc = srcDoc.cloneNode(true);
     doc.querySelectorAll("img").forEach(function (im) {
-      var lazy = im.getAttribute("data-src") || im.getAttribute("data-original") || im.getAttribute("data-lazy-src");
+      var lazy = im.getAttribute("data-original") || im.getAttribute("data-originalurl") || im.getAttribute("data-lazy-src") || im.getAttribute("data-src");
       var cur = im.getAttribute("src") || "";
-      if (lazy && (!cur || cur.indexOf("data:") === 0)) im.setAttribute("src", lazy);
+      if (lazy && (lazy.indexOf("data:") !== 0 || !cur || cur.indexOf("data:") === 0)) im.setAttribute("src", lazy);
     });
     doc.querySelectorAll("[src]").forEach(function (el) { el.setAttribute("src", abs(el.getAttribute("src"))); });
     doc.querySelectorAll("[href]").forEach(function (el) {
@@ -62,6 +115,7 @@
       var els = [];
       try { els = Array.prototype.slice.call(doc.querySelectorAll(sel)); } catch (e) {}
       if (els.length) {
+        els = els.filter(function (el) { return !els.some(function (outer) { return outer !== el && outer.contains(el); }); });
         var box = doc.createElement("div");
         els.forEach(function (el) { var w = doc.createElement("div"); w.appendChild(el); box.appendChild(w); });
         box.querySelectorAll("script,style,noscript,template").forEach(function (el) { el.remove(); });
@@ -82,10 +136,27 @@
       html = article.content;
       title = (article.title || title).trim();
     }
-    var td = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
+    var selected = doc.createElement("div");
+    selected.innerHTML = html;
+    normalizeVideos(selected);
+    preserveEmbeds(selected);
+    var td = new TurndownService({
+      headingStyle: "atx",
+      codeBlockStyle: "fenced",
+      bulletListMarker: "-",
+      blankReplacement: function (content, node) {
+        if (node.nodeName === "VIDEO") return node.outerHTML;
+        return node.isBlock ? "\n\n" : "";
+      }
+    });
     if (typeof turndownPluginGfm !== "undefined") td.use(turndownPluginGfm.gfm);
     td.remove(["script", "style", "noscript", "template"]);
-    var md = dropLeadingTitle(td.turndown(html).trim(), title).trim();
+    // Turndown checks its blank rule before keep(), so both paths must preserve video HTML.
+    td.keep(["video"]);
+    var md = dropLeadingTitle(td.turndown(selected.innerHTML).trim(), title).trim();
+    embedLinks.forEach(function (embed) {
+      md = md.split(embed.token).join("[Embedded video](" + embed.url + ")");
+    });
     if (!md) return JSON.stringify({ error: "nocontent" });
     return JSON.stringify({ title: title, markdown: md });
   } catch (e) {

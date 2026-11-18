@@ -31,4 +31,43 @@ class WebClipRulesTest {
         assertEquals("2026-11-11", WebClip.rulesStamp(bundled))
         assertEquals("", WebClip.rulesStamp(oldCache))
     }
+
+    @Test fun parsesOnlyAllowlistedTablesWithCommentsSingleQuotesAndTrailingCommas() {
+        val source = """
+            const SITE_CONTENT_SELECTORS = { // c
+              'example.com': '.post',
+            };
+            const SITE_CLEANUP_SELECTORS = { 'example.com': ['.ad',], };
+            const SITE_LABEL_FROM_TITLE_SELECTORS = { 'example.com': ['.tag',], };
+            const SITE_IFRAME_SELECTORS = { 'example.com': 'iframe.article', };
+            const MOBILE_HOST_ALIAS = { 'm.example.com': 'www.example.com', };
+            const EXECUTABLE = 'must not be extracted';
+        """.trimIndent()
+        val parsed = org.json.JSONObject(WebClip.parseUpstreamRules(source))
+        assertEquals(".post", parsed.getJSONObject("content").getString("example.com"))
+        assertEquals(".ad", parsed.getJSONObject("cleanup").getJSONArray("example.com").getString(0))
+        assertEquals("www.example.com", parsed.getJSONObject("alias").getString("m.example.com"))
+        assertEquals(6, parsed.length())
+    }
+
+    @Test fun rejectsExecutableSyntaxAndInvalidSchema() {
+        val bad = "const SITE_CONTENT_SELECTORS = getRules();"
+        org.junit.Assert.assertThrows(RuntimeException::class.java) { WebClip.parseUpstreamRules(bad) }
+    }
+
+    @Test fun comparesRuleTablesIgnoringDateAndObjectKeyOrder() {
+        val a = """{"updated":"2026-01-01","content":{"a":"x","b":"y"},"cleanup":{},"label":{},"iframe":{},"alias":{}}"""
+        val b = """{"updated":"2026-12-01","alias":{},"iframe":{},"label":{},"cleanup":{},"content":{"b":"y","a":"x"}}"""
+        org.junit.Assert.assertTrue(WebClip.sameRuleTables(a, b))
+        val different = b.replace("\"y\"", "\"z\"")
+        org.junit.Assert.assertFalse(WebClip.sameRuleTables(a, different))
+    }
+
+    @Test fun manualRulesWinSameDateButNewerRegularRulesWin() {
+        val manual = """{"updated":"2026-01-01"}"""
+        val sameDate = """{"updated":"2026-01-01","regular":true}"""
+        val newer = """{"updated":"2026-01-02"}"""
+        assertEquals(manual, WebClip.pickManualRules(manual, sameDate))
+        assertEquals(newer, WebClip.pickManualRules(manual, newer))
+    }
 }
