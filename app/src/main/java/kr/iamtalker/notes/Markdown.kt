@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
@@ -48,9 +49,15 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Context
 import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
+import androidx.compose.foundation.Canvas
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.viewinterop.AndroidView
@@ -258,24 +265,52 @@ private fun NoteImage(block: Block.Img, cacheKey: String, loader: suspend (Strin
     }
 }
 
-/** 동영상 블록: 주소(또는 노트 폴더의 파일 주소)를 Uri 로 바꾼 뒤 폰의 재생기(VideoView + 조절 막대)로 재생한다. */
+/** 동영상의 한 장면(썸네일)을 읽는다. 1초 지점(없으면 처음)을 쓰고, 폭 640px 이하로 줄인다. 실패하면 null. */
+private fun videoFrame(ctx: Context, uri: Uri): ImageBitmap? {
+    val r = android.media.MediaMetadataRetriever()
+    return try {
+        if (uri.scheme == "http" || uri.scheme == "https") r.setDataSource(uri.toString(), HashMap<String, String>())
+        else r.setDataSource(ctx, uri)
+        val frame = r.getFrameAtTime(1_000_000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            ?: r.getFrameAtTime(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        frame?.let { f ->
+            val small = if (f.width > 640) android.graphics.Bitmap.createScaledBitmap(f, 640, (f.height * 640f / f.width).toInt().coerceAtLeast(1), true) else f
+            small.asImageBitmap()
+        }
+    } catch (e: Exception) {
+        null
+    } finally {
+        runCatching { r.release() }
+    }
+}
+
+/** 동영상 블록: 처음에는 썸네일과 재생 단추만 그린다(영상을 미리 여는 것은 하지 않는다). 누르면 그때 폰의 재생기로 재생한다. */
 @Composable
-private fun NoteVideo(src: String, loadUri: suspend (String) -> Uri?) {
+private fun NoteVideo(src: String, cacheKey: String, loadUri: suspend (String) -> Uri?) {
+    val ctx = LocalContext.current
     var uri by remember(src) { mutableStateOf<Uri?>(null) }
-    var state by remember(src) { mutableStateOf(0) }      // 0 불러오는 중, 1 재생 가능, 2 못 찾거나 재생 못 함
+    var failed by remember(src) { mutableStateOf(false) }
+    var playing by remember(src) { mutableStateOf(false) }
+    var prepared by remember(src) { mutableStateOf(false) }
+    val key = cacheKey + "|video|" + src
+    var poster by remember(key) { mutableStateOf(ImageCache.get(key)) }   // 보관함에 있으면 바로 보인다
     LaunchedEffect(src) {
         val u = loadUri(src)
         uri = u
-        if (u == null) state = 2
+        if (u == null) failed = true
+    }
+    LaunchedEffect(uri) {
+        val u = uri ?: return@LaunchedEffect
+        if (poster == null) poster = ImageCache.load(key) { withContext(Dispatchers.IO) { videoFrame(ctx, u) } }
     }
     val u = uri
     Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).aspectRatio(16f / 9f).background(Color.Black), contentAlignment = androidx.compose.ui.Alignment.Center) {
-        if (u != null && state != 2) {
+        if (playing && u != null && !failed) {
             AndroidView(
                 factory = { c ->
                     VideoView(c).apply {
-                        setOnErrorListener { _, _, _ -> state = 2; true }
-                        setOnPreparedListener { state = 1 }
+                        setOnErrorListener { _, _, _ -> failed = true; true }
+                        setOnPreparedListener { prepared = true; start() }
                         setVideoURI(u)
                         setMediaController(MediaController(c).also { it.setAnchorView(this) })
                     }
@@ -283,9 +318,24 @@ private fun NoteVideo(src: String, loadUri: suspend (String) -> Uri?) {
                 modifier = Modifier.fillMaxSize(),
                 onRelease = { it.stopPlayback() }      // 화면에서 벗어나면 소리도 멈춘다
             )
+            if (!prepared) CircularProgressIndicator(color = Color.White)
         } else {
-            Text(if (state == 2) "[동영상을 재생하지 못함: ${src.substringAfterLast('/')}]" else "[동영상 불러오는 중…]",
-                color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(12.dp))
+            poster?.let { Image(bitmap = it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+            if (failed) {
+                Text("[동영상을 재생하지 못함: ${src.substringAfterLast('/')}]", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(12.dp))
+            } else {
+                // 재생 단추(흰 원 안의 삼각형). 썸네일을 읽는 동안에도 누를 수 있다.
+                Canvas(Modifier.size(56.dp).clickable { playing = true }) {
+                    drawCircle(color = Color.Black.copy(alpha = 0.55f))
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(size.width * 0.40f, size.height * 0.30f)
+                        lineTo(size.width * 0.72f, size.height * 0.50f)
+                        lineTo(size.width * 0.40f, size.height * 0.70f)
+                        close()
+                    }
+                    drawPath(path, color = Color.White)
+                }
+            }
         }
     }
 }
@@ -374,7 +424,7 @@ fun MarkdownView(
                 }
             }
             is Block.Img -> NoteImage(b, cacheKey, loadImage, onImage)
-            is Block.Video -> NoteVideo(b.src, loadVideo)
+            is Block.Video -> NoteVideo(b.src, cacheKey, loadVideo)
             Block.Rule -> HorizontalDivider(Modifier.padding(vertical = 10.dp))
         }
     }
