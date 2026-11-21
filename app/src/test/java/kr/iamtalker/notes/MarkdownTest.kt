@@ -51,6 +51,19 @@ class MarkdownTest {
         assertEquals(0, blocks.filterIsInstance<Block.Img>().size)
     }
 
+    @Test fun webClipVideoLineBecomesVideoBlock() {
+        // 웹 스크랩 형식 그대로: <video controls="" src="…"></video>
+        val blocks = parseBlocks("앞\n\n<video controls=\"\" src=\"https://i.aagag.com/L6jyx.mp4\"></video>\n\n뒤")
+        val v = blocks.filterIsInstance<Block.Video>().single()
+        assertEquals("https://i.aagag.com/L6jyx.mp4", v.src)
+        assertTrue(blocks.none { it is Block.P && it.text.contains("<video") })
+    }
+
+    @Test fun localVideoPathAndSingleQuotesAreRead() {
+        val blocks = parseBlocks("<VIDEO src='../.resources/clip%201.mp4' controls></VIDEO>")
+        assertEquals("../.resources/clip%201.mp4", blocks.filterIsInstance<Block.Video>().single().src)
+    }
+
     @Test fun toggleCheckboxFlips() {
         val t = "---\nx: 1\n---\n- [ ] a\n- [x] b\n"
         assertEquals("---\nx: 1\n---\n- [x] a\n- [x] b\n", toggleCheckbox(t, 3))

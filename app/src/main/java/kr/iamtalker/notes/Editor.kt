@@ -287,6 +287,15 @@ fun Editor(start: Note, model: NotesModel, onClose: () -> Unit, onOpenTitle: (St
                                 else NoteRepo.resolve(ctx, model.tree!!, note.folder, src)?.let { NoteRepo.loadBitmap(ctx, it)?.asImageBitmap() }
                             }
                         },
+                        loadVideo = { src ->
+                            withContext(Dispatchers.IO) {
+                                when {
+                                    src.startsWith("http://") || src.startsWith("https://") -> Uri.parse(src)
+                                    src.startsWith(":/") -> null
+                                    else -> NoteRepo.resolve(ctx, model.tree!!, note.folder, src)
+                                }
+                            }
+                        },
                         onToggle = { line ->
                             val n = toggleCheckbox(v.text, line)
                             tfv = TextFieldValue(n, v.selection)

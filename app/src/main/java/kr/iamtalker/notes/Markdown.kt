@@ -48,6 +48,12 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.viewinterop.AndroidView
 
 /** 마크다운 보기용 단순한 렌더러: 제목·목록(체크박스)·인용·코드·표(글자 그대로)·그림·**굵게**·*기울임*·`코드`·링크. */
 sealed class Block {
@@ -59,6 +65,8 @@ sealed class Block {
     data class Code(val text: String) : Block()
     data class Table(val text: String) : Block()
     data class Img(val alt: String, val src: String) : Block()
+    /** 웹 스크랩의 `<video controls src="…"></video>` 한 줄. src 는 http(s) 주소 또는 .resources 상대 경로 */
+    data class Video(val src: String) : Block()
     object Rule : Block()
 }
 
@@ -101,6 +109,8 @@ private val imageLine = Regex("^!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?
 // 링크로 감싼 그림 [![그림](src)](원본 주소) — 웹 스크랩이 이 형식으로 만든다. 바깥 링크는 버리고 그림만 보인다.
 private val linkedImageLine = Regex("^\\[!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)\\]\\([^)]*\\)(.*)$")
 // 줄 안의 로컬 그림(.resources)과, 그 그림을 감싼 링크 [![그림](src)글](주소) — 웹 스크랩 프로필 아이콘·카드 등
+// 동영상 한 줄: <video controls="" src="주소"></video> (PC 앱 노트와 같은 형식, 대소문자·따옴표 무관)
+private val videoLine = Regex("^<video\\b[^>]*?\\bsrc\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>.*$", RegexOption.IGNORE_CASE)
 private val localImage = Regex("!\\[([^\\]]*)\\]\\(((?:\\.\\./)?\\.resources/[^)\\s]+)(?:\\s+\"[^\"]*\")?\\)")
 private val wrappedLocalImage = Regex("\\[(!\\[[^\\]]*\\]\\((?:\\.\\./)?\\.resources/[^)\\s]+\\))([^\\]]*)\\]\\([^)]*\\)")
 
@@ -148,9 +158,11 @@ fun parseBlocks(body: String): List<Block> {
         val li = item.find(line)
         val img = imageLine.find(line.trim()) ?: linkedImageLine.find(line.trim())
         val locals = if (h == null && li == null && !line.trimStart().startsWith(">")) splitLocalImages(line.trim()) else null
+        val video = videoLine.find(line.trim())
         when {
             h != null -> { flushPara(); out.add(Block.H(h.groupValues[1].length, h.groupValues[2])) }
             rule.matches(line) -> { flushPara(); out.add(Block.Rule) }
+            video != null -> { flushPara(); out.add(Block.Video(video.groupValues[1])) }
             locals != null -> { flushPara(); out.addAll(locals) }
             img != null -> {
                 flushPara()
@@ -246,10 +258,43 @@ private fun NoteImage(block: Block.Img, cacheKey: String, loader: suspend (Strin
     }
 }
 
+/** 동영상 블록: 주소(또는 노트 폴더의 파일 주소)를 Uri 로 바꾼 뒤 폰의 재생기(VideoView + 조절 막대)로 재생한다. */
+@Composable
+private fun NoteVideo(src: String, loadUri: suspend (String) -> Uri?) {
+    var uri by remember(src) { mutableStateOf<Uri?>(null) }
+    var state by remember(src) { mutableStateOf(0) }      // 0 불러오는 중, 1 재생 가능, 2 못 찾거나 재생 못 함
+    LaunchedEffect(src) {
+        val u = loadUri(src)
+        uri = u
+        if (u == null) state = 2
+    }
+    val u = uri
+    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).aspectRatio(16f / 9f).background(Color.Black), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        if (u != null && state != 2) {
+            AndroidView(
+                factory = { c ->
+                    VideoView(c).apply {
+                        setOnErrorListener { _, _, _ -> state = 2; true }
+                        setOnPreparedListener { state = 1 }
+                        setVideoURI(u)
+                        setMediaController(MediaController(c).also { it.setAnchorView(this) })
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+                onRelease = { it.stopPlayback() }      // 화면에서 벗어나면 소리도 멈춘다
+            )
+        } else {
+            Text(if (state == 2) "[동영상을 재생하지 못함: ${src.substringAfterLast('/')}]" else "[동영상 불러오는 중…]",
+                color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(12.dp))
+        }
+    }
+}
+
 @Composable
 fun MarkdownView(
     text: String, modifier: Modifier = Modifier,
     loadImage: suspend (String) -> ImageBitmap? = { null },
+    loadVideo: suspend (String) -> Uri? = { null },
     onToggle: (Int) -> Unit = {},
     onNoteLink: (String) -> Unit = {},
     onImage: (String) -> Unit = {},
@@ -329,6 +374,7 @@ fun MarkdownView(
                 }
             }
             is Block.Img -> NoteImage(b, cacheKey, loadImage, onImage)
+            is Block.Video -> NoteVideo(b.src, loadVideo)
             Block.Rule -> HorizontalDivider(Modifier.padding(vertical = 10.dp))
         }
     }
