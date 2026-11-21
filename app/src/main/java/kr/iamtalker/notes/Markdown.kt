@@ -51,12 +51,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
 import android.net.Uri
-import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.foundation.Canvas
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Slider
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -284,6 +287,96 @@ private fun videoFrame(ctx: Context, uri: Uri): ImageBitmap? {
     }
 }
 
+private fun fmtTime(ms: Int): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(s / 60, s % 60)
+}
+
+/** 폰 재생기: 화면을 채우는 영상 위에 재생 위치 막대, 재생·일시정지, 음량(음소거·슬라이더), 전체 화면 단추를 둔다.
+ *  startMs 부터 재생하고, 재생 위치를 onPos 로 알려 준다. */
+@Composable
+private fun VideoPlayer(
+    uri: Uri, startMs: Int, autoPlay: Boolean, fullscreen: Boolean,
+    onPos: (Int) -> Unit, onToggleFull: () -> Unit, onFail: () -> Unit
+) {
+    var view by remember { mutableStateOf<VideoView?>(null) }
+    var prepared by remember { mutableStateOf(false) }
+    var playing by remember { mutableStateOf(false) }
+    var pos by remember { mutableStateOf(startMs) }
+    var dur by remember { mutableStateOf(0) }
+    var vol by remember { mutableStateOf(1f) }
+    var seeking by remember { mutableStateOf<Int?>(null) }        // 막대를 끄는 중이면 그 위치
+
+    // 재생 위치와 재생 중 여부를 0.25초마다 읽는다(막대를 끄는 중에는 건드리지 않는다)
+    LaunchedEffect(prepared) {
+        while (prepared) {
+            val v = view
+            if (v != null) {
+                playing = v.isPlaying
+                if (seeking == null) { pos = v.currentPosition; onPos(pos) }
+            }
+            delay(250)
+        }
+    }
+    // 음량은 재생기 쪽에 적용한다(VideoView 의 MediaPlayer 를 onPrepared 에서 받아 둔다)
+    var mp by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    LaunchedEffect(mp, vol) { mp?.setVolume(vol, vol) }
+
+    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        AndroidView(
+            factory = { c ->
+                VideoView(c).also { v ->
+                    v.setOnPreparedListener { p ->
+                        mp = p
+                        dur = p.duration.coerceAtLeast(0)
+                        p.setVolume(vol, vol)
+                        prepared = true
+                        if (startMs > 0) v.seekTo(startMs)
+                        if (autoPlay) v.start()
+                    }
+                    v.setOnErrorListener { _, _, _ -> onFail(); true }
+                    v.setVideoURI(uri)
+                    view = v
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+            onRelease = { it.stopPlayback(); view = null }     // 화면에서 벗어나면 소리도 멈춘다
+        )
+        // 영상을 누르면 재생·일시정지
+        Box(Modifier.fillMaxSize().clickable {
+            val v = view ?: return@clickable
+            if (v.isPlaying) { v.pause(); playing = false } else { v.start(); playing = true }
+        })
+        if (!prepared) CircularProgressIndicator(color = Color.White)
+        if (prepared) {
+            Column(Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                // 재생 위치 막대
+                Slider(
+                    value = (seeking ?: pos).toFloat(),
+                    valueRange = 0f..dur.coerceAtLeast(1).toFloat(),
+                    onValueChange = { seeking = it.toInt() },
+                    onValueChangeFinished = { seeking?.let { target -> view?.seekTo(target); pos = target }; seeking = null },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(if (playing) "일시정지" else "재생", color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.clickable {
+                            val v = view ?: return@clickable
+                            if (v.isPlaying) { v.pause(); playing = false } else { v.start(); playing = true }
+                        }.padding(horizontal = 6.dp, vertical = 8.dp))
+                    Text("${fmtTime(seeking ?: pos)} / ${fmtTime(dur)}", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                    Spacer(Modifier.weight(1f))
+                    Text(if (vol == 0f) "소리 켬" else "음소거", color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.clickable { vol = if (vol == 0f) 1f else 0f }.padding(horizontal = 6.dp, vertical = 8.dp))
+                    Slider(value = vol, onValueChange = { vol = it }, valueRange = 0f..1f, modifier = Modifier.width(72.dp))
+                    Text(if (fullscreen) "닫기" else "전체 화면", color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.clickable { onToggleFull() }.padding(horizontal = 6.dp, vertical = 8.dp))
+                }
+            }
+        }
+    }
+}
+
 /** 동영상 블록: 처음에는 썸네일과 재생 단추만 그린다(영상을 미리 여는 것은 하지 않는다). 누르면 그때 폰의 재생기로 재생한다. */
 @Composable
 private fun NoteVideo(src: String, cacheKey: String, loadUri: suspend (String) -> Uri?) {
@@ -291,7 +384,8 @@ private fun NoteVideo(src: String, cacheKey: String, loadUri: suspend (String) -
     var uri by remember(src) { mutableStateOf<Uri?>(null) }
     var failed by remember(src) { mutableStateOf(false) }
     var playing by remember(src) { mutableStateOf(false) }
-    var prepared by remember(src) { mutableStateOf(false) }
+    var fullscreen by remember(src) { mutableStateOf(false) }
+    var resumeAt by remember(src) { mutableStateOf(0) }     // 전체 화면과 본문 재생기가 서로 이어 재생할 위치
     val key = cacheKey + "|video|" + src
     var poster by remember(key) { mutableStateOf(ImageCache.get(key)) }   // 보관함에 있으면 바로 보인다
     LaunchedEffect(src) {
@@ -304,21 +398,33 @@ private fun NoteVideo(src: String, cacheKey: String, loadUri: suspend (String) -
         if (poster == null) poster = ImageCache.load(key) { withContext(Dispatchers.IO) { videoFrame(ctx, u) } }
     }
     val u = uri
-    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).aspectRatio(16f / 9f).background(Color.Black), contentAlignment = androidx.compose.ui.Alignment.Center) {
-        if (playing && u != null && !failed) {
-            AndroidView(
-                factory = { c ->
-                    VideoView(c).apply {
-                        setOnErrorListener { _, _, _ -> failed = true; true }
-                        setOnPreparedListener { prepared = true; start() }
-                        setVideoURI(u)
-                        setMediaController(MediaController(c).also { it.setAnchorView(this) })
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-                onRelease = { it.stopPlayback() }      // 화면에서 벗어나면 소리도 멈춘다
+    // 상자 비율을 영상 자체 비율에 맞춘다(세로 영상은 세로로 크게). 썸네일이 아직 없으면 16:9 로 둔다.
+    val ratio = poster?.let { p -> if (p.height > 0) p.width.toFloat() / p.height.toFloat() else null } ?: (16f / 9f)
+    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).aspectRatio(ratio).background(Color.Black), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        if (playing && u != null && !failed && !fullscreen) {
+            VideoPlayer(
+                uri = u, startMs = resumeAt, autoPlay = true, fullscreen = false,
+                onPos = { resumeAt = it },
+                onToggleFull = { fullscreen = true },
+                onFail = { failed = true }
             )
-            if (!prepared) CircularProgressIndicator(color = Color.White)
+        } else if (fullscreen && u != null) {
+            // 전체 화면에서 재생 중: 본문 자리에는 썸네일만 둔다
+            poster?.let { Image(bitmap = it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+            Text("전체 화면에서 재생 중", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(12.dp))
+            Dialog(
+                onDismissRequest = { fullscreen = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+            ) {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    VideoPlayer(
+                        uri = u, startMs = resumeAt, autoPlay = true, fullscreen = true,
+                        onPos = { resumeAt = it },
+                        onToggleFull = { fullscreen = false },
+                        onFail = { failed = true; fullscreen = false }
+                    )
+                }
+            }
         } else {
             poster?.let { Image(bitmap = it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
             if (failed) {
