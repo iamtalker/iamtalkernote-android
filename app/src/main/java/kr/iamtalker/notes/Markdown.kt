@@ -306,14 +306,24 @@ private fun VideoPlayer(
     var dur by remember { mutableStateOf(0) }
     var vol by remember { mutableStateOf(1f) }
     var seeking by remember { mutableStateOf<Int?>(null) }        // 막대를 끄는 중이면 그 위치
+    var seekTarget by remember { mutableStateOf<Int?>(null) }     // 방금 옮긴 위치(옮기는 동안은 옛 위치를 읽지 않는다)
+    var seekDeadline by remember { mutableStateOf(0L) }
 
-    // 재생 위치와 재생 중 여부를 0.25초마다 읽는다(막대를 끄는 중에는 건드리지 않는다)
+    // 재생 위치와 재생 중 여부를 0.25초마다 읽는다(막대를 끄는 중·옮기는 중에는 옛 위치로 되돌리지 않는다)
     LaunchedEffect(prepared) {
         while (prepared) {
             val v = view
             if (v != null) {
                 playing = v.isPlaying
-                if (seeking == null) { pos = v.currentPosition; onPos(pos) }
+                val t = seekTarget
+                if (t != null) {
+                    // 재생 중에는 옮긴 뒤에도 옛 위치가 잠깐 나오므로, 가까워지거나 2초가 지나면 다시 읽는다
+                    if (Math.abs(v.currentPosition - t) < 1000 || System.currentTimeMillis() > seekDeadline) seekTarget = null
+                    pos = t
+                } else if (seeking == null) {
+                    pos = v.currentPosition
+                }
+                onPos(pos)
             }
             delay(250)
         }
@@ -342,8 +352,8 @@ private fun VideoPlayer(
             modifier = Modifier.fillMaxSize(),
             onRelease = { it.stopPlayback(); view = null }     // 화면에서 벗어나면 소리도 멈춘다
         )
-        // 영상을 누르면 재생·일시정지
-        Box(Modifier.fillMaxSize().clickable {
+        // 영상을 누르면 재생·일시정지(아래 조절 막대 영역은 제외: 막대를 끌 때 일시정지가 눌리지 않게)
+        Box(Modifier.fillMaxSize().padding(bottom = 96.dp).clickable {
             val v = view ?: return@clickable
             if (v.isPlaying) { v.pause(); playing = false } else { v.start(); playing = true }
         })
@@ -355,7 +365,15 @@ private fun VideoPlayer(
                     value = (seeking ?: pos).toFloat(),
                     valueRange = 0f..dur.coerceAtLeast(1).toFloat(),
                     onValueChange = { seeking = it.toInt() },
-                    onValueChangeFinished = { seeking?.let { target -> view?.seekTo(target); pos = target }; seeking = null },
+                    onValueChangeFinished = {
+                        seeking?.let { target ->
+                            view?.seekTo(target)
+                            pos = target
+                            seekTarget = target
+                            seekDeadline = System.currentTimeMillis() + 2000
+                        }
+                        seeking = null
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
